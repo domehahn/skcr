@@ -1,0 +1,28 @@
+# CLAUDE.md
+
+## Project context
+
+Project: {{ project_name }}
+Owner team: {{ owner_team }}
+Default language: {{ default_language }}
+Governance level: {{ governance_level }}
+
+Use this file as Claude Code project guidance. Keep work small, tool-driven, and validated.
+
+## Working rules
+
+- Make real file changes when implementation is requested; do not only write instructions.
+- Use a plan for non-trivial multi-file work.
+- Read only relevant files.
+- Do not access secrets, `.env` files, private keys, token files, or production data unless explicitly required and approved.
+- Do not commit, push, publish, or deploy unless explicitly asked.
+- Run targeted tests/checks when practical.
+- Summarize changed files, validation, and risks before finishing.
+
+## Available project skills
+
+{% if skills %}{% for skill in skills %}- `{{ skill }}`
+{% endfor %}{% else %}- No skills configured by this target.
+{% endif %}
+
+Claude Code skills are rendered under `.claude/skills/<skill-name>/SKILL.md` by this template pack.

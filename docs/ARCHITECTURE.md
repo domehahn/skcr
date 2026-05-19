@@ -1,26 +1,49 @@
 # Architecture
 
-Agentic Template Kit separates four responsibilities:
+`agentic-template-kit` has four core parts:
 
-1. **Bake file**: project-local selection of targets, platforms, skills, flows, rules, and variables.
-2. **Template pack**: versioned templates embedded in the Python package.
-3. **Renderer**: resolves targets, renders Jinja templates, merges common destinations such as `AGENTS.md`.
-4. **Lockfile**: records managed outputs and checksums for safe updates.
+1. Bake-file parser
+2. Target resolver
+3. Platform renderer
+4. Validator and lockfile manager
 
-## Safety
+## Bake-file parser
 
-The generator is dry-run by default. File writes require `--write`.
+Reads `agentic.bake.yaml` and validates it with Pydantic models.
 
-Existing unmanaged files are treated as conflicts. Use `--force` only when intentional.
+## Target resolver
 
-## Platform adapters
+Resolves `inherits` relationships and merges platforms, profiles, skills, flows, rules, variables, and model settings.
 
-Each platform adapter maps a logical platform name to concrete output paths:
+## Platform renderer
 
-- Codex: `AGENTS.md`, `.agents/skills/**`
-- GitLab Duo: `AGENTS.md`, `.gitlab/duo/**`
-- GitHub Copilot: `.github/copilot-instructions.md`, `.github/prompts/**`
-- OpenHands: `AGENTS.md`, `.openhands/instructions.md`
-- OpenCode: `AGENTS.md`, `.opencode/instructions.md`
+The renderer maps platform keys to concrete files.
 
-`AGENTS.md` may be shared by multiple platforms. In that case, the renderer merges platform sections using managed HTML comments.
+| Platform | Main output logic |
+|---|---|
+| `codex` | Root `AGENTS.md` plus `.agents/skills/<skill>/SKILL.md`. |
+| `gitlab-duo` | Root `AGENTS.md`, GitLab project skills under `skills/`, custom rules under `.gitlab/duo/chat-rules.md`, custom flow templates under `.gitlab/duo/flows/*.yaml`. |
+| `github-copilot` | `.github/copilot-instructions.md` and prompt files. |
+| `claude` | `CLAUDE.md` and `.claude/skills/<skill>/SKILL.md`. |
+| `openhands` | Root `AGENTS.md` plus `.openhands/instructions.md`. |
+| `opencode` | Root `AGENTS.md` plus `.opencode/instructions.md`. |
+| `ollama` | `.ollama/Modelfile` and `.ollama/README.md`. |
+| `generic` | Portable placeholder `SKILL.md`. |
+
+When multiple platforms render the same destination, such as `AGENTS.md`, the renderer merges the platform contributions into one file with generated boundary comments.
+
+## Lockfile
+
+`.agentic-template.lock` records managed files and checksums. This allows safe updates while detecting local modifications.
+
+## Validator
+
+The validator checks generated files and key platform-specific constraints. For GitLab Duo it checks native paths and custom-flow constraints, including:
+
+- project skills under `skills/<skill>/SKILL.md`
+- custom rules under `.gitlab/duo/chat-rules.md`
+- no legacy `.gitlab/duo/custom-rules.md` or `.gitlab/duo/rules/**`
+- flow YAML does not contain forbidden top-level fields
+- flow `environment` is `ambient`
+- flow prompts do not contain a `model` field
+- flow AgentComponents receive `context:inputs.user_rule` and `context:inputs.workspace_agent_skills`

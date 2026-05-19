@@ -1,196 +1,279 @@
 # Configuration Reference
 
-This document explains the `agentic.bake.yaml` schema used by Agentic Template Kit.
+This document explains all supported `agentic.bake.yaml` parameters.
 
-## Mental model
-
-```text
-target   = named bake preset, for example default, codex, gitlab, all
-platform = destination agentic system, for example codex or github-copilot
-profile  = behavior/policy package passed into templates
-skill    = reusable capability bundle rendered as SKILL.md where supported
-flow     = multi-step process guidance, mainly for GitLab Duo style workflows
-```
-
-## Minimal file
+## Top-level schema
 
 ```yaml
 version: "1"
-
-targets:
-  codex:
-    platforms:
-      - codex
-    skills:
-      - cost-based-planner
-      - safe-implementer
+variables: {}
+targets: {}
 ```
 
-## Full example
+## `version`
+
+Required. Currently only `"1"` is supported.
 
 ```yaml
 version: "1"
+```
 
+## `variables`
+
+Optional global variables available to all templates and inherited by all targets.
+
+Common variables:
+
+| Variable | Meaning | Example |
+|---|---|---|
+| `project_name` | Human-readable project name | `CoachIQ` |
+| `owner_team` | Owning team | `platform-engineering` |
+| `default_language` | Default documentation language | `de` |
+| `governance_level` | Governance strictness | `standard`, `strict` |
+
+Example:
+
+```yaml
 variables:
   project_name: CoachIQ
   owner_team: platform-engineering
   default_language: de
   governance_level: strict
-
-targets:
-  codex:
-    description: Codex AGENTS.md and skill setup
-    platforms:
-      - codex
-    profiles:
-      - base
-      - devsecops
-    skills:
-      - cost-based-planner
-      - safe-implementer
-      - verification-reviewer
-      - security-reviewer
-      - documentation-maintainer
-
-  gitlab:
-    description: GitLab Duo Agent Platform setup
-    platforms:
-      - gitlab-duo
-    profiles:
-      - base
-      - gitlab-governance
-      - devsecops
-    flows:
-      - secure-code-change
-      - documentation-review
-      - ci-cd-review
-
-  local-ai:
-    description: Local Ollama-based setup
-    platforms:
-      - opencode
-      - openhands
-    profiles:
-      - base
-      - local-models
-    model:
-      provider: ollama
-      default_model: qwen2.5-coder:7b
-      base_url: http://localhost:11434
-
-  default:
-    inherits:
-      - codex
-
-  all:
-    inherits:
-      - codex
-      - gitlab
-      - local-ai
 ```
 
-## Top-level schema
+If `project_name` is left as `"{{ project_name }}"`, the CLI replaces it with the detected repository directory name.
 
-| Field | Type | Required | Description |
-|---|---:|---:|---|
-| `version` | string | yes | Schema version. Currently only `"1"`. |
-| `variables` | object | no | Global template variables. |
-| `targets` | object | yes | Map of target names to configurations. |
+## `targets`
 
-## Target schema
+A mapping of named bake targets.
 
-| Field | Type | Required | Description |
-|---|---:|---:|---|
-| `description` | string | no | Human-readable description. |
-| `inherits` | list[string] | no | Parent targets merged before the current target. |
-| `platforms` | list[string] | no | Platform adapters to render. |
-| `profiles` | list[string] | no | Behavior labels passed to templates. |
-| `skills` | list[string] | no | Skill bundles to render where supported. |
-| `flows` | list[string] | no | Flow files to render where supported. |
-| `model` | object | no | Model defaults for generated guidance. |
-| `rules` | object | no | Open-ended policy flags. |
-| `variables` | object | no | Target-specific template variables. |
+```yaml
+targets:
+  gitlab:
+    platforms:
+      - gitlab-duo
+```
 
-## Supported platforms
+A target is a reusable recipe. It can be platform-oriented (`gitlab`, `codex`, `claude`), use-case-oriented (`devsecops`, `documentation`), or broad (`default`, `all`).
 
-| Platform | Main output |
+## Target fields
+
+### `description`
+
+Optional human-readable description shown by `list-targets`.
+
+```yaml
+description: GitLab Duo Agent Platform setup
+```
+
+### `inherits`
+
+Optional list of parent targets. Parent values are merged first; the current target overlays them.
+
+```yaml
+default:
+  inherits:
+    - codex
+    - copilot
+```
+
+Merge behavior:
+
+| Field | Merge behavior |
 |---|---|
-| `codex` | `AGENTS.md`, `.agents/skills/...` |
-| `gitlab-duo` | `AGENTS.md`, `.gitlab/duo/...` |
-| `github-copilot` | `.github/copilot-instructions.md`, `.github/prompts/...` |
+| `platforms` | append, preserve first occurrence |
+| `profiles` | append, preserve first occurrence |
+| `skills` | append, preserve first occurrence |
+| `flows` | append, preserve first occurrence |
+| `rules` | shallow merge, child overrides parent |
+| `variables` | shallow merge, child overrides parent |
+| `model` | child replaces parent |
+
+### `platforms`
+
+List of platform adapters to render.
+
+Supported values:
+
+| Platform | Output |
+|---|---|
+| `codex` | `AGENTS.md`, `.agents/skills/<skill>/SKILL.md` |
+| `gitlab-duo` | `AGENTS.md`, `skills/<skill>/SKILL.md`, `.gitlab/duo/chat-rules.md`, `.gitlab/duo/flows/*.yaml` |
+| `github-copilot` | `.github/copilot-instructions.md`, `.github/prompts/*.prompt.md` |
+| `claude` | `CLAUDE.md`, `.claude/skills/<skill>/SKILL.md` |
 | `openhands` | `AGENTS.md`, `.openhands/instructions.md` |
 | `opencode` | `AGENTS.md`, `.opencode/instructions.md` |
-| `generic` | portable `.skills/.../SKILL.md` |
+| `ollama` | `.ollama/Modelfile`, `.ollama/README.md` |
+| `generic` | `.agentic/generic/SKILL.md` |
 
-## Model schema
+### `profiles`
 
-| Field | Type | Example |
-|---|---:|---|
-| `provider` | string | `ollama` |
-| `default_model` | string | `qwen2.5-coder:7b` |
-| `base_url` | string | `http://localhost:11434` |
+Labels that influence rendered content. Templates can branch on profiles or simply list them as policy context.
 
-## Rules
+Examples:
 
-`rules` can contain team-specific governance flags.
+```yaml
+profiles:
+  - base
+  - devsecops
+  - documentation
+  - gitlab-governance
+  - local-models
+```
+
+### `skills`
+
+List of skill templates to render.
+
+Available built-in skills:
+
+```yaml
+skills:
+  - cost-based-planner
+  - safe-implementer
+  - verification-reviewer
+  - security-reviewer
+  - documentation-maintainer
+  - universal-skill-creator
+```
+
+Adapter-specific skill paths:
+
+| Adapter | Path |
+|---|---|
+| `codex` | `.agents/skills/<skill>/SKILL.md` |
+| `gitlab-duo` | `skills/<skill>/SKILL.md` |
+| `claude` | `.claude/skills/<skill>/SKILL.md` |
+
+### `flows`
+
+List of GitLab Duo flow templates to render. Currently used by `gitlab-duo`.
+
+Built-in flows:
+
+```yaml
+flows:
+  - secure-code-change
+  - documentation-review
+  - ci-cd-review
+  - dependency-review
+  - security-policy-review
+```
+
+Generated path:
+
+```text
+.gitlab/duo/flows/<flow>.yaml
+```
+
+These YAML files are rendered as source-of-truth templates. They must be created or updated in GitLab AI > Flows / AI Catalog to become active Custom Flows.
+
+### `rules`
+
+Arbitrary governance flags consumed by templates.
+
+Common rule flags:
+
+| Rule | Meaning |
+|---|---|
+| `no_direct_push` | Instruct agents not to push directly to protected branches. |
+| `require_merge_request` | Require MR workflow for code changes. |
+| `require_tests` | Require tests/checks where practical. |
+| `require_security_review` | Require security review for sensitive changes. |
+| `forbid_secret_files` | Forbid reading secret-like files. |
+| `forbid_env_file_access` | Forbid `.env` access unless explicitly approved. |
+| `require_diff_summary` | Require final diff summary. |
+| `require_validation_summary` | Require final validation summary. |
+| `allow_autonomous_changes` | Whether autonomous edits are allowed. |
 
 Example:
 
 ```yaml
 rules:
   no_direct_push: true
+  require_merge_request: true
   require_tests: true
   require_security_review: true
   forbid_secret_files: true
-  require_merge_request: true
+  forbid_env_file_access: true
+  allow_autonomous_changes: false
 ```
 
-The core schema does not restrict rule names. Templates decide how to render them.
+### `model`
 
-## Inheritance behavior
+Optional model metadata used by local-AI templates, especially `ollama`.
 
-Child targets inherit parent targets listed in `inherits`.
+```yaml
+model:
+  provider: ollama
+  default_model: qwen2.5-coder:7b
+  base_url: http://localhost:11434
+```
 
-Merge behavior:
+Fields:
 
-- `platforms`, `profiles`, `skills`, `flows`: appended and de-duplicated while preserving order.
-- `rules`: merged, child overrides parent.
-- `variables`: merged, child overrides parent.
-- `model`: child replaces parent if defined.
-- `description`: child replaces parent if defined.
+| Field | Meaning |
+|---|---|
+| `provider` | Logical model provider, for example `ollama`. |
+| `default_model` | Default local or remote model identifier. |
+| `base_url` | Base URL used by local tools, such as `http://localhost:11434`. |
 
-Cycles are invalid:
+### `variables`
+
+Target-local variables. These override top-level `variables`.
 
 ```yaml
 targets:
-  a:
-    inherits: [b]
-  b:
-    inherits: [a]
-```
-
-## Target naming recommendations
-
-Use explicit platform targets:
-
-```yaml
-targets:
-  codex:
-    platforms: [codex]
-  copilot:
-    platforms: [github-copilot]
   gitlab:
-    platforms: [gitlab-duo]
+    variables:
+      governance_level: strict
 ```
 
-Use aggregate targets for common combinations:
+## Recommended GitLab Duo target
 
 ```yaml
 targets:
-  default:
-    inherits: [codex, copilot]
-  all:
-    inherits: [codex, copilot, gitlab, local-ai]
+  gitlab:
+    description: GitLab Duo Agent Platform setup with AGENTS.md, project-level skills, custom rules, and flow templates
+    platforms:
+      - gitlab-duo
+    profiles:
+      - base
+      - gitlab-governance
+      - devsecops
+      - documentation
+    skills:
+      - cost-based-planner
+      - safe-implementer
+      - verification-reviewer
+      - security-reviewer
+      - documentation-maintainer
+      - universal-skill-creator
+    rules:
+      no_direct_push: true
+      require_merge_request: true
+      require_tests: true
+      require_security_review: true
+      forbid_secret_files: true
+      forbid_env_file_access: true
+      require_diff_summary: true
+      require_validation_summary: true
+      allow_autonomous_changes: false
+    flows:
+      - secure-code-change
+      - documentation-review
+      - ci-cd-review
+      - dependency-review
+      - security-policy-review
 ```
 
-This is easier to understand than placing every platform directly into `default`.
+Generated output:
+
+```text
+AGENTS.md
+skills/<skill-name>/SKILL.md
+.gitlab/duo/chat-rules.md
+.gitlab/duo/flows/<flow>.yaml
+.gitlab/duo/flows/README.md
+.agentic-template.lock
+```

@@ -1,14 +1,14 @@
 [project]
 name = "agentic-template-kit"
-version = "0.1.0"
-description = "Bake-style generator for agentic coding assistant instructions and skills across Codex, GitLab Duo, GitHub Copilot, OpenHands, and OpenCode."
+version = "0.2.0"
+description = "Bake-style generator for agentic coding assistant instructions and skills across Codex, GitLab Duo, GitHub Copilot, Claude Code, OpenHands, OpenCode, and Ollama."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [
   { name = "Agentic Template Kit Maintainers" }
 ]
-keywords = ["agents", "codex", "gitlab-duo", "copilot", "openhands", "opencode", "skills", "templates"]
+keywords = ["agents", "codex", "gitlab-duo", "copilot", "openhands", "opencode", "claude", "ollama", "skills", "templates"]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Environment :: Console",
@@ -47,6 +47,7 @@ ignore = []
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+pythonpath = ["src"]
 
 [tool.setuptools.package-data]
 agentic_template_kit = ["templates/**/*.j2"]

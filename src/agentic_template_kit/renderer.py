@@ -14,8 +14,10 @@ SUPPORTED_PLATFORMS = {
     "codex",
     "gitlab-duo",
     "github-copilot",
+    "claude",
     "openhands",
     "opencode",
+    "ollama",
     "generic",
 }
 
@@ -29,9 +31,11 @@ SKILL_TEMPLATES = {
 }
 
 FLOW_TEMPLATES = {
-    "secure-code-change": "gitlab-duo/flows/secure-code-change.md.j2",
-    "documentation-review": "gitlab-duo/flows/documentation-review.md.j2",
-    "ci-cd-review": "gitlab-duo/flows/ci-cd-review.md.j2",
+    "secure-code-change": "gitlab-duo/flows/secure-code-change.yaml.j2",
+    "documentation-review": "gitlab-duo/flows/documentation-review.yaml.j2",
+    "ci-cd-review": "gitlab-duo/flows/ci-cd-review.yaml.j2",
+    "dependency-review": "gitlab-duo/flows/dependency-review.yaml.j2",
+    "security-policy-review": "gitlab-duo/flows/security-policy-review.yaml.j2",
 }
 
 
@@ -112,12 +116,23 @@ def render_files(target_dir: Path, target: TargetConfig, target_name: str) -> li
                 add("codex", skill_template, f".agents/skills/{skill}/SKILL.md")
 
     if "gitlab-duo" in target.platforms:
+        # GitLab Duo project-level customization paths are intentionally GitLab-specific:
+        # - AGENTS.md at repository root
+        # - skills/<skill-name>/SKILL.md for project-level Agent Skills
+        # - .gitlab/duo/chat-rules.md for project-level Custom Rules
+        # - .gitlab/duo/flows/*.yaml as source-of-truth templates for Custom Flows
         add("gitlab-duo", "gitlab-duo/AGENTS.md.j2", "AGENTS.md")
-        add("gitlab-duo", "gitlab-duo/custom-rules.md.j2", ".gitlab/duo/custom-rules.md")
+        add("gitlab-duo", "gitlab-duo/chat-rules.md.j2", ".gitlab/duo/chat-rules.md")
+        for skill in target.skills:
+            skill_template = SKILL_TEMPLATES.get(skill)
+            if skill_template:
+                add("gitlab-duo", skill_template, f"skills/{skill}/SKILL.md")
+        if target.flows:
+            add("gitlab-duo", "gitlab-duo/flows/README.md.j2", ".gitlab/duo/flows/README.md")
         for flow in target.flows:
             flow_template = FLOW_TEMPLATES.get(flow)
             if flow_template:
-                add("gitlab-duo", flow_template, f".gitlab/duo/flows/{flow}.md")
+                add("gitlab-duo", flow_template, f".gitlab/duo/flows/{flow}.yaml")
 
     if "github-copilot" in target.platforms:
         add(
@@ -131,6 +146,14 @@ def render_files(target_dir: Path, target: TargetConfig, target_name: str) -> li
             ".github/prompts/agentic-default.prompt.md",
         )
 
+
+    if "claude" in target.platforms:
+        add("claude", "claude/CLAUDE.md.j2", "CLAUDE.md")
+        for skill in target.skills:
+            skill_template = SKILL_TEMPLATES.get(skill)
+            if skill_template:
+                add("claude", skill_template, f".claude/skills/{skill}/SKILL.md")
+
     if "openhands" in target.platforms:
         add("openhands", "openhands/AGENTS.md.j2", "AGENTS.md")
         add("openhands", "openhands/instructions.md.j2", ".openhands/instructions.md")
@@ -138,6 +161,10 @@ def render_files(target_dir: Path, target: TargetConfig, target_name: str) -> li
     if "opencode" in target.platforms:
         add("opencode", "opencode/AGENTS.md.j2", "AGENTS.md")
         add("opencode", "opencode/instructions.md.j2", ".opencode/instructions.md")
+
+    if "ollama" in target.platforms:
+        add("ollama", "ollama/Modelfile.j2", ".ollama/Modelfile")
+        add("ollama", "ollama/README.md.j2", ".ollama/README.md")
 
     if "generic" in target.platforms:
         add("generic", "generic/SKILL.md.j2", ".agentic/generic/SKILL.md")

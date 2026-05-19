@@ -1,110 +1,27 @@
 # Agentic Template Kit
 
-`agentic-template-kit` is a production-oriented Python CLI for generating agentic configuration files, instructions, and skill bundles across multiple coding-assistant platforms.
+`agentic-template-kit` is a production-oriented Python CLI for generating agentic configuration files, instructions, skill bundles, GitLab Duo customization files, Copilot instructions, Claude Code files, OpenHands/OpenCode instructions, and optional Ollama model wrappers.
 
-It follows a **Docker Bake-like model** for agentic configuration:
+It follows a **Docker Bake-like model**:
 
 - Define reusable targets in `agentic.bake.yaml`.
-- Select one or more target platforms per target.
+- Select one or more platform adapters per target.
 - Render platform-specific outputs from versioned templates.
 - Apply the same setup to many repositories without copy and paste.
-- Use dry-runs, diffs, validation, conflict detection, and a lockfile for controlled updates.
+- Use dry-runs, validation, conflict detection, and a lockfile for controlled updates.
 
-## Why this exists
+## Supported platform adapters
 
-Most agentic coding tools use different instruction files and different conventions:
-
-- Codex uses `AGENTS.md` and `.agents/skills/...`.
-- GitHub Copilot uses `.github/copilot-instructions.md` and prompt files.
-- GitLab Duo Agent Platform uses repository instructions, custom rules, and flow-like guidance.
-- OpenHands and OpenCode can use repository-level instruction files.
-- Generic agents often understand portable `SKILL.md` bundles.
-
-Without a generator, every project tends to get copied instructions that drift over time. This tool treats agentic configuration as generated, versioned, reproducible project infrastructure.
-
-## Core concepts
-
-### Target
-
-A **target** is a named bake preset. It answers:
-
-> What agentic setup should be rendered for this repository?
-
-Examples:
-
-- `codex`
-- `copilot`
-- `gitlab`
-- `local-ai`
-- `devsecops`
-- `documentation`
-- `default`
-- `all`
-
-A target can include one or more platforms, profiles, skills, flows, rules, variables, and model settings.
-
-### Platform
-
-A **platform** is the destination agentic system for which files are generated.
-
-Supported platform adapters:
-
-| Platform key | Generated artifacts |
-|---|---|
-| `codex` | `AGENTS.md`, `.agents/skills/<skill>/SKILL.md` |
-| `gitlab-duo` | `AGENTS.md`, `.gitlab/duo/custom-rules.md`, `.gitlab/duo/flows/*.md` |
-| `github-copilot` | `.github/copilot-instructions.md`, `.github/prompts/*.prompt.md` |
-| `openhands` | `AGENTS.md`, `.openhands/instructions.md` |
-| `opencode` | `AGENTS.md`, `.opencode/instructions.md` |
-| `generic` | portable `SKILL.md` bundles |
-
-### Profile
-
-A **profile** is a named behavior package used by templates. Examples:
-
-- `base`
-- `devsecops`
-- `documentation`
-- `gitlab-governance`
-- `local-models`
-- `python`
-- `typescript`
-- `strict`
-
-Profiles are passed into templates and can be used to alter generated wording or policy emphasis.
-
-### Skill
-
-A **skill** is a reusable capability bundle, usually rendered as a `SKILL.md` file.
-
-Included skills:
-
-- `cost-based-planner`
-- `safe-implementer`
-- `verification-reviewer`
-- `security-reviewer`
-- `documentation-maintainer`
-- `universal-skill-creator`
-
-### Flow
-
-A **flow** is a named multi-step process, primarily useful for GitLab Duo / agent-platform-style usage.
-
-Included example flows:
-
-- `secure-code-change`
-- `documentation-review`
-- `ci-cd-review`
-
-### Lockfile
-
-The CLI writes `.agentic-template.lock` after applying a target. It records managed files, checksums, platforms, and applied targets.
-
-The lockfile enables safe updates:
-
-- unchanged managed files can be updated automatically;
-- locally modified managed files become conflicts;
-- unmanaged existing files are not overwritten unless `--force` is used.
+| Platform key | Generated artifacts | Notes |
+|---|---|---|
+| `codex` | `AGENTS.md`, `.agents/skills/<skill>/SKILL.md` | Codex project skills. |
+| `gitlab-duo` | `AGENTS.md`, `skills/<skill>/SKILL.md`, `.gitlab/duo/chat-rules.md`, `.gitlab/duo/flows/*.yaml` | GitLab-native paths. Flow files are source-of-truth templates and must be created/updated in GitLab AI > Flows. |
+| `github-copilot` | `.github/copilot-instructions.md`, `.github/prompts/agentic-default.prompt.md` | Repository instructions and prompt files. |
+| `claude` | `CLAUDE.md`, `.claude/skills/<skill>/SKILL.md` | Claude Code project guidance and filesystem skills. |
+| `openhands` | `AGENTS.md`, `.openhands/instructions.md` | OpenHands-oriented project instructions. |
+| `opencode` | `AGENTS.md`, `.opencode/instructions.md` | OpenCode-oriented project instructions. |
+| `ollama` | `.ollama/Modelfile`, `.ollama/README.md` | Optional local model wrapper. Ollama itself does not read repo instruction files automatically. |
+| `generic` | `.agentic/generic/SKILL.md` | Portable generic skill bundle placeholder. |
 
 ## Installation
 
@@ -121,36 +38,30 @@ uv sync --extra dev
 uv run agentic-template --help
 ```
 
-Alternative editable-style usage during development:
-
-```bash
-uv run agentic-template --help
-```
-
 ## Quickstart
 
-Create a starter bake file in a target repository:
+Create a starter bake file in your target repository:
 
 ```bash
 agentic-template init --target /path/to/repo
 ```
 
-List available targets:
+List targets:
 
 ```bash
 agentic-template list-targets --target /path/to/repo
 ```
 
-Preview a target without writing files:
+Preview changes:
 
 ```bash
-agentic-template bake default --target /path/to/repo --dry-run
+agentic-template bake gitlab --target /path/to/repo --dry-run
 ```
 
-Apply a target:
+Write changes:
 
 ```bash
-agentic-template bake default --target /path/to/repo --write
+agentic-template bake gitlab --target /path/to/repo --write
 ```
 
 Validate generated files:
@@ -159,15 +70,80 @@ Validate generated files:
 agentic-template validate --target /path/to/repo
 ```
 
-Show the planned file-level changes for a target:
+## Core concepts
 
-```bash
-agentic-template diff default --target /path/to/repo
+### Target
+
+A `target` is a named bake recipe. It answers:
+
+> What agentic configuration should be generated for this use case?
+
+Examples:
+
+- `codex`
+- `copilot`
+- `claude`
+- `gitlab`
+- `local-ai`
+- `default`
+- `all`
+
+A target can include multiple platforms, profiles, skills, flows, rules, model settings, and inherited targets.
+
+### Platform
+
+A `platform` is the target system for generated files.
+
+Examples:
+
+- `gitlab-duo`
+- `codex`
+- `github-copilot`
+- `claude`
+- `openhands`
+- `opencode`
+- `ollama`
+
+### Profile
+
+A `profile` is a named rule bundle used by templates. Profiles are declarative labels such as:
+
+- `base`
+- `devsecops`
+- `documentation`
+- `gitlab-governance`
+- `local-models`
+
+### Skill
+
+A `skill` is a reusable capability template, for example:
+
+- `cost-based-planner`
+- `safe-implementer`
+- `verification-reviewer`
+- `security-reviewer`
+- `documentation-maintainer`
+- `universal-skill-creator`
+
+Different adapters render skills to different paths:
+
+| Adapter | Skill path |
+|---|---|
+| Codex | `.agents/skills/<skill>/SKILL.md` |
+| GitLab Duo | `skills/<skill>/SKILL.md` |
+| Claude Code | `.claude/skills/<skill>/SKILL.md` |
+
+### Flow
+
+A `flow` is currently GitLab Duo-specific in this kit. Flow templates are rendered to:
+
+```text
+.gitlab/duo/flows/<flow>.yaml
 ```
 
-## Recommended target layout
+These files are **not automatically activated by GitLab from the repository**. They are rendered as source-of-truth templates for GitLab Custom Flows and must be created or updated in GitLab through AI > Flows / AI Catalog.
 
-A clear production-oriented bake file should separate platform targets from aggregate targets:
+## Example `agentic.bake.yaml`
 
 ```yaml
 version: "1"
@@ -180,7 +156,7 @@ variables:
 
 targets:
   codex:
-    description: Codex AGENTS.md and skill setup
+    description: Codex AGENTS.md and project skills
     platforms:
       - codex
     profiles:
@@ -194,7 +170,7 @@ targets:
       - documentation-maintainer
 
   copilot:
-    description: GitHub Copilot repository instructions and prompts
+    description: GitHub Copilot repository instructions and prompt files
     platforms:
       - github-copilot
     profiles:
@@ -202,24 +178,59 @@ targets:
       - devsecops
       - documentation
 
+  claude:
+    description: Claude Code CLAUDE.md and project skills
+    platforms:
+      - claude
+    profiles:
+      - base
+      - devsecops
+    skills:
+      - cost-based-planner
+      - safe-implementer
+      - verification-reviewer
+      - security-reviewer
+      - documentation-maintainer
+
   gitlab:
-    description: GitLab Duo Agent Platform setup
+    description: GitLab Duo Agent Platform setup with AGENTS.md, project-level skills, custom rules, and flow templates
     platforms:
       - gitlab-duo
     profiles:
       - base
       - gitlab-governance
       - devsecops
+      - documentation
+    skills:
+      - cost-based-planner
+      - safe-implementer
+      - verification-reviewer
+      - security-reviewer
+      - documentation-maintainer
+      - universal-skill-creator
+    rules:
+      no_direct_push: true
+      require_merge_request: true
+      require_tests: true
+      require_security_review: true
+      forbid_secret_files: true
+      forbid_env_file_access: true
+      require_diff_summary: true
+      require_validation_summary: true
+      allow_autonomous_changes: false
     flows:
       - secure-code-change
       - documentation-review
       - ci-cd-review
+      - dependency-review
+      - security-policy-review
 
   local-ai:
-    description: Local agent setup for Ollama-friendly tools
+    description: Local Ollama/OpenCode/OpenHands setup
     platforms:
       - opencode
       - openhands
+      - ollama
     profiles:
       - base
       - local-models
@@ -229,247 +240,40 @@ targets:
       base_url: http://localhost:11434
 
   default:
-    description: Standard daily development setup
+    description: Standard daily-development setup
     inherits:
       - codex
       - copilot
 
   all:
-    description: All supported agentic platforms
+    description: Generate all supported platform artifacts
     inherits:
       - codex
       - copilot
+      - claude
       - gitlab
       - local-ai
 ```
 
-## Why can `default` contain multiple platforms?
+## GitLab Duo output
 
-`default` is only a target name. It is not special beyond being a convenient preset.
+For `platforms: [gitlab-duo]`, the kit now renders GitLab-native project-level artifacts:
 
-If `default` contains:
-
-```yaml
-platforms:
-  - codex
-  - github-copilot
-  - opencode
+```text
+AGENTS.md
+skills/<skill-name>/SKILL.md
+.gitlab/duo/chat-rules.md
+.gitlab/duo/flows/<flow>.yaml
+.gitlab/duo/flows/README.md
+.agentic-template.lock
 ```
 
-then running:
+Important distinctions:
 
-```bash
-agentic-template bake default --target . --write
-```
-
-means:
-
-> Render Codex, GitHub Copilot, and OpenCode artifacts for this repository.
-
-For stricter production usage, prefer explicit targets like `codex`, `copilot`, `gitlab`, `local-ai`, and aggregate them with `inherits` into `default` or `all`.
-
-## Configuration reference: `agentic.bake.yaml`
-
-### Top-level fields
-
-| Field | Type | Required | Description |
-|---|---:|---:|---|
-| `version` | string | yes | Bake file schema version. Currently only `"1"` is supported. |
-| `variables` | object | no | Global variables passed to all rendered templates. |
-| `targets` | object | yes | Map of target names to target configurations. |
-
-### `targets.<name>` fields
-
-| Field | Type | Required | Description |
-|---|---:|---:|---|
-| `description` | string | no | Human-readable description shown in `list-targets`. |
-| `inherits` | list[string] | no | Other targets to merge before this target. Enables reusable target composition. |
-| `platforms` | list[string] | no | Platform adapters to render. Supported: `codex`, `gitlab-duo`, `github-copilot`, `openhands`, `opencode`, `generic`. |
-| `profiles` | list[string] | no | Behavior/profile labels passed to templates. |
-| `skills` | list[string] | no | Skill bundles to render where supported by the selected platform. |
-| `flows` | list[string] | no | Flow instruction files to render where supported, mainly GitLab Duo. |
-| `model` | object | no | Optional local/cloud model defaults for generated instructions. |
-| `rules` | object | no | Policy flags passed to templates. |
-| `variables` | object | no | Target-specific variables. These override top-level variables with the same key. |
-
-### `model` fields
-
-| Field | Type | Required | Description |
-|---|---:|---:|---|
-| `provider` | string | no | Model provider name, for example `ollama`, `openai`, `anthropic`, `openrouter`. |
-| `default_model` | string | no | Default model name, for example `qwen2.5-coder:7b`. |
-| `base_url` | string | no | Base URL for local or OpenAI-compatible endpoints, for example `http://localhost:11434`. |
-
-### `rules` examples
-
-`rules` is intentionally open-ended so teams can express governance flags without changing the schema.
-
-Example:
-
-```yaml
-rules:
-  no_direct_push: true
-  require_tests: true
-  require_security_review: true
-  forbid_secret_files: true
-  require_merge_request: true
-```
-
-Templates can render these as explicit agent instructions.
-
-### Variable merge behavior
-
-Top-level variables apply to every target:
-
-```yaml
-variables:
-  project_name: CoachIQ
-  default_language: de
-```
-
-Target-level variables override top-level variables:
-
-```yaml
-targets:
-  documentation:
-    variables:
-      default_language: en
-```
-
-Resolved value for `documentation.default_language` is `en`.
-
-### Inheritance merge behavior
-
-When a target inherits another target:
-
-- lists are appended and de-duplicated while preserving order;
-- `rules` are merged, with child values overriding parent values;
-- `variables` are merged, with child values overriding parent values;
-- `model` is replaced by the child target if the child defines one;
-- `description` is replaced by the child target if the child defines one.
-
-Example:
-
-```yaml
-targets:
-  base:
-    platforms:
-      - codex
-    profiles:
-      - base
-    skills:
-      - cost-based-planner
-
-  strict:
-    inherits:
-      - base
-    profiles:
-      - devsecops
-      - strict
-    skills:
-      - security-reviewer
-      - verification-reviewer
-    rules:
-      require_tests: true
-```
-
-Resolved `strict` target:
-
-```yaml
-platforms:
-  - codex
-profiles:
-  - base
-  - devsecops
-  - strict
-skills:
-  - cost-based-planner
-  - security-reviewer
-  - verification-reviewer
-rules:
-  require_tests: true
-```
-
-## CLI reference
-
-### `init`
-
-Create a starter `agentic.bake.yaml`.
-
-```bash
-agentic-template init --target .
-agentic-template init --target . --overwrite
-```
-
-Options:
-
-| Option | Description |
-|---|---|
-| `--target`, `-t` | Target repository path. Defaults to current directory. |
-| `--overwrite` | Replace an existing `agentic.bake.yaml`. |
-
-### `list-targets`
-
-List configured targets.
-
-```bash
-agentic-template list-targets --target .
-agentic-template list-targets --file ./agentic.bake.yaml
-```
-
-Options:
-
-| Option | Description |
-|---|---|
-| `--target`, `-t` | Target repository path. |
-| `--file`, `-f` | Explicit bake file path. Defaults to `<target>/agentic.bake.yaml`. |
-
-### `bake`
-
-Render a target.
-
-```bash
-agentic-template bake <target-name> --target . --dry-run
-agentic-template bake <target-name> --target . --write
-agentic-template bake <target-name> --target . --write --force
-```
-
-Options:
-
-| Option | Description |
-|---|---|
-| `<target-name>` | Target from `agentic.bake.yaml`, for example `default`, `codex`, `gitlab`, `all`. |
-| `--target`, `-t` | Target repository path. |
-| `--file`, `-f` | Explicit bake file path. |
-| `--write` | Write files to disk. Without this, the command is a dry-run. |
-| `--dry-run` | Preview only. Equivalent to omitting `--write`. |
-| `--force` | Overwrite unmanaged or conflicting files. Use carefully. |
-
-### `diff`
-
-Show planned file-level changes. This is a dry-run wrapper around `bake`.
-
-```bash
-agentic-template diff default --target .
-```
-
-### `validate`
-
-Validate generated agentic files.
-
-```bash
-agentic-template validate --target .
-```
-
-The validator checks core structures, required metadata, and known platform output conventions.
-
-### `--version`
-
-Show the installed version.
-
-```bash
-agentic-template --version
-```
+- `skills/<skill-name>/SKILL.md` is the GitLab project-level Agent Skill path.
+- `.gitlab/duo/chat-rules.md` is the GitLab project-level custom rules path.
+- `.gitlab/duo/flows/*.yaml` are source-of-truth templates; GitLab does not treat these as automatically active Custom Flows by merely committing them.
+- Flow YAML includes optional inputs for `context:inputs.user_rule` and `context:inputs.workspace_agent_skills`, so AGENTS.md and project skills can be passed into custom flow agents.
 
 ## Safety model
 
@@ -477,124 +281,19 @@ The CLI is safe by default:
 
 - `bake` does not write unless `--write` is set.
 - Existing unmanaged files are not overwritten unless `--force` is set.
-- Conflicting managed files block writes unless `--force` is set.
-- A `.agentic-template.lock` file records managed files and checksums.
+- A `.agentic-template.lock` file records managed files, checksums, targets, platforms, and template-pack version.
 - `diff` and `dry-run` show planned changes before write.
-- `validate` checks expected structures and core metadata.
+- `validate` checks expected structures, core metadata, GitLab-native paths, and GitLab flow restrictions.
 
-## Typical workflows
-
-### Initialize a repository
+## Typical workflow
 
 ```bash
 agentic-template init --target .
-agentic-template list-targets --target .
-agentic-template bake default --target . --dry-run
-agentic-template bake default --target . --write
+agentic-template bake gitlab --target . --dry-run
+agentic-template bake gitlab --target . --write
 agentic-template validate --target .
 git diff
 ```
-
-### Apply only Codex files
-
-```bash
-agentic-template bake codex --target . --dry-run
-agentic-template bake codex --target . --write
-```
-
-### Apply GitLab Duo setup
-
-```bash
-agentic-template bake gitlab --target . --dry-run
-agentic-template bake gitlab --target . --write
-```
-
-### Apply everything
-
-```bash
-agentic-template bake all --target . --dry-run
-agentic-template bake all --target . --write
-```
-
-### Resolve conflicts
-
-If the CLI reports conflicts:
-
-1. Inspect the existing file.
-2. Decide whether local changes should be preserved.
-3. Manually merge or rerun with `--force` if overwriting is intended.
-
-```bash
-agentic-template bake default --target . --write --force
-```
-
-## Generated output by platform
-
-### Codex
-
-Typical output:
-
-```text
-AGENTS.md
-.agents/skills/<skill-name>/SKILL.md
-```
-
-Use for Codex CLI and Codex-enabled repository workflows.
-
-### GitHub Copilot
-
-Typical output:
-
-```text
-.github/copilot-instructions.md
-.github/prompts/default.prompt.md
-```
-
-Use for repository-wide Copilot guidance and reusable prompt files.
-
-### GitLab Duo
-
-Typical output:
-
-```text
-AGENTS.md
-.gitlab/duo/custom-rules.md
-.gitlab/duo/flows/<flow-name>.md
-```
-
-This adapter intentionally models GitLab Duo through repository instructions, rules, and flow guidance rather than Claude-style subagents.
-
-### OpenHands
-
-Typical output:
-
-```text
-AGENTS.md
-.openhands/instructions.md
-```
-
-Use for local or remote OpenHands runs.
-
-### OpenCode
-
-Typical output:
-
-```text
-AGENTS.md
-.opencode/instructions.md
-```
-
-Use for terminal-centric local coding-agent workflows.
-
-### Generic
-
-Typical output:
-
-```text
-.skills/<skill-name>/SKILL.md
-```
-
-Use for portable skill bundles or unsupported agentic systems.
 
 ## Development
 
@@ -604,34 +303,8 @@ uv run pytest
 uv run ruff check .
 ```
 
-## Project structure
+## Documentation
 
-```text
-agentic-template-kit/
-├── pyproject.toml
-├── README.md
-├── docs/
-├── examples/
-├── src/
-│   └── agentic_template_kit/
-│       ├── cli.py
-│       ├── bake.py
-│       ├── detector.py
-│       ├── lockfile.py
-│       ├── models.py
-│       ├── renderer.py
-│       ├── validator.py
-│       └── templates/
-└── tests/
-```
-
-## Design notes
-
-This project intentionally separates:
-
-- **Templates**: reusable platform-specific text assets.
-- **Bake file**: project-specific target selection.
-- **Targets**: named presets for one or more agentic outputs.
-- **Profiles**: behavior and policy bundles passed to templates.
-- **CLI**: reproducible renderer and lockfile manager.
-- **Generated files**: committed into target repositories as normal agentic configuration.
+- `docs/CONFIGURATION.md` explains every `agentic.bake.yaml` parameter.
+- `docs/USAGE.md` contains CLI examples.
+- `docs/ARCHITECTURE.md` explains the renderer, adapters, lockfile, and validation model.

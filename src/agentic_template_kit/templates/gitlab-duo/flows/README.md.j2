@@ -1,0 +1,13 @@
+# GitLab Duo Custom Flow templates
+
+These files are source-of-truth templates for GitLab Duo Custom Flows.
+
+They are **not automatically loaded from the repository**. Create or update the active flow in GitLab through **AI > Flows** or the AI Catalog and paste the rendered YAML there.
+
+The generated flow YAML follows these GitLab Duo constraints:
+
+- `environment` uses `ambient`.
+- Prompts do not define a `model` field.
+- Top-level `name`, `description`, and `product_group` are omitted.
+- Agent components receive optional `context:inputs.user_rule` as `agents_dot_md`.
+- Agent components receive optional `context:inputs.workspace_agent_skills` as `workspace_agent_skills`.

@@ -1,39 +1,64 @@
 # Usage
 
-## Initialize
+## Initialize a repository
 
 ```bash
-agentic-template init --target .
+agentic-template init --target /path/to/repo
 ```
 
-## Preview
+## Preview GitLab Duo output
 
 ```bash
-agentic-template bake default --target . --dry-run
+agentic-template bake gitlab --target /path/to/repo --dry-run
 ```
 
-## Apply
+Expected files:
+
+```text
+AGENTS.md
+skills/<skill-name>/SKILL.md
+.gitlab/duo/chat-rules.md
+.gitlab/duo/flows/<flow>.yaml
+.gitlab/duo/flows/README.md
+.agentic-template.lock
+```
+
+## Apply GitLab Duo output
 
 ```bash
-agentic-template bake default --target . --write
+agentic-template bake gitlab --target /path/to/repo --write
 ```
+
+## Apply Codex output
+
+```bash
+agentic-template bake codex --target /path/to/repo --write
+```
+
+## Apply Claude Code output
+
+```bash
+agentic-template bake claude --target /path/to/repo --write
+```
+
+## Apply local AI output
+
+```bash
+agentic-template bake local-ai --target /path/to/repo --write
+```
+
+This generates OpenCode, OpenHands, and Ollama-oriented files.
 
 ## Validate
 
 ```bash
-agentic-template validate --target .
+agentic-template validate --target /path/to/repo
 ```
 
-## List targets
+## Force overwrite conflicts
 
 ```bash
-agentic-template list-targets --target .
+agentic-template bake gitlab --target /path/to/repo --write --force
 ```
 
-## Force overwrite
-
-Only use this when you intentionally want to overwrite unmanaged or locally modified files:
-
-```bash
-agentic-template bake default --target . --write --force
-```
+Use this only when you intentionally want to replace unmanaged or locally modified generated files.

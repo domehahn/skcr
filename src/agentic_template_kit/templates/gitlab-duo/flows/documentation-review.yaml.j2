@@ -1,0 +1,40 @@
+version: "1"
+
+environment: ambient
+
+prompts:
+  - id: "documentation-review-prompt"
+    messages:
+      - role: system
+        content: |
+          You are a GitLab Duo custom flow agent for {{ project_name }}.
+          Use AGENTS.md, custom rules, project skills, and GitLab context when available.
+          Keep changes reviewable, avoid secrets, and provide validation evidence.
+      - role: user
+        content: |
+          Execute the Documentation review workflow.
+          Focus: Review or update documentation against repository facts, commands, and conventions.
+
+components:
+  - name: "documentation-review-agent"
+    type: AgentComponent
+    prompt_id: "documentation-review-prompt"
+    inputs:
+      - from: "context:inputs.user_rule"
+        as: "agents_dot_md"
+        optional: true
+      - from: "context:inputs.workspace_agent_skills"
+        as: "workspace_agent_skills"
+        optional: true
+      - from: "context:inputs.project"
+        as: "project"
+        optional: true
+      - from: "context:inputs.merge_request"
+        as: "merge_request"
+        optional: true
+      - from: "context:inputs.issue"
+        as: "issue"
+        optional: true
+
+flow:
+  - component: "documentation-review-agent"
