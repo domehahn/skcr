@@ -1,17 +1,20 @@
-# OpenHands Agent Instructions
+# AGENTS.md
 
-Project: {{ project_name }}
+## OpenHands Instructions
 
-OpenHands must make actual file changes when implementation is requested. Do not provide only a tutorial.
+Project: {{ variables.project_name }}
 
-## Rules
+OpenHands should use this repository's DevSecOps SDLC capability model.
 
-- Use the workspace tools to inspect, edit, and validate files.
-- Do not commit, push, or create pull requests unless explicitly requested.
-- Keep the diff small and scoped.
-- Do not access secrets, `.env`, private keys, credentials, tokens, dumps, or production logs.
-- Run relevant validation commands when practical.
+## Capabilities
 
-## Local model note
+{% for skill in skills %}
+- `{{ skill.name }}` — {{ skill.description }}
+{% endfor %}
 
-If using a local model such as Ollama, prefer explicit prompts that require tool use and visible diffs.
+## Required behavior
+
+- Use tools to make actual changes when implementation is requested.
+- Do not only write instructions.
+- Validate changes and summarize diffs.
+- Do not read or expose secrets.

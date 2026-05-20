@@ -1,20 +1,5 @@
 # OpenHands Workspace Instructions
 
-## Execution
+Use the DevSecOps SDLC capability model from `AGENTS.md`.
 
-- Make real changes in the connected repository when asked.
-- Do not merely describe shell commands.
-- Prefer minimal changes with visible diffs.
-- Validate with repository-native commands.
-- If tool execution is unavailable, state that clearly.
-
-## Model
-
-{% if model %}
-Configured model preference:
-- Provider: {{ model.provider or "unspecified" }}
-- Model: {{ model.default_model or "unspecified" }}
-- Base URL: {{ model.base_url or "unspecified" }}
-{% else %}
-No local model preference configured.
-{% endif %}
+For local models, keep tasks small and explicit. If tool execution fails, report the limitation rather than pretending the task was completed.

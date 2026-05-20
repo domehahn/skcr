@@ -1,64 +1,26 @@
 # Usage
 
-## Initialize a repository
+## Initialize for GitLab Duo
 
 ```bash
-agentic-template init --target /path/to/repo
+agentic-template init --target . --platform "gitlab-duo" --project-name MyProject
+agentic-template bake default --target . --dry-run
+agentic-template bake default --target . --write
+agentic-template validate --target .
 ```
 
-## Preview GitLab Duo output
+## Initialize for multiple platforms
 
 ```bash
-agentic-template bake gitlab --target /path/to/repo --dry-run
+agentic-template init --target . --platform "gitlab-duo,codex,github-copilot" --project-name MyProject
+agentic-template bake default --target . --write
 ```
 
-Expected files:
-
-```text
-AGENTS.md
-skills/<skill-name>/SKILL.md
-.gitlab/duo/chat-rules.md
-.gitlab/duo/flows/<flow>.yaml
-.gitlab/duo/flows/README.md
-.agentic-template.lock
-```
-
-## Apply GitLab Duo output
+## Presets
 
 ```bash
-agentic-template bake gitlab --target /path/to/repo --write
+agentic-template init --target . --preset gitlab
+agentic-template init --target . --preset enterprise
+agentic-template init --target . --preset local-ai
+agentic-template init --target . --preset all
 ```
-
-## Apply Codex output
-
-```bash
-agentic-template bake codex --target /path/to/repo --write
-```
-
-## Apply Claude Code output
-
-```bash
-agentic-template bake claude --target /path/to/repo --write
-```
-
-## Apply local AI output
-
-```bash
-agentic-template bake local-ai --target /path/to/repo --write
-```
-
-This generates OpenCode, OpenHands, and Ollama-oriented files.
-
-## Validate
-
-```bash
-agentic-template validate --target /path/to/repo
-```
-
-## Force overwrite conflicts
-
-```bash
-agentic-template bake gitlab --target /path/to/repo --write --force
-```
-
-Use this only when you intentionally want to replace unmanaged or locally modified generated files.

@@ -1,21 +1,16 @@
-# Ollama local model configuration
+# Ollama Local Model Configuration
 
-This directory contains an optional Ollama `Modelfile` for creating a project-specific local model wrapper.
+This directory contains a generated Modelfile for local development.
 
-## Create model
-
-```bash
-ollama create {{ project_name | lower | replace(' ', '-') }}-agent -f .ollama/Modelfile
-```
-
-## Run model
+Recommended commands:
 
 ```bash
-ollama run {{ project_name | lower | replace(' ', '-') }}-agent
+ollama create {{ variables.project_name | lower }}-agent -f .ollama/Modelfile
+ollama run {{ variables.project_name | lower }}-agent
 ```
 
-## Notes
+Base URL for local tools:
 
-- Ollama itself does not read repository instruction files automatically.
-- Tools such as OpenCode, OpenHands, Continue, or Cline must be configured to use the local Ollama endpoint.
-- Default base URL: `{{ model.base_url | default('http://localhost:11434', true) }}`
+```text
+{{ model.base_url | default("http://localhost:11434") }}
+```

@@ -1,28 +1,25 @@
 # GitHub Copilot Repository Instructions
 
-## Agentic behavior
+Project: {{ variables.project_name }}  
+Owner team: {{ variables.owner_team }}  
+Governance level: {{ variables.governance_level }}
 
-When generating or editing code in this repository:
+GitHub Copilot does not use `SKILL.md` project skills like Codex or GitLab Duo. This repository provides reusable prompt files under:
 
-- Prefer small, reviewable changes.
-- Follow existing project conventions.
-- Do not invent commands, scripts, endpoints, or files.
-- Avoid reading or suggesting changes to secrets, `.env`, private keys, credentials, dumps, or production logs.
-- Add or update tests when behavior changes.
-- Validate instructions against repository files.
+```text
+.github/prompts/*.prompt.md
+```
 
-## Project context
+## Available prompt capabilities
 
-Project: {{ project_name }}
-Owner team: {{ owner_team }}
-Detected language: {{ language }}
-Detected package manager: {{ package_manager or "unknown" }}
+{% for skill in skills %}
+- `{{ skill.name }}.prompt.md` — {{ skill.description }}
+{% endfor %}
 
-## Review expectations
+## Required behavior
 
-For any generated change, include:
-
-- What changed
-- Why it changed
-- How to validate it
-- Known limitations or risks
+- Prefer minimal, reviewable changes.
+- Do not expose secrets or credentials.
+- Do not change CI/CD or security posture without explaining the impact.
+- Run or suggest repository-native validation.
+- Summarize changed files, validation, and risks.

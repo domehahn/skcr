@@ -1,53 +1,35 @@
 [project]
 name = "agentic-template-kit"
-version = "0.2.0"
-description = "Bake-style generator for agentic coding assistant instructions and skills across Codex, GitLab Duo, GitHub Copilot, Claude Code, OpenHands, OpenCode, and Ollama."
+version = "0.7.0"
+description = "Generate agentic DevSecOps SDLC instructions, skills, prompts, rules, and flow templates for Codex, GitLab Duo, GitHub Copilot, Claude Code, OpenHands, OpenCode, Ollama, and generic agentic systems."
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
 authors = [
   { name = "Agentic Template Kit Maintainers" }
 ]
-keywords = ["agents", "codex", "gitlab-duo", "copilot", "openhands", "opencode", "claude", "ollama", "skills", "templates"]
-classifiers = [
-  "Development Status :: 4 - Beta",
-  "Environment :: Console",
-  "Intended Audience :: Developers",
-  "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.12",
-  "Topic :: Software Development :: Code Generators",
-  "Topic :: Software Development :: Quality Assurance",
-]
+keywords = ["agents", "devsecops", "sdlc", "codex", "gitlab-duo", "copilot", "claude", "openhands", "opencode", "ollama"]
 dependencies = [
-  "jinja2>=3.1.0",
-  "pydantic>=2.7.0",
-  "pyyaml>=6.0.1",
-  "rich>=13.7.0",
   "typer>=0.12.0",
-]
-
-[project.optional-dependencies]
-dev = [
-  "pytest>=8.2.0",
-  "ruff>=0.6.0",
-  "mypy>=1.10.0",
+  "jinja2>=3.1.0",
+  "pyyaml>=6.0.0",
+  "rich>=13.7.0",
+  "pydantic>=2.7.0"
 ]
 
 [project.scripts]
 agentic-template = "agentic_template_kit.cli:app"
 
-[tool.ruff]
-line-length = 100
-target-version = "py312"
-
-[tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP", "SIM"]
-ignore = []
+[dependency-groups]
+dev = [
+  "pytest>=8.0.0",
+  "ruff>=0.6.0"
+]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
 pythonpath = ["src"]
 
-[tool.setuptools.package-data]
-agentic_template_kit = ["templates/**/*.j2"]
+[tool.ruff]
+line-length = 100
+target-version = "py312"

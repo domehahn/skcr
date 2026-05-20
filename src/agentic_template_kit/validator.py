@@ -4,105 +4,57 @@ from pathlib import Path
 
 import yaml
 
-
-def _check_skill_dir(skills_dir: Path, issues: list[str]) -> None:
-    if not skills_dir.exists():
-        return
-    for skill_dir in sorted(p for p in skills_dir.iterdir() if p.is_dir()):
-        skill_file = skill_dir / "SKILL.md"
-        if not skill_file.exists():
-            issues.append(f"Missing SKILL.md in {skill_dir}")
-            continue
-        text = skill_file.read_text(encoding="utf-8")
-        if not text.startswith("---"):
-            issues.append(f"{skill_file} is missing YAML frontmatter")
-        if "name:" not in text:
-            issues.append(f"{skill_file} is missing 'name' metadata")
-        if "description:" not in text:
-            issues.append(f"{skill_file} is missing 'description' metadata")
+from .models import SUPPORTED_PLATFORMS
 
 
-def _validate_gitlab_flows(target: Path, issues: list[str]) -> None:
-    flows_dir = target / ".gitlab" / "duo" / "flows"
-    if not flows_dir.exists():
-        return
-    for flow in sorted(flows_dir.glob("*.yaml")):
-        try:
-            data = yaml.safe_load(flow.read_text(encoding="utf-8")) or {}
-        except Exception as exc:  # noqa: BLE001
-            issues.append(f"Invalid GitLab flow YAML {flow}: {exc}")
-            continue
-
-        for forbidden in ("name", "description", "product_group"):
-            if forbidden in data:
-                issues.append(f"{flow} contains forbidden top-level field '{forbidden}' for GitLab custom flows")
-
-        if data.get("environment") != "ambient":
-            issues.append(f"{flow} should set environment: ambient")
-
-        for prompt in data.get("prompts", []) or []:
-            if isinstance(prompt, dict) and "model" in prompt:
-                issues.append(f"{flow} prompt '{prompt.get('id', '<unknown>')}' must not define a model field")
-
-        agent_components = [
-            component
-            for component in (data.get("components", []) or [])
-            if isinstance(component, dict) and component.get("type") == "AgentComponent"
-        ]
-        for component in agent_components:
-            inputs = component.get("inputs", []) or []
-            sources = {item.get("from") for item in inputs if isinstance(item, dict)}
-            if "context:inputs.user_rule" not in sources:
-                issues.append(f"{flow} AgentComponent '{component.get('name')}' does not receive context:inputs.user_rule")
-            if "context:inputs.workspace_agent_skills" not in sources:
-                issues.append(f"{flow} AgentComponent '{component.get('name')}' does not receive context:inputs.workspace_agent_skills")
-
-
-def validate_target(target: Path) -> list[str]:
-    issues: list[str] = []
-
-    if not target.exists():
-        return [f"Target does not exist: {target}"]
+def validate_project(target: Path) -> list[str]:
+    errors: list[str] = []
 
     bake = target / "agentic.bake.yaml"
-    if bake.exists():
-        try:
-            yaml.safe_load(bake.read_text(encoding="utf-8"))
-        except Exception as exc:  # noqa: BLE001
-            issues.append(f"Invalid agentic.bake.yaml: {exc}")
+    if not bake.exists():
+        errors.append("Missing agentic.bake.yaml")
+        return errors
 
-    agents = target / "AGENTS.md"
-    if agents.exists() and not agents.read_text(encoding="utf-8").strip():
-        issues.append("AGENTS.md exists but is empty")
+    data = yaml.safe_load(bake.read_text(encoding="utf-8")) or {}
+    targets = data.get("targets", {})
+    if not targets:
+        errors.append("No targets configured in agentic.bake.yaml")
 
-    claude = target / "CLAUDE.md"
-    if claude.exists() and not claude.read_text(encoding="utf-8").strip():
-        issues.append("CLAUDE.md exists but is empty")
+    for name, cfg in targets.items():
+        for platform in cfg.get("platforms", []) or []:
+            if platform not in SUPPORTED_PLATFORMS:
+                errors.append(f"Target {name}: unsupported platform {platform}")
 
-    _check_skill_dir(target / ".agents" / "skills", issues)
-    _check_skill_dir(target / ".claude" / "skills", issues)
-    _check_skill_dir(target / "skills", issues)
+    if (target / "skills").exists():
+        for skill_dir in sorted((target / "skills").iterdir()):
+            if not skill_dir.is_dir():
+                continue
+            skill_file = skill_dir / "SKILL.md"
+            if not skill_file.exists():
+                errors.append(f"GitLab skill missing SKILL.md: {skill_dir}")
+                continue
+            text = skill_file.read_text(encoding="utf-8")
+            if "name:" not in text or "description:" not in text:
+                errors.append(f"Skill missing name/description: {skill_file}")
+            if "slash-command: enabled" not in text:
+                errors.append(f"GitLab skill should enable slash command: {skill_file}")
 
-    old_gitlab_rules = target / ".gitlab" / "duo" / "rules"
-    if old_gitlab_rules.exists():
-        issues.append("GitLab custom rules should render to .gitlab/duo/chat-rules.md, not .gitlab/duo/rules/**")
+    gitlab_duo = target / ".gitlab" / "duo"
+    if gitlab_duo.exists():
+        if not (gitlab_duo / "chat-rules.md").exists():
+            errors.append("GitLab Duo output missing .gitlab/duo/chat-rules.md")
 
-    old_gitlab_custom_rules = target / ".gitlab" / "duo" / "custom-rules.md"
-    if old_gitlab_custom_rules.exists():
-        issues.append("GitLab custom rules should render to .gitlab/duo/chat-rules.md, not .gitlab/duo/custom-rules.md")
+        flow_dir = gitlab_duo / "flows"
+        if flow_dir.exists():
+            for flow_file in sorted(flow_dir.glob("*.yaml")):
+                text = flow_file.read_text(encoding="utf-8")
+                forbidden_top_level = ["name:", "description:", "product_group:"]
+                for forbidden in forbidden_top_level:
+                    if text.startswith(forbidden):
+                        errors.append(f"GitLab custom flow contains forbidden top-level field {forbidden}: {flow_file}")
+                if "workspace_agent_skills" not in text:
+                    errors.append(f"Flow does not pass workspace_agent_skills: {flow_file}")
+                if "user_rule" not in text:
+                    errors.append(f"Flow does not pass user_rule: {flow_file}")
 
-    gitlab_chat_rules = target / ".gitlab" / "duo" / "chat-rules.md"
-    if gitlab_chat_rules.exists() and not gitlab_chat_rules.read_text(encoding="utf-8").strip():
-        issues.append(".gitlab/duo/chat-rules.md exists but is empty")
-
-    _validate_gitlab_flows(target, issues)
-
-    copilot = target / ".github" / "copilot-instructions.md"
-    if copilot.exists() and "Agentic" not in copilot.read_text(encoding="utf-8"):
-        issues.append(".github/copilot-instructions.md does not look like an agentic-template output")
-
-    modelfile = target / ".ollama" / "Modelfile"
-    if modelfile.exists() and "FROM" not in modelfile.read_text(encoding="utf-8"):
-        issues.append(".ollama/Modelfile is missing a FROM instruction")
-
-    return issues
+    return errors

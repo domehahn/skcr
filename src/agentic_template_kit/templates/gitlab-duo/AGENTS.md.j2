@@ -2,9 +2,9 @@
 
 ## GitLab Duo Agent Platform Instructions
 
-Project: {{ project_name }}
-Owner team: {{ owner_team }}
-Governance level: {{ governance_level }}
+Project: {{ variables.project_name }}  
+Owner team: {{ variables.owner_team }}  
+Governance level: {{ variables.governance_level }}
 
 Use these instructions for GitLab Duo Chat, Agentic Chat, Custom Agents, and Flows.
 
@@ -26,6 +26,55 @@ GitLab Duo Chat is not assumed to be a Claude-style subagent runtime. Multi-step
 - Use GitLab context such as issues, merge requests, diffs, pipelines, jobs, and repository files when available.
 - Do not expose CI/CD variables, tokens, job secrets, or masked variables.
 - Do not modify pipeline behavior without explaining the effect.
+
+## Project-level Agent Skills
+
+This repository defines GitLab Duo project-level skills under:
+
+```text
+skills/<skill-name>/SKILL.md
+```
+
+When slash commands are supported, invoke skills as `/skill-name`.
+
+{% for skill in skills %}
+- `/{{ skill.name }}` — {{ skill.description }}
+{% endfor %}
+
+## Skill routing
+
+Use skills proactively when the task matches their description.
+
+For feature work, prefer:
+
+```text
+/requirements-analyst
+→ /cost-based-planner
+→ /architecture-reviewer when architecture is affected
+→ /threat-modeler when security-sensitive behavior is affected
+→ /safe-implementer
+→ /test-strategy-engineer
+→ /verification-reviewer
+→ /security-reviewer when needed
+→ /documentation-maintainer when needed
+→ /release-readiness-reviewer before release readiness claims
+```
+
+For CI/CD, dependency, IaC, GitOps, secrets, compliance, observability, or incident tasks, use the matching specialized skill before claiming completion.
+
+## Custom Flow context requirements
+
+When a GitLab Custom Flow should use repository rules and project-level skills, the AgentComponent must pass both contexts:
+
+```yaml
+inputs:
+  - from: "context:inputs.user_rule"
+    as: "agents_dot_md"
+    optional: true
+  - from: "context:inputs.workspace_agent_skills"
+    as: "workspace_agent_skills"
+    optional: true
+```
 
 ## Validation
 

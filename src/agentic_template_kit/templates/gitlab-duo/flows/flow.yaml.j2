@@ -1,0 +1,29 @@
+version: "1"
+environment: "ambient"
+
+prompts:
+  - id: "{{ flow_name }}-prompt"
+    messages:
+      - role: system
+        content: |
+          You are executing the {{ flow_title }} flow for {{ variables.project_name }}.
+          Follow AGENTS.md, custom rules, and available project-level skills.
+          Produce auditable, concise, and validation-oriented output.
+      - role: user
+        content: |
+          Execute the requested flow using available GitLab context.
+
+components:
+  - name: "{{ flow_name }}-agent"
+    type: AgentComponent
+    prompt_id: "{{ flow_name }}-prompt"
+    inputs:
+      - from: "context:inputs.user_rule"
+        as: "agents_dot_md"
+        optional: true
+      - from: "context:inputs.workspace_agent_skills"
+        as: "workspace_agent_skills"
+        optional: true
+
+flow:
+  entrypoint: "{{ flow_name }}-agent"

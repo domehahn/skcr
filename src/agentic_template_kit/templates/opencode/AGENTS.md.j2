@@ -1,18 +1,13 @@
-# OpenCode Agent Instructions
+# AGENTS.md
 
-Project: {{ project_name }}
+## OpenCode Instructions
 
-Use OpenCode as a terminal-first coding agent.
+Project: {{ variables.project_name }}
 
-## Behavior
+Use this repository's DevSecOps SDLC capability model.
 
-- Inspect files with targeted search before editing.
-- Make actual file changes when requested.
-- Keep changes small and reviewable.
-- Run relevant tests/checks where practical.
-- Do not commit or push unless explicitly asked.
-- Do not read or expose secrets.
+{% for skill in skills %}
+- `{{ skill.name }}` — {{ skill.description }}
+{% endfor %}
 
-## Local model guidance
-
-When using Ollama or another local model, keep tasks scoped and validate frequently.
+Prefer terminal-native, minimal, validated changes. Do not expose secrets.

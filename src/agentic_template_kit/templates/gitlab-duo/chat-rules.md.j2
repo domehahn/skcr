@@ -1,37 +1,22 @@
 # GitLab Duo Custom Rules
 
-Project: {{ project_name }}
-Owner team: {{ owner_team }}
-Governance level: {{ governance_level }}
+Project: {{ variables.project_name }}  
+Owner team: {{ variables.owner_team }}  
+Governance level: {{ variables.governance_level }}
 
-These rules are rendered for GitLab Duo project-level custom rules.
+## Repository rules
 
-## General behavior
-
-- Plan before changing files.
-- Keep diffs small and reviewable.
-- Prefer Merge Request workflow for code changes.
+- Use Merge Requests for all changes.
 - Never push directly to protected branches.
-- Do not read, print, or modify secrets, masked CI/CD variables, private keys, token files, or `.env` files unless explicitly required and approved.
-- Summarize changed files, validation commands, and remaining risks.
+- Do not reveal secrets, masked variables, tokens, private keys, or CI/CD credentials.
+- Do not alter CI/CD behavior without explaining pipeline impact.
+- Prefer minimal diffs and repository-native validation.
+- Summarize validation evidence and residual risks.
 
-## GitLab workflow
+## DevSecOps SDLC skills
 
-- Use GitLab context such as Issues, Merge Requests, diffs, pipelines, job logs, commits, and repository files when available.
-- Treat `.gitlab-ci.yml`, pipeline templates, CI/CD variables, runners, includes, and deployment jobs as security-sensitive.
-- Do not mark work as merge-ready without test or pipeline evidence.
+Apply the relevant project-level skills under `skills/<skill-name>/SKILL.md`:
 
-## DevSecOps rules
-
-{% if rules.require_security_review | default(false) %}- Perform a security review for changes touching authentication, authorization, secrets, CI/CD, dependency management, file handling, or deployment logic.
-{% endif %}{% if rules.forbid_secret_files | default(false) %}- Do not open secret-like files, including private keys, token dumps, credential exports, and local `.env` files.
-{% endif %}{% if rules.require_tests | default(false) %}- Run or recommend the repository-native test/check commands before finalizing work.
-{% endif %}- Prefer least privilege.
-- Avoid privileged runners and containers unless explicitly justified.
-- Call out supply-chain, permission, secret-exposure, and deployment risks.
-
-## Documentation rules
-
-- Do not invent commands, APIs, paths, or GitLab settings.
-- Verify commands against repository files when possible.
-- Keep documentation task-oriented and copy-pasteable.
+{% for skill in skills %}
+- `/{{ skill.name }}` — {{ skill.description }}
+{% endfor %}

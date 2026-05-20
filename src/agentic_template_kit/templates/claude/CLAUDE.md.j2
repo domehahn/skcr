@@ -1,28 +1,32 @@
 # CLAUDE.md
 
-## Project context
+## Claude Code Instructions
 
-Project: {{ project_name }}
-Owner team: {{ owner_team }}
-Default language: {{ default_language }}
-Governance level: {{ governance_level }}
+Project: {{ variables.project_name }}  
+Owner team: {{ variables.owner_team }}  
+Governance level: {{ variables.governance_level }}
 
-Use this file as Claude Code project guidance. Keep work small, tool-driven, and validated.
+## Required behavior
 
-## Working rules
+- Make real file changes when implementation is requested.
+- Do not commit, push, deploy, publish, or merge unless explicitly asked.
+- Avoid secrets and sensitive files.
+- Keep changes minimal and validated.
 
-- Make real file changes when implementation is requested; do not only write instructions.
-- Use a plan for non-trivial multi-file work.
-- Read only relevant files.
-- Do not access secrets, `.env` files, private keys, token files, or production data unless explicitly required and approved.
-- Do not commit, push, publish, or deploy unless explicitly asked.
-- Run targeted tests/checks when practical.
-- Summarize changed files, validation, and risks before finishing.
+## Project Skills
 
-## Available project skills
+Claude Code project skills are stored under:
 
-{% if skills %}{% for skill in skills %}- `{{ skill }}`
-{% endfor %}{% else %}- No skills configured by this target.
-{% endif %}
+```text
+.claude/skills/<skill-name>/SKILL.md
+```
 
-Claude Code skills are rendered under `.claude/skills/<skill-name>/SKILL.md` by this template pack.
+Use slash commands where supported, or apply the matching skill instructions directly.
+
+{% for skill in skills %}
+- `/{{ skill.name }}` — {{ skill.description }}
+{% endfor %}
+
+## SDLC skill routing
+
+Use the relevant specialized skill before performing or approving work. For implementation, prefer planning, safe implementation, test strategy, verification, security review, documentation, and release readiness in that order.
