@@ -1,3 +1,88 @@
+# Claude Code Integration
+
+The Claude Code adapter generates both skills and subagents.
+
+## Generated structure
+
+```text
+CLAUDE.md
+.claude/
+├── skills/
+│   └── <skill-name>/
+│       └── SKILL.md
+└── agents/
+    └── <subagent-name>.md
+Skills vs. Subagents
+
+Skills are reusable instruction bundles.
+
+.claude/skills/<skill-name>/SKILL.md
+
+Subagents are specialized Claude Code workers with their own context, tool access, model, permissions, and system prompt.
+
+.claude/agents/<subagent-name>.md
+Generated subagents
+
+The DevSecOps SDLC edition generates these Claude Code subagents when the claude platform is enabled:
+
+requirements-analyst
+architecture-reviewer
+devsecops-reviewer
+security-reviewer
+ci-cd-reviewer
+iac-gitops-reviewer
+test-runner
+release-readiness-reviewer
+incident-postmortem-assistant
+Invocation
+
+Claude Code can delegate automatically when a task matches a subagent description.
+
+You can also ask explicitly:
+
+Use the security-reviewer subagent to review this change.
+
+or:
+
+Use the test-runner subagent to run relevant tests and summarize failures.
+Design rules
+Keep review subagents mostly read-only.
+Use explicit tools.
+Use skills: to preload relevant skill instructions into subagent context.
+Prefer bounded, specialized subagents over generic workers.
+Do not use subagents as a replacement for human review on security-sensitive changes.
+
+---
+
+## README-Ergänzung
+
+Diesen Block in die Plattformübersicht deiner `README.md` einfügen:
+
+```md
+### Claude Code
+
+Generated files:
+
+```text
+CLAUDE.md
+.claude/skills/<skill-name>/SKILL.md
+.claude/agents/<subagent-name>.md
+
+Claude Code skills provide reusable instructions. Claude Code subagents provide specialized workers with their own context, tools, model, permissions, and preloaded skills.
+
+The Claude adapter generates both:
+
+skills under .claude/skills/<skill-name>/SKILL.md
+subagents under .claude/agents/<subagent-name>.md
+
+Subagents are useful for bounded review, testing, analysis, and DevSecOps tasks that would otherwise flood the main Claude Code conversation with logs, grep output, test output, or detailed review findings.
+
+
+---
+
+## `src/agentic_template_kit/templates/claude/CLAUDE.md.j2`
+
+```md
 # CLAUDE.md
 
 ## Claude Code Instructions
@@ -9,9 +94,11 @@ Governance level: {{ variables.governance_level }}
 ## Required behavior
 
 - Make real file changes when implementation is requested.
+- Do not only explain how to do the work.
 - Do not commit, push, deploy, publish, or merge unless explicitly asked.
 - Avoid secrets and sensitive files.
-- Keep changes minimal and validated.
+- Keep changes minimal, validated, and reviewable.
+- Summarize changed files, validation results, and residual risks.
 
 ## Project Skills
 
@@ -19,14 +106,68 @@ Claude Code project skills are stored under:
 
 ```text
 .claude/skills/<skill-name>/SKILL.md
-```
 
 Use slash commands where supported, or apply the matching skill instructions directly.
 
 {% for skill in skills %}
-- `/{{ skill.name }}` — {{ skill.description }}
+
+/{{ skill.name }} — {{ skill.description }}
 {% endfor %}
+Project Subagents
 
-## SDLC skill routing
+Claude Code project subagents are stored under:
 
-Use the relevant specialized skill before performing or approving work. For implementation, prefer planning, safe implementation, test strategy, verification, security review, documentation, and release readiness in that order.
+.claude/agents/<subagent-name>.md
+
+Use subagents for bounded side tasks that would otherwise flood the main conversation with file reads, grep results, logs, test output, or security review detail.
+
+{% for subagent in claude_subagents %}
+
+{{ subagent.name }} — {{ subagent.description }}
+{% endfor %}
+Subagent routing
+
+Use the matching subagent proactively when the task fits its description.
+
+Recommended routing:
+
+Requirements or acceptance criteria unclear → requirements-analyst
+Architecture or module boundaries affected → architecture-reviewer
+Security-sensitive behavior affected → security-reviewer
+CI/CD or deployment logic changed → ci-cd-reviewer
+Terraform, Kubernetes, Helm, Kustomize, or GitOps changed → iac-gitops-reviewer
+Tests should be executed or failures analyzed → test-runner
+DevSecOps merge-readiness review needed → devsecops-reviewer
+Release readiness must be assessed → release-readiness-reviewer
+Incident, outage, logs, or postmortem analysis needed → incident-postmortem-assistant
+SDLC skill routing
+
+For feature work, prefer:
+
+/requirements-analyst
+→ /cost-based-planner
+→ /architecture-reviewer when architecture is affected
+→ /threat-modeler when security-sensitive behavior is affected
+→ /safe-implementer
+→ /test-strategy-engineer
+→ /verification-reviewer
+→ /security-reviewer when needed
+→ /documentation-maintainer when needed
+→ /release-readiness-reviewer before release readiness claims
+
+For CI/CD, dependency, IaC, GitOps, secrets, compliance, observability, or incident tasks, use the matching specialized skill or subagent before claiming completion.
+
+Safety model
+Prefer read-only subagents for analysis and review.
+Use implementation through the main Claude Code session unless a subagent is explicitly designed to modify files.
+Do not let review subagents perform broad rewrites.
+Treat subagent output as review input; the main session remains responsible for final user-visible conclusions.
+
+---
+
+## `tests/test_templates.py` Ergänzung
+
+In `EXPECTED_TEMPLATES` muss diese Datei enthalten sein:
+
+```python
+"claude/agent.md.j2",

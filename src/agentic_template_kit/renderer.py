@@ -4,7 +4,7 @@ from pathlib import Path
 
 from jinja2 import Environment, FileSystemLoader
 
-from .catalog import skill_description, skill_title
+from .catalog import CLAUDE_SUBAGENTS, skill_description, skill_title
 from .models import BakeConfig, RenderedFile, TargetConfig
 
 TEMPLATE_ROOT = Path(__file__).parent / "templates"
@@ -25,6 +25,26 @@ def _skill_meta(skill_names: list[str]) -> list[dict[str, str]]:
     ]
 
 
+def _claude_subagents_for_target(target: TargetConfig) -> list[dict]:
+    available_skills = set(target.skills)
+    selected: list[dict] = []
+
+    for agent in CLAUDE_SUBAGENTS:
+        agent_skills = [skill for skill in agent.get("skills", []) if skill in available_skills]
+        if not agent_skills:
+            continue
+
+        selected.append(
+            {
+                **agent,
+                "title": skill_title(agent["name"]),
+                "skills": agent_skills,
+            }
+        )
+
+    return selected
+
+
 def render_files(config: BakeConfig, target: TargetConfig) -> list[RenderedFile]:
     env = Environment(
         loader=FileSystemLoader(TEMPLATE_ROOT),
@@ -34,10 +54,13 @@ def render_files(config: BakeConfig, target: TargetConfig) -> list[RenderedFile]
     )
 
     skills = _skill_meta(target.skills)
+    claude_subagents = _claude_subagents_for_target(target)
+
     context = {
         "variables": config.variables,
         "target": target,
         "skills": skills,
+        "claude_subagents": claude_subagents,
         "flows": target.flows,
         "rules": target.rules,
         "model": target.model,
@@ -93,6 +116,13 @@ def render_files(config: BakeConfig, target: TargetConfig) -> list[RenderedFile]
                 "shared/SKILL.md.j2",
                 f".claude/skills/{skill['name']}/SKILL.md",
                 {"skill": skill, "invocation_prefix": "/", "slash_command": False},
+            )
+        for subagent in claude_subagents:
+            add(
+                "claude",
+                "claude/agent.md.j2",
+                f".claude/agents/{subagent['name']}.md",
+                {"subagent": subagent},
             )
 
     if "github-copilot" in target.platforms:

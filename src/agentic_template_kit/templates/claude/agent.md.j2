@@ -1,0 +1,37 @@
+---
+name: {{ subagent.name }}
+description: {{ subagent.description }}
+tools: {{ subagent.tools }}
+model: {{ subagent.model }}
+permissionMode: {{ subagent.permissionMode }}
+maxTurns: {{ subagent.maxTurns }}
+skills:
+{% for skill in subagent.skills %}
+  - {{ skill }}
+{% endfor %}
+---
+
+# {{ subagent.title }}
+
+{{ subagent.prompt }}
+
+## Operating constraints
+
+- Keep the work scoped to the delegated task.
+- Do not expose secrets, credentials, tokens, private keys, masked CI/CD variables, production data, or sensitive logs.
+- Do not push, merge, deploy, publish, or create releases.
+- Prefer read-only analysis unless the user explicitly asks for implementation.
+- Prefer minimal, auditable findings over broad speculation.
+- Return only the information the main conversation needs to proceed.
+
+## Output format
+
+Return:
+
+1. Summary
+2. Findings
+3. Evidence
+4. Required fixes
+5. Recommended fixes
+6. Validation commands or checks
+7. Residual risks
