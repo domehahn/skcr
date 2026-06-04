@@ -34,7 +34,7 @@ go install ./cmd/skcr
 ### 3. Global über Modulpfad (z. B. GitHub)
 
 ```bash
-go install github.com/skcr/cmd/skcr@latest
+go install github.com/domehahn/skcr/cmd/skcr@latest
 ```
 
 ### 4. Nur Binary bauen
