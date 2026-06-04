@@ -1,9 +1,9 @@
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.ruff_cache/
-.venv/
+# Go
+bin/
 dist/
-build/
-*.egg-info/
+*.test
+*.out
+coverage.out
+
+# Tool state
 .agentic-template.lock

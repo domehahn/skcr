@@ -1,26 +1,46 @@
 # Usage
 
+This document uses the naming Skill Creator (`skcr`) consistently.
+
+## Build the CLI
+
+```bash
+make build
+```
+
+## Install the CLI
+
+```bash
+make install
+```
+
+Alternative:
+
+```bash
+go install ./cmd/skcr
+```
+
 ## Initialize for GitLab Duo
 
 ```bash
-agentic-template init --target . --platform "gitlab-duo" --project-name MyProject
-agentic-template bake default --target . --plan
-agentic-template bake default --target . --write
-agentic-template validate --target .
+./skcr init --target . --platform "gitlab-duo" --project-name MyProject
+./skcr bake default --target . --plan
+./skcr bake default --target . --write
+./skcr validate --target .
 ```
 
 ## Initialize for multiple platforms
 
 ```bash
-agentic-template init --target . --platform "gitlab-duo,codex,github-copilot" --project-name MyProject
-agentic-template bake default --target . --write
+./skcr init --target . --platform "gitlab-duo,codex,github-copilot" --project-name MyProject
+./skcr bake default --target . --write
 ```
 
 ## Initialize with defaults (all supported platforms)
 
 ```bash
-agentic-template init --target . --project-name MyProject
-agentic-template bake default --target . --write
+./skcr init --target . --project-name MyProject
+./skcr bake default --target . --write
 ```
 
 Default platforms when `--platform` and `--preset` are not provided:
@@ -45,8 +65,8 @@ Default platforms when `--platform` and `--preset` are not provided:
 ## Presets
 
 ```bash
-agentic-template init --target . --preset gitlab
-agentic-template init --target . --preset enterprise
-agentic-template init --target . --preset local-ai
-agentic-template init --target . --preset all
+./skcr init --target . --preset gitlab
+./skcr init --target . --preset enterprise
+./skcr init --target . --preset local-ai
+./skcr init --target . --preset all
 ```

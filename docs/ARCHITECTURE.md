@@ -1,6 +1,6 @@
 # Architecture
 
-The tool has four core responsibilities:
+Skill Creator (`skcr`) has four core responsibilities:
 
 1. Parse `agentic.bake.yaml`
 2. Resolve targets and inheritance

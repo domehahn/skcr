@@ -1,5 +1,7 @@
 # Configuration Reference
 
+This reference applies to Skill Creator (`skcr`).
+
 ## `agentic.bake.yaml`
 
 Top-level fields:
@@ -52,7 +54,7 @@ Aliases:
 ## Init with comma-separated platforms
 
 ```bash
-agentic-template init --target . --platform "gitlab-duo,codex,github-copilot"
+./skcr init --target . --platform "gitlab-duo,codex,github-copilot"
 ```
 
 ## Init defaults

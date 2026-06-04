@@ -2,7 +2,7 @@
 
 ## Agent Platform Index
 
-Project: agentic-template-kit  
+Project: Skill Creator (`skcr`)  
 Owner team: platform-engineering  
 Governance level: strict
 

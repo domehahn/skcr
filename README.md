@@ -1,149 +1,92 @@
-# Agentic Template Kit - DevSecOps SDLC Edition
+# Skill Creator (`skcr`)
 
-Generate agentic configuration for Codex, GitLab Duo Agent Platform, GitHub Copilot, Claude Code, OpenHands, OpenCode, Ollama, and generic agentic systems.
+`skcr` ist eine Go-CLI zum Generieren von agentischen Projekt-Templates für:
 
-This edition includes a full DevSecOps SDLC skill set and platform-specific render targets.
+- Codex
+- GitLab Duo
+- GitHub Copilot
+- Claude Code
+- OpenHands
+- OpenCode
+- Ollama
 
-## Included SDLC Skills
+## Voraussetzungen
 
-### Planning and analysis
+- Go `>= 1.23`
+- `make` (optional, für `make build` und `make install`)
 
-- `requirements-analyst`
-- `cost-based-planner`
-- `architecture-reviewer`
-- `threat-modeler`
+## Installation
 
-### Implementation and validation
-
-- `safe-implementer`
-- `test-strategy-engineer`
-- `verification-reviewer`
-
-### Security and governance
-
-- `security-reviewer`
-- `secrets-reviewer`
-- `dependency-supply-chain-reviewer`
-- `ci-cd-reviewer`
-- `iac-gitops-reviewer`
-- `compliance-governance-reviewer`
-
-### Delivery and operations
-
-- `release-readiness-reviewer`
-- `observability-reviewer`
-- `incident-postmortem-assistant`
-
-### Knowledge and reuse
-
-- `documentation-maintainer`
-- `universal-skill-creator`
-
-## Quickstart
-
-Use this sequence for a clean first setup in any repository:
-
-1. Install dependencies.
-2. Initialize `agentic.bake.yaml`.
-3. Preview generated files (`--plan`).
-4. Write generated files (`--write`).
-5. Validate project consistency.
+### 1. Lokal aus dem Repo installieren (wie bei `sctl`)
 
 ```bash
-uv sync
-uv run agentic-template init --target /path/to/repo --project-name MyProject
-uv run agentic-template bake default --target /path/to/repo --plan
-uv run agentic-template bake default --target /path/to/repo --write
-uv run agentic-template validate --target /path/to/repo
+make install
 ```
 
-If `init` runs without `--platform` or `--preset`, it configures:
+Das installiert `skcr` nach `$(go env GOBIN)` oder alternativ nach `$(go env GOPATH)/bin`.
 
-- `codex`
-- `github-copilot`
-- `claude`
-- `gitlab-duo`
-- `opencode`
-- `openhands`
-- `ollama`
-
-## Command Overview
-
-This section focuses on what each command is for and when to use it.
-
-### `agentic-template init`
-
-Creates a new `agentic.bake.yaml` in the target repository.
-
-Use this command when:
-
-- you onboard a new repository
-- you want a fresh baseline configuration
-- you want to switch to a different platform/preset setup and regenerate from a new bakefile
-
-### `agentic-template list-targets`
-
-Shows all available bake targets from `agentic.bake.yaml` in a table.
-
-Use this command when:
-
-- you need to understand which targets exist (`default`, `all`, platform-specific targets)
-- you are unsure which target to pass to `bake`
-- you want to inspect inherited target structure quickly
-
-### `agentic-template bake`
-
-Renders files for one target and either previews or writes them.
-
-Use this command when:
-
-- you want to preview upcoming changes (`--plan`)
-- you want to materialize generated files in the repo (`--write`)
-- your bakefile, skills, rules, or platform selection changed and outputs must be refreshed
-
-Typical behavior:
-
-- compares generated output to existing files
-- compares planned output to `.agentic-template.lock` state (Terraform/OpenTofu-like)
-- reports whether each file would be created, updated, or unchanged
-- reports state actions (`create`, `update`, `delete`, `noop`) and a plan summary
-- shows compact unified diffs for changed files in `--plan`
-- supports `--detailed-diff` to print full diffs (without truncation)
-- writes `.agentic-template.lock` when run with `--write`
-
-### `agentic-template validate`
-
-Checks whether generated/project state is valid and consistent.
-
-Use this command when:
-
-- you finished a bake and want a safety check
-- you want CI to fail early on invalid configuration
-- you changed `agentic.bake.yaml` manually and need a verification pass
-
-## GitHub Copilot Example
+### 2. Direkt mit Go (lokales Repo)
 
 ```bash
-uv run agentic-template init --target /path/to/repo --platform "github-copilot" --project-name MyProject
-uv run agentic-template bake default --target /path/to/repo --write
+go install ./cmd/skcr
 ```
 
-Generated Copilot structure:
+### 3. Global über Modulpfad (z. B. GitHub)
 
-```text
-AGENTS.md
-.agentic/github-copilot/AGENTS.md
-.github/copilot-instructions.md
-.github/prompts/<skill-name>.prompt.md
-.agentic-template.lock
+```bash
+go install github.com/skcr/cmd/skcr@latest
 ```
 
-Root `AGENTS.md` is a generated platform index. Platform-specific instruction files are written under `.agentic/<platform>/AGENTS.md`.
+### 4. Nur Binary bauen
 
-## Documentation
+```bash
+make build
+```
 
-- `docs/CONFIGURATION.md`
-- `docs/GITLAB_DUO.md`
-- `docs/SDLC_SKILLS.md`
-- `docs/USAGE.md`
-- `docs/ARCHITECTURE.md`
+Ergebnis: `dist/skcr`
+
+## Verifikation
+
+```bash
+skcr version
+skcr --help
+```
+
+## Schnellstart
+
+```bash
+skcr init --target /path/to/repo --project-name MyProject
+skcr bake default --target /path/to/repo --plan
+skcr bake default --target /path/to/repo --write
+skcr validate --target /path/to/repo
+```
+
+## Typische Commands
+
+- `skcr init`: erstellt `agentic.bake.yaml`
+- `skcr list-targets`: listet Targets aus `agentic.bake.yaml`
+- `skcr bake`: rendert Dateien als Plan oder schreibt sie mit `--write`
+- `skcr validate`: prüft Konsistenz und Plattform-Outputs
+- `skcr version`: zeigt Version, Commit und Build-Zeit
+
+## Häufige Workflows
+
+### Neues Projekt initialisieren
+
+```bash
+skcr init --target . --project-name MyProject
+skcr bake default --target . --write
+```
+
+### Nur bestimmte Plattformen aktivieren
+
+```bash
+skcr init --target . --platform "gitlab-duo,codex,github-copilot" --project-name MyProject
+skcr bake default --target . --write
+```
+
+### Preset verwenden
+
+```bash
+skcr init --target . --preset all --project-name MyProject
+```

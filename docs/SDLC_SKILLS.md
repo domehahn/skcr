@@ -1,6 +1,6 @@
 # DevSecOps SDLC Skills
 
-This kit includes a full SDLC-oriented skill set.
+Skill Creator (`skcr`) includes a full SDLC-oriented skill set.
 
 ## Planning
 
