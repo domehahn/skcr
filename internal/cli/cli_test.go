@@ -1,0 +1,404 @@
+package cli
+
+import (
+	"bytes"
+	"errors"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"runtime/debug"
+	"strings"
+	"testing"
+
+	"github.com/agentic-template-kit/skcr/internal/models"
+	"gopkg.in/yaml.v3"
+)
+
+func runRoot(args ...string) error {
+	root := NewRootCommand()
+	root.SetArgs(args)
+	root.SetOut(&bytes.Buffer{})
+	root.SetErr(&bytes.Buffer{})
+	return root.Execute()
+}
+
+func TestRootAndVersionCommand(t *testing.T) {
+	root := NewRootCommand()
+	if root.Use != "skcr" {
+		t.Fatalf("unexpected root use: %s", root.Use)
+	}
+
+	Version, Commit, Date = "1.2.3", "abcdef1", "2026-06-04"
+	cmd := newVersionCommand()
+	buf := &bytes.Buffer{}
+	cmd.SetOut(buf)
+	cmd.SetArgs(nil)
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "1.2.3") || !strings.Contains(out, "abcdef1") {
+		t.Fatalf("unexpected version output: %q", out)
+	}
+}
+
+func TestApplyBuildInfo(t *testing.T) {
+	origV, origC, origD := Version, Commit, Date
+	t.Cleanup(func() {
+		Version, Commit, Date = origV, origC, origD
+	})
+
+	Version, Commit, Date = "fixed", "none", "unknown"
+	applyBuildInfo(&debug.BuildInfo{}, true)
+	if Version != "fixed" {
+		t.Fatal("expected early return when version not dev")
+	}
+
+	Version, Commit, Date = "dev", "none", "unknown"
+	applyBuildInfo(nil, false)
+	if Version != "dev" {
+		t.Fatal("expected no change when build info unavailable")
+	}
+
+	Version, Commit, Date = "dev", "none", "unknown"
+	info := &debug.BuildInfo{
+		Main: debug.Module{Version: "v1.0.0"},
+		Settings: []debug.BuildSetting{
+			{Key: "vcs.revision", Value: "1234567890"},
+			{Key: "vcs.time", Value: "2026-06-04T00:00:00Z"},
+		},
+	}
+	applyBuildInfo(info, true)
+	if Version != "v1.0.0" || Commit != "1234567" || Date != "2026-06-04T00:00:00Z" {
+		t.Fatalf("unexpected version info: %s %s %s", Version, Commit, Date)
+	}
+
+	Version, Commit, Date = "dev", "none", "unknown"
+	info2 := &debug.BuildInfo{
+		Main: debug.Module{Version: "(devel)"},
+		Settings: []debug.BuildSetting{
+			{Key: "vcs.revision", Value: "123"},
+		},
+	}
+	applyBuildInfo(info2, true)
+	if Version != "dev" || Commit != "none" {
+		t.Fatalf("expected unchanged short revision/devel, got %s %s", Version, Commit)
+	}
+}
+
+func TestInitListBakeValidateFlow(t *testing.T) {
+	dir := t.TempDir()
+
+	if err := runRoot("init", "--target", dir, "--platform", "codex,gitlab-duo", "--project-name", "Demo"); err != nil {
+		t.Fatalf("init failed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "agentic.bake.yaml")); err != nil {
+		t.Fatalf("missing bake file: %v", err)
+	}
+	if err := runRoot("init", "--target", dir); err == nil {
+		t.Fatal("expected init error when bake file exists")
+	}
+	if err := runRoot("init", "--target", dir, "--force", "--preset", "minimal"); err != nil {
+		t.Fatalf("force init failed: %v", err)
+	}
+	if err := runRoot("list-targets", "--target", dir); err != nil {
+		t.Fatalf("list-targets failed: %v", err)
+	}
+
+	if err := runRoot("bake", "default", "--target", dir, "--write"); err != nil {
+		t.Fatalf("bake write failed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".agentic-template.lock")); err != nil {
+		t.Fatalf("missing lockfile: %v", err)
+	}
+
+	agentsPath := filepath.Join(dir, ".agentic", "codex", "AGENTS.md")
+	orig, err := os.ReadFile(agentsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(agentsPath, append(orig, []byte("\nchanged\n")...), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := runRoot("bake", "default", "--target", dir, "--plan", "--detailed-diff"); err != nil {
+		t.Fatalf("bake plan failed: %v", err)
+	}
+
+	if err := runRoot("validate", "--target", dir); err != nil {
+		t.Fatalf("validate failed: %v", err)
+	}
+
+	// Break validation deliberately.
+	skill := filepath.Join(dir, ".agents", "skills", "security-reviewer", "SKILL.md")
+	if err := os.WriteFile(skill, []byte("name: \"\"\ndescription: \"\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := runRoot("validate", "--target", dir); err == nil {
+		t.Fatal("expected validate failure")
+	}
+}
+
+func TestCommandErrorPaths(t *testing.T) {
+	dir := t.TempDir()
+	if err := runRoot("list-targets", "--target", dir); err == nil {
+		t.Fatal("expected list-targets error without bakefile")
+	}
+	if err := runRoot("bake", "default", "--target", dir); err == nil {
+		t.Fatal("expected bake error without bakefile")
+	}
+	if err := runRoot("validate", "--target", filepath.Join(dir, "does-not-exist", string([]byte{0}))); err == nil {
+		t.Fatal("expected validate error for invalid path")
+	}
+	if err := runRoot("init", "--target", dir, "--platform", "invalid"); err == nil {
+		t.Fatal("expected init parse error")
+	}
+}
+
+func TestInjectedErrorPaths(t *testing.T) {
+	// init abs error
+	origAbs := cliAbsPath
+	cliAbsPath = func(string) (string, error) { return "", errors.New("abs fail") }
+	if err := runRoot("init", "--target", t.TempDir()); err == nil {
+		t.Fatal("expected init abs error")
+	}
+	cliAbsPath = origAbs
+
+	// init mkdir error
+	origMkdir := cliMkdirAll
+	cliMkdirAll = func(string, os.FileMode) error { return errors.New("mkdir fail") }
+	if err := runRoot("init", "--target", t.TempDir()); err == nil {
+		t.Fatal("expected init mkdir error")
+	}
+	cliMkdirAll = origMkdir
+
+	// init build and dump errors
+	origBuild := cliBuildInitialConfig
+	cliBuildInitialConfig = func([]string, string, string, string, string, string) (*models.BakeConfig, error) {
+		return nil, errors.New("build fail")
+	}
+	if err := runRoot("init", "--target", t.TempDir()); err == nil {
+		t.Fatal("expected init build error")
+	}
+	cliBuildInitialConfig = origBuild
+
+	origDump := cliDumpBakeFile
+	cliDumpBakeFile = func(*models.BakeConfig, string) error { return errors.New("dump fail") }
+	if err := runRoot("init", "--target", t.TempDir(), "--force"); err == nil {
+		t.Fatal("expected init dump error")
+	}
+	cliDumpBakeFile = origDump
+
+	// validate abs error
+	origAbsValidate := cliAbsPathValidate
+	cliAbsPathValidate = func(string) (string, error) { return "", errors.New("abs fail") }
+	if err := runRoot("validate", "--target", "."); err == nil {
+		t.Fatal("expected validate abs error")
+	}
+	cliAbsPathValidate = origAbsValidate
+}
+
+func TestBakeInjectedErrorPaths(t *testing.T) {
+	dir := t.TempDir()
+	if err := runRoot("init", "--target", dir, "--platform", "codex", "--project-name", "Demo"); err != nil {
+		t.Fatal(err)
+	}
+
+	origAbs := cliAbsPathBake
+	cliAbsPathBake = func(string) (string, error) { return "", errors.New("abs fail") }
+	if err := runRoot("bake", "default", "--target", dir); err == nil {
+		t.Fatal("expected bake abs error")
+	}
+	cliAbsPathBake = origAbs
+
+	origResolve := cliResolveTarget
+	cliResolveTarget = func(*models.BakeConfig, string) (*models.TargetConfig, error) { return nil, errors.New("resolve fail") }
+	if err := runRoot("bake", "default", "--target", dir); err == nil {
+		t.Fatal("expected bake resolve error")
+	}
+	cliResolveTarget = origResolve
+
+	origRender := cliRenderFiles
+	cliRenderFiles = func(*models.BakeConfig, *models.TargetConfig) ([]models.RenderedFile, error) {
+		return nil, errors.New("render fail")
+	}
+	if err := runRoot("bake", "default", "--target", dir); err == nil {
+		t.Fatal("expected bake render error")
+	}
+	cliRenderFiles = origRender
+
+	origLoadLock := cliLoadLockfile
+	cliLoadLockfile = func(string) (map[string]any, error) { return nil, errors.New("lock fail") }
+	if err := runRoot("bake", "default", "--target", dir); err == nil {
+		t.Fatal("expected bake lock load error")
+	}
+	cliLoadLockfile = origLoadLock
+
+	origRead := cliReadFile
+	cliReadFile = func(string) ([]byte, error) { return nil, errors.New("read fail") }
+	if err := runRoot("bake", "default", "--target", dir, "--plan"); err != nil {
+		t.Fatalf("plan should continue on read errors, got %v", err)
+	}
+	cliReadFile = origRead
+
+	// Write path errors
+	origMkdir := cliMkdirAllBake
+	cliMkdirAllBake = func(string, os.FileMode) error { return errors.New("mkdir fail") }
+	if err := runRoot("bake", "default", "--target", dir, "--write"); err == nil {
+		t.Fatal("expected bake mkdir error")
+	}
+	cliMkdirAllBake = origMkdir
+
+	origWriteFile := cliWriteFile
+	cliWriteFile = func(string, []byte, os.FileMode) error { return errors.New("write fail") }
+	if err := runRoot("bake", "default", "--target", dir, "--write"); err == nil {
+		t.Fatal("expected bake write file error")
+	}
+	cliWriteFile = origWriteFile
+
+	origWriteLock := cliWriteLockfile
+	cliWriteLockfile = func(string, []models.RenderedFile, string) error { return errors.New("write lock fail") }
+	if err := runRoot("bake", "default", "--target", dir, "--write"); err == nil {
+		t.Fatal("expected bake write lock error")
+	}
+	cliWriteLockfile = origWriteLock
+}
+
+func TestBakePlanCoversStateAndDiffBranches(t *testing.T) {
+	dir := t.TempDir()
+	if err := runRoot("init", "--target", dir, "--platform", "codex", "--project-name", "Demo"); err != nil {
+		t.Fatal(err)
+	}
+	if err := runRoot("bake", "default", "--target", dir, "--write"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Add stale state entries to trigger delete and platform fallback branches.
+	lockPath := filepath.Join(dir, ".agentic-template.lock")
+	lockData, err := os.ReadFile(lockPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var lock map[string]any
+	if err := yaml.Unmarshal(lockData, &lock); err != nil {
+		t.Fatal(err)
+	}
+	managed, _ := lock["managed_files"].([]any)
+	if len(managed) == 0 {
+		t.Fatal("expected managed files in lock")
+	}
+	first, _ := managed[0].(map[string]any)
+	first["checksum"] = "sha256:deadbeef"
+	lock["managed_files"] = append(managed,
+		map[string]any{"path": "stale1", "platform": "codex", "source": "x", "checksum": "sha256:1"},
+		map[string]any{"path": "stale2", "source": "x", "checksum": "sha256:2"},
+	)
+	encoded, err := yaml.Marshal(lock)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(lockPath, encoded, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	agentsPath := filepath.Join(dir, ".agentic", "codex", "AGENTS.md")
+	original, err := os.ReadFile(agentsPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	skillPath := filepath.Join(dir, ".agents", "skills", "security-reviewer", "SKILL.md")
+	originalSkill, err := os.ReadFile(skillPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	origRead := cliReadFile
+	counts := map[string]int{}
+	cliReadFile = func(path string) ([]byte, error) {
+		if strings.HasSuffix(path, filepath.Join(".agentic", "codex", "AGENTS.md")) {
+			counts["agents"]++
+			if counts["agents"] == 2 {
+				return []byte("changed-content"), nil
+			}
+			if counts["agents"] == 3 {
+				return nil, errors.New("second read error")
+			}
+			return original, nil
+		}
+		if strings.HasSuffix(path, filepath.Join(".agents", "skills", "security-reviewer", "SKILL.md")) {
+			counts["skill"]++
+			if counts["skill"] == 2 {
+				return []byte("changed-content"), nil
+			}
+			return originalSkill, nil
+		}
+		return origRead(path)
+	}
+	defer func() { cliReadFile = origRead }()
+
+	if err := runRoot("bake", "default", "--target", dir, "--plan"); err != nil {
+		t.Fatalf("expected plan to succeed, got %v", err)
+	}
+}
+
+func TestHelpers(t *testing.T) {
+	rendered := sortedRendered([]models.RenderedFile{
+		{Destination: "b"},
+		{Destination: "a"},
+	})
+	if len(rendered) != 2 || rendered[0].Destination != "a" {
+		t.Fatalf("sortedRendered bad result: %#v", rendered)
+	}
+
+	// Cover helper branches directly.
+	if got := checksumValue(map[string]any{"checksum": "x"}); got != "x" {
+		t.Fatalf("checksumValue mismatch: %q", got)
+	}
+	if got := checksumValue(map[string]any{"checksum": 1}); got != "" {
+		t.Fatalf("checksumValue expected empty, got %q", got)
+	}
+
+	sm := sortedMapKeys(map[string]map[string]any{"b": {}, "a": {}})
+	if len(sm) != 2 || sm[0] != "a" {
+		t.Fatalf("sortedMapKeys bad result: %#v", sm)
+	}
+
+	sk := sortedKeys(map[string]models.RenderedFile{"b": {Destination: "b"}, "a": {Destination: "a"}})
+	if len(sk) != 2 || sk[0] != "a" {
+		t.Fatalf("sortedKeys bad result, got %#v", sk)
+	}
+
+	short := unifiedDiff("a\n", "b\n", "x", true)
+	if !strings.Contains(short, "a/x") || !strings.Contains(short, "b/x") {
+		t.Fatalf("unexpected diff header: %q", short)
+	}
+	longA := strings.Repeat("a\n", 300)
+	longB := strings.Repeat("b\n", 300)
+	truncated := unifiedDiff(longA, longB, "x", true)
+	if !strings.Contains(truncated, "... (diff truncated)") {
+		t.Fatal("expected truncated diff marker")
+	}
+	full := unifiedDiff(longA, longB, "x", false)
+	if strings.Contains(full, "... (diff truncated)") {
+		t.Fatal("did not expect truncation")
+	}
+}
+
+func TestExecuteErrorSubprocess(t *testing.T) {
+	if os.Getenv("SKCR_EXECUTE_ERR") == "1" {
+		orig := os.Args
+		defer func() { os.Args = orig }()
+		os.Args = []string{"skcr", "does-not-exist"}
+		Execute()
+		return
+	}
+
+	cmd := exec.Command(os.Args[0], "-test.run", "TestExecuteErrorSubprocess")
+	cmd.Env = append(os.Environ(), "SKCR_EXECUTE_ERR=1")
+	err := cmd.Run()
+	if err == nil {
+		t.Fatal("expected subprocess to fail via os.Exit")
+	}
+	exitErr, ok := err.(*exec.ExitError)
+	if !ok || exitErr.ExitCode() != 1 {
+		t.Fatalf("expected exit code 1, got err=%v", err)
+	}
+}

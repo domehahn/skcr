@@ -17,6 +17,18 @@ import (
 
 const maxDiffLinesPerFile = 120
 
+var (
+	cliAbsPathBake   = filepath.Abs
+	cliLoadBakeFile  = bake.LoadBakeFile
+	cliResolveTarget = bake.ResolveTarget
+	cliRenderFiles   = renderer.RenderFiles
+	cliLoadLockfile  = lockfile.LoadLockfile
+	cliWriteLockfile = lockfile.WriteLockfile
+	cliReadFile      = os.ReadFile
+	cliMkdirAllBake  = os.MkdirAll
+	cliWriteFile     = os.WriteFile
+)
+
 func newBakeCommand() *cobra.Command {
 	var target string
 	var plan bool
@@ -36,25 +48,25 @@ func newBakeCommand() *cobra.Command {
 				plan = true
 			}
 
-			absTarget, err := filepath.Abs(target)
+			absTarget, err := cliAbsPathBake(target)
 			if err != nil {
 				return err
 			}
 
-			cfg, err := bake.LoadBakeFile(filepath.Join(absTarget, "agentic.bake.yaml"))
+			cfg, err := cliLoadBakeFile(filepath.Join(absTarget, "agentic.bake.yaml"))
 			if err != nil {
 				return err
 			}
-			resolved, err := bake.ResolveTarget(cfg, targetName)
+			resolved, err := cliResolveTarget(cfg, targetName)
 			if err != nil {
 				return err
 			}
-			files, err := renderer.RenderFiles(cfg, resolved)
+			files, err := cliRenderFiles(cfg, resolved)
 			if err != nil {
 				return err
 			}
 
-			lock, err := lockfile.LoadLockfile(absTarget)
+			lock, err := cliLoadLockfile(absTarget)
 			if err != nil {
 				return err
 			}
@@ -69,7 +81,7 @@ func newBakeCommand() *cobra.Command {
 			for _, rendered := range sortedRendered(files) {
 				path := filepath.Join(absTarget, rendered.Destination)
 				action := "create"
-				if current, err := os.ReadFile(path); err == nil {
+				if current, err := cliReadFile(path); err == nil {
 					if string(current) == rendered.Content {
 						action = "unchanged"
 					} else {
@@ -115,7 +127,7 @@ func newBakeCommand() *cobra.Command {
 			if plan {
 				changed := []string{}
 				for path, rendered := range plannedFiles {
-					current, err := os.ReadFile(filepath.Join(absTarget, path))
+					current, err := cliReadFile(filepath.Join(absTarget, path))
 					if err != nil {
 						continue
 					}
@@ -126,7 +138,7 @@ func newBakeCommand() *cobra.Command {
 				sort.Strings(changed)
 				for _, path := range changed {
 					rendered := plannedFiles[path]
-					current, err := os.ReadFile(filepath.Join(absTarget, path))
+					current, err := cliReadFile(filepath.Join(absTarget, path))
 					if err != nil {
 						continue
 					}
@@ -157,15 +169,15 @@ func newBakeCommand() *cobra.Command {
 
 			for _, rendered := range files {
 				path := filepath.Join(absTarget, rendered.Destination)
-				if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+				if err := cliMkdirAllBake(filepath.Dir(path), 0o755); err != nil {
 					return err
 				}
-				if err := os.WriteFile(path, []byte(rendered.Content), 0o644); err != nil {
+				if err := cliWriteFile(path, []byte(rendered.Content), 0o644); err != nil {
 					return err
 				}
 			}
 
-			if err := lockfile.WriteLockfile(absTarget, files, targetName); err != nil {
+			if err := cliWriteLockfile(absTarget, files, targetName); err != nil {
 				return err
 			}
 			fmt.Printf("Wrote %d files and .agentic-template.lock\n", len(files))

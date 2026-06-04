@@ -17,10 +17,13 @@ var (
 )
 
 func init() {
+	applyBuildInfo(debug.ReadBuildInfo())
+}
+
+func applyBuildInfo(info *debug.BuildInfo, ok bool) {
 	if Version != "dev" {
 		return
 	}
-	info, ok := debug.ReadBuildInfo()
 	if !ok {
 		return
 	}

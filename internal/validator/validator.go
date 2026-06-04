@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/agentic-template-kit/skcr/internal/models"
@@ -49,24 +50,22 @@ func ValidateProject(target string) ([]string, error) {
 		}
 	}
 
-	skillsDir := filepath.Join(target, "skills")
-	if entries, err := os.ReadDir(skillsDir); err == nil {
-		for _, entry := range entries {
-			if !entry.IsDir() {
-				continue
-			}
-			skillFile := filepath.Join(skillsDir, entry.Name(), "SKILL.md")
-			text, err := os.ReadFile(skillFile)
-			if err != nil {
-				errors = append(errors, fmt.Sprintf("GitLab skill missing SKILL.md: %s", filepath.Dir(skillFile)))
-				continue
-			}
-			s := string(text)
-			if !containsAll(s, []string{"name:", "description:"}) {
-				errors = append(errors, fmt.Sprintf("Skill missing name/description: %s", skillFile))
-			}
-			if !containsAll(s, []string{"slash-command: enabled"}) {
-				errors = append(errors, fmt.Sprintf("GitLab skill should enable slash command: %s", skillFile))
+	for _, baseDir := range []string{"skills", ".agents/skills", ".claude/skills", ".agentic/skills"} {
+		skillsDir := filepath.Join(target, baseDir)
+		if entries, err := os.ReadDir(skillsDir); err == nil {
+			for _, entry := range entries {
+				if !entry.IsDir() {
+					continue
+				}
+				skillFile := filepath.Join(skillsDir, entry.Name(), "SKILL.md")
+				text, err := os.ReadFile(skillFile)
+				if err != nil {
+					errors = append(errors, fmt.Sprintf("Skill missing SKILL.md: %s", filepath.Dir(skillFile)))
+					continue
+				}
+				if errMsg := validateSkillMetadata(string(text)); errMsg != "" {
+					errors = append(errors, fmt.Sprintf("%s: %s", errMsg, skillFile))
+				}
 			}
 		}
 	}
@@ -115,4 +114,29 @@ func containsAll(s string, terms []string) bool {
 		}
 	}
 	return true
+}
+
+var (
+	nameRegex        = regexp.MustCompile(`(?m)^name:\s*(.+?)\s*$`)
+	descriptionRegex = regexp.MustCompile(`(?m)^description:\s*(.+?)\s*$`)
+)
+
+func validateSkillMetadata(content string) string {
+	nameMatch := nameRegex.FindStringSubmatch(content)
+	if len(nameMatch) < 2 || isEmptyMetadataValue(nameMatch[1]) {
+		return "Skill metadata name is missing or empty"
+	}
+
+	descriptionMatch := descriptionRegex.FindStringSubmatch(content)
+	if len(descriptionMatch) < 2 || isEmptyMetadataValue(descriptionMatch[1]) {
+		return "Skill metadata description is missing or empty"
+	}
+
+	return ""
+}
+
+func isEmptyMetadataValue(value string) bool {
+	v := strings.TrimSpace(value)
+	v = strings.Trim(v, `"'`)
+	return strings.TrimSpace(v) == ""
 }

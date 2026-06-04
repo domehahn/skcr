@@ -12,6 +12,11 @@ import (
 
 const LockfileName = ".agentic-template.lock"
 
+var (
+	lockYAMLMarshal   = yaml.Marshal
+	lockYAMLUnmarshal = yaml.Unmarshal
+)
+
 func Sha256Text(value string) string {
 	hash := sha256.Sum256([]byte(value))
 	return "sha256:" + hex.EncodeToString(hash[:])
@@ -32,7 +37,7 @@ func WriteLockfile(targetDir string, files []models.RenderedFile, targetName str
 		"target":        targetName,
 		"managed_files": managed,
 	}
-	encoded, err := yaml.Marshal(payload)
+	encoded, err := lockYAMLMarshal(payload)
 	if err != nil {
 		return err
 	}
@@ -52,7 +57,7 @@ func LoadLockfile(targetDir string) (map[string]any, error) {
 		return nil, err
 	}
 	decoded := map[string]any{}
-	if err := yaml.Unmarshal(payload, &decoded); err != nil {
+	if err := lockYAMLUnmarshal(payload, &decoded); err != nil {
 		return nil, err
 	}
 	if decoded == nil {

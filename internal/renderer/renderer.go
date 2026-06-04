@@ -11,34 +11,48 @@ import (
 	"github.com/flosch/pongo2/v6"
 )
 
-type SkillMeta struct {
-	Name        string `pongo2:"name"`
-	Title       string `pongo2:"title"`
-	Description string `pongo2:"description"`
-}
+var (
+	rendererCaller = runtime.Caller
+	rendererStat   = os.Stat
+)
 
 func templateRoot() (string, error) {
-	_, file, _, ok := runtime.Caller(0)
+	_, file, _, ok := rendererCaller(0)
 	if !ok {
 		return "", fmt.Errorf("unable to determine template root")
 	}
 	root := filepath.Join(filepath.Dir(file), "templates")
-	if _, err := os.Stat(root); err != nil {
+	if _, err := rendererStat(root); err != nil {
 		return "", err
 	}
 	return root, nil
 }
 
-func skillMeta(skillNames []string) []SkillMeta {
-	items := make([]SkillMeta, 0, len(skillNames))
+func skillMeta(skillNames []string) []map[string]any {
+	items := make([]map[string]any, 0, len(skillNames))
 	for _, skill := range skillNames {
-		items = append(items, SkillMeta{
-			Name:        skill,
-			Title:       catalog.SkillTitle(skill),
-			Description: catalog.SkillDescription(skill),
+		items = append(items, map[string]any{
+			"name":        skill,
+			"title":       catalog.SkillTitle(skill),
+			"description": catalog.SkillDescription(skill),
 		})
 	}
 	return items
+}
+
+func gitlabSlashCommandEnabled(target *models.TargetConfig) bool {
+	if target == nil || target.GitLabDuo == nil {
+		return true
+	}
+	value, ok := target.GitLabDuo["slash_command"]
+	if !ok {
+		return true
+	}
+	enabled, ok := value.(bool)
+	if !ok {
+		return true
+	}
+	return enabled
 }
 
 func claudeSubagentsForTarget(target *models.TargetConfig) []map[string]any {
@@ -108,7 +122,7 @@ func RenderFiles(config *models.BakeConfig, target *models.TargetConfig) ([]mode
 		if err != nil {
 			return err
 		}
-		content, err := tpl.Execute(ctx)
+		content, err := safeExecuteTemplate(tpl, ctx)
 		if err != nil {
 			return err
 		}
@@ -137,7 +151,7 @@ func RenderFiles(config *models.BakeConfig, target *models.TargetConfig) ([]mode
 		platformDocs = append(platformDocs, map[string]any{"platform": "codex", "path": ".agentic/codex/AGENTS.md", "description": "Codex instructions and skill routing"})
 		for _, skill := range skills {
 			extra := map[string]any{"skill": skill, "invocation_prefix": "$", "slash_command": false}
-			if err := add("codex", "shared/SKILL.md.j2", fmt.Sprintf(".agents/skills/%s/SKILL.md", skill.Name), extra); err != nil {
+			if err := add("codex", "shared/SKILL.md.j2", fmt.Sprintf(".agents/skills/%s/SKILL.md", skill["name"]), extra); err != nil {
 				return nil, err
 			}
 		}
@@ -151,9 +165,10 @@ func RenderFiles(config *models.BakeConfig, target *models.TargetConfig) ([]mode
 		if err := add("gitlab-duo", "gitlab-duo/chat-rules.md.j2", ".gitlab/duo/chat-rules.md", nil); err != nil {
 			return nil, err
 		}
+		slashCommandEnabled := gitlabSlashCommandEnabled(target)
 		for _, skill := range skills {
-			extra := map[string]any{"skill": skill, "invocation_prefix": "/", "slash_command": true}
-			if err := add("gitlab-duo", "shared/SKILL.md.j2", fmt.Sprintf("skills/%s/SKILL.md", skill.Name), extra); err != nil {
+			extra := map[string]any{"skill": skill, "invocation_prefix": "/", "slash_command": slashCommandEnabled}
+			if err := add("gitlab-duo", "shared/SKILL.md.j2", fmt.Sprintf("skills/%s/SKILL.md", skill["name"]), extra); err != nil {
 				return nil, err
 			}
 		}
@@ -175,7 +190,7 @@ func RenderFiles(config *models.BakeConfig, target *models.TargetConfig) ([]mode
 		platformDocs = append(platformDocs, map[string]any{"platform": "claude", "path": ".agentic/claude/AGENTS.md", "description": "Claude Code integration, skills, and subagent routing"})
 		for _, skill := range skills {
 			extra := map[string]any{"skill": skill, "invocation_prefix": "/", "slash_command": false}
-			if err := add("claude", "shared/SKILL.md.j2", fmt.Sprintf(".claude/skills/%s/SKILL.md", skill.Name), extra); err != nil {
+			if err := add("claude", "shared/SKILL.md.j2", fmt.Sprintf(".claude/skills/%s/SKILL.md", skill["name"]), extra); err != nil {
 				return nil, err
 			}
 		}
@@ -196,7 +211,7 @@ func RenderFiles(config *models.BakeConfig, target *models.TargetConfig) ([]mode
 		}
 		platformDocs = append(platformDocs, map[string]any{"platform": "github-copilot", "path": ".agentic/github-copilot/AGENTS.md", "description": "Pointer to GitHub Copilot repository instructions and prompts"})
 		for _, skill := range skills {
-			if err := add("github-copilot", "github-copilot/prompt.prompt.md.j2", fmt.Sprintf(".github/prompts/%s.prompt.md", skill.Name), map[string]any{"skill": skill}); err != nil {
+			if err := add("github-copilot", "github-copilot/prompt.prompt.md.j2", fmt.Sprintf(".github/prompts/%s.prompt.md", skill["name"]), map[string]any{"skill": skill}); err != nil {
 				return nil, err
 			}
 		}
@@ -239,7 +254,7 @@ func RenderFiles(config *models.BakeConfig, target *models.TargetConfig) ([]mode
 	if contains("generic") {
 		for _, skill := range skills {
 			extra := map[string]any{"skill": skill, "invocation_prefix": "$", "slash_command": false}
-			if err := add("generic", "shared/SKILL.md.j2", fmt.Sprintf(".agentic/skills/%s/SKILL.md", skill.Name), extra); err != nil {
+			if err := add("generic", "shared/SKILL.md.j2", fmt.Sprintf(".agentic/skills/%s/SKILL.md", skill["name"]), extra); err != nil {
 				return nil, err
 			}
 		}
@@ -252,4 +267,13 @@ func RenderFiles(config *models.BakeConfig, target *models.TargetConfig) ([]mode
 	}
 
 	return files, nil
+}
+
+func safeExecuteTemplate(tpl *pongo2.Template, ctx pongo2.Context) (content string, err error) {
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = fmt.Errorf("template execution panic: %v", recovered)
+		}
+	}()
+	return tpl.Execute(ctx)
 }

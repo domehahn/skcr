@@ -8,6 +8,8 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var cliAbsPathValidate = filepath.Abs
+
 func newValidateCommand() *cobra.Command {
 	var target string
 
@@ -15,7 +17,7 @@ func newValidateCommand() *cobra.Command {
 		Use:   "validate",
 		Short: "Validate generated/project state",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			absTarget, err := filepath.Abs(target)
+			absTarget, err := cliAbsPathValidate(target)
 			if err != nil {
 				return err
 			}

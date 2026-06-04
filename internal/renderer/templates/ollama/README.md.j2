@@ -5,12 +5,12 @@ This directory contains a generated Modelfile for local development.
 Recommended commands:
 
 ```bash
-ollama create {{ variables.project_name | lower }}-agent -f .ollama/Modelfile
-ollama run {{ variables.project_name | lower }}-agent
+ollama create {{ variables.project_name|lower }}-agent -f .ollama/Modelfile
+ollama run {{ variables.project_name|lower }}-agent
 ```
 
 Base URL for local tools:
 
 ```text
-{{ model.base_url | default("http://localhost:11434") }}
+{{ model.base_url|default:"http://localhost:11434" }}
 ```

@@ -11,6 +11,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+var bakeYAMLMarshal = yaml.Marshal
+
 func mergeUnique(base, add []string) []string {
 	result := slices.Clone(base)
 	for _, item := range add {
@@ -63,7 +65,7 @@ func LoadBakeFile(path string) (*models.BakeConfig, error) {
 }
 
 func DumpBakeFile(config *models.BakeConfig, path string) error {
-	payload, err := yaml.Marshal(config)
+	payload, err := bakeYAMLMarshal(config)
 	if err != nil {
 		return err
 	}
@@ -94,6 +96,9 @@ func normalizeTarget(target *models.TargetConfig) {
 	}
 	if target.Model == nil {
 		target.Model = map[string]any{}
+	}
+	if target.GitLabDuo == nil {
+		target.GitLabDuo = map[string]any{}
 	}
 }
 
@@ -130,6 +135,7 @@ func ResolveTarget(config *models.BakeConfig, targetName string) (*models.Target
 			merged.Flows = mergeUnique(merged.Flows, parentTarget.Flows)
 			merged.Rules = deepMerge(merged.Rules, parentTarget.Rules)
 			merged.Model = deepMerge(merged.Model, parentTarget.Model)
+			merged.GitLabDuo = deepMerge(merged.GitLabDuo, parentTarget.GitLabDuo)
 		}
 
 		merged.Platforms = mergeUnique(merged.Platforms, target.Platforms)
@@ -138,6 +144,7 @@ func ResolveTarget(config *models.BakeConfig, targetName string) (*models.Target
 		merged.Flows = mergeUnique(merged.Flows, target.Flows)
 		merged.Rules = deepMerge(merged.Rules, target.Rules)
 		merged.Model = deepMerge(merged.Model, target.Model)
+		merged.GitLabDuo = deepMerge(merged.GitLabDuo, target.GitLabDuo)
 
 		activeStack = activeStack[:len(activeStack)-1]
 		return merged, nil
@@ -222,6 +229,9 @@ func BuildInitialConfig(
 			Skills:      slices.Clone(catalog.CoreSkills),
 			Rules:       deepMerge(map[string]any{}, catalog.BaseRules),
 			Flows:       slices.Clone(catalog.DevsecopsFlows),
+			GitLabDuo: map[string]any{
+				"slash_command": true,
+			},
 		}
 	}
 

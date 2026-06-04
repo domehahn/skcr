@@ -37,6 +37,7 @@ type TargetConfig struct {
 	Flows       []string       `yaml:"flows,omitempty"`
 	Rules       map[string]any `yaml:"rules,omitempty"`
 	Model       map[string]any `yaml:"model,omitempty"`
+	GitLabDuo   map[string]any `yaml:"gitlab_duo,omitempty"`
 }
 
 type BakeConfig struct {

@@ -10,6 +10,14 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var (
+	cliAbsPath            = filepath.Abs
+	cliMkdirAll           = os.MkdirAll
+	cliParsePlatforms     = models.ParsePlatforms
+	cliBuildInitialConfig = bake.BuildInitialConfig
+	cliDumpBakeFile       = bake.DumpBakeFile
+)
+
 func newInitCommand() *cobra.Command {
 	var target string
 	var platform string
@@ -24,11 +32,11 @@ func newInitCommand() *cobra.Command {
 		Use:   "init",
 		Short: "Create a new agentic.bake.yaml",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			absTarget, err := filepath.Abs(target)
+			absTarget, err := cliAbsPath(target)
 			if err != nil {
 				return err
 			}
-			if err := os.MkdirAll(absTarget, 0o755); err != nil {
+			if err := cliMkdirAll(absTarget, 0o755); err != nil {
 				return err
 			}
 
@@ -37,18 +45,18 @@ func newInitCommand() *cobra.Command {
 				return fmt.Errorf("%s already exists. Use --force to overwrite", bakePath)
 			}
 
-			platforms, err := models.ParsePlatforms(platform)
+			platforms, err := cliParsePlatforms(platform)
 			if err != nil {
 				return err
 			}
 			if projectName == "" {
 				projectName = filepath.Base(absTarget)
 			}
-			cfg, err := bake.BuildInitialConfig(platforms, projectName, ownerTeam, language, governanceLevel, preset)
+			cfg, err := cliBuildInitialConfig(platforms, projectName, ownerTeam, language, governanceLevel, preset)
 			if err != nil {
 				return err
 			}
-			if err := bake.DumpBakeFile(cfg, bakePath); err != nil {
+			if err := cliDumpBakeFile(cfg, bakePath); err != nil {
 				return err
 			}
 

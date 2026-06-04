@@ -33,6 +33,7 @@ Top-level fields:
 | `rules` | Governance flags rendered into instructions/rules. |
 | `flows` | Flow template names to generate. |
 | `model` | Local model configuration for Ollama/local AI. |
+| `gitlab_duo` | GitLab Duo-specific options, e.g. `slash_command`. |
 
 ## Supported platforms
 
@@ -68,3 +69,16 @@ If neither `--platform` nor `--preset` is provided, `init` configures all suppor
 - `opencode`
 - `openhands`
 - `ollama`
+
+## GitLab Duo options
+
+To control slash-command metadata in generated GitLab skills:
+
+```yaml
+targets:
+  gitlab:
+    gitlab_duo:
+      slash_command: false
+```
+
+Default is `true`.
