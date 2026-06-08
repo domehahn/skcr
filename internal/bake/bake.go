@@ -55,11 +55,14 @@ func LoadBakeFile(path string) (*models.BakeConfig, error) {
 	if cfg.Variables == nil {
 		cfg.Variables = map[string]any{}
 	}
+	normalizeSkillConfig(cfg)
 	if cfg.Targets == nil {
 		cfg.Targets = map[string]*models.TargetConfig{}
 	}
 	for _, target := range cfg.Targets {
-		normalizeTarget(target)
+		if err := normalizeTarget(target); err != nil {
+			return nil, err
+		}
 	}
 	return cfg, nil
 }
@@ -72,15 +75,41 @@ func DumpBakeFile(config *models.BakeConfig, path string) error {
 	return os.WriteFile(path, payload, 0o644)
 }
 
-func normalizeTarget(target *models.TargetConfig) {
+func normalizeSkillConfig(cfg *models.BakeConfig) {
+	if cfg.Skills == nil {
+		cfg.Skills = &models.SkillIntegrationConfig{}
+	}
+	if cfg.Skills.Source == "" {
+		cfg.Skills.Source = "agent-skills.lock"
+	}
+	if cfg.Skills.Mode == "" {
+		cfg.Skills.Mode = models.SkillModeReference
+	}
+	if cfg.Skills.Platforms == nil {
+		cfg.Skills.Platforms = []string{}
+	} else {
+		platforms, err := models.NormalizePlatforms(cfg.Skills.Platforms)
+		if err == nil {
+			cfg.Skills.Platforms = platforms
+		}
+	}
+}
+
+func normalizeTarget(target *models.TargetConfig) error {
 	if target == nil {
-		return
+		return nil
 	}
 	if target.Inherits == nil {
 		target.Inherits = []string{}
 	}
 	if target.Platforms == nil {
 		target.Platforms = []string{}
+	} else {
+		platforms, err := models.NormalizePlatforms(target.Platforms)
+		if err != nil {
+			return err
+		}
+		target.Platforms = platforms
 	}
 	if target.Profiles == nil {
 		target.Profiles = []string{}
@@ -100,6 +129,7 @@ func normalizeTarget(target *models.TargetConfig) {
 	if target.GitLabDuo == nil {
 		target.GitLabDuo = map[string]any{}
 	}
+	return nil
 }
 
 func ResolveTarget(config *models.BakeConfig, targetName string) (*models.TargetConfig, error) {
@@ -118,10 +148,14 @@ func ResolveTarget(config *models.BakeConfig, targetName string) (*models.Target
 		if !ok {
 			return nil, fmt.Errorf("target %q not found", name)
 		}
-		normalizeTarget(target)
+		if err := normalizeTarget(target); err != nil {
+			return nil, err
+		}
 		activeStack = append(activeStack, name)
 		merged := &models.TargetConfig{}
-		normalizeTarget(merged)
+		if err := normalizeTarget(merged); err != nil {
+			return nil, err
+		}
 		merged.Description = target.Description
 
 		for _, parent := range target.Inherits {
@@ -161,6 +195,11 @@ func BuildInitialConfig(
 	governanceLevel string,
 	preset string,
 ) (*models.BakeConfig, error) {
+	var err error
+	platforms, err = models.NormalizePlatforms(platforms)
+	if err != nil {
+		return nil, err
+	}
 	if preset != "" {
 		switch preset {
 		case "minimal":
@@ -172,14 +211,18 @@ func BuildInitialConfig(
 		case "local-ai":
 			platforms = []string{"opencode", "openhands", "ollama"}
 		case "all":
-			platforms = []string{"codex", "github-copilot", "claude", "gitlab-duo", "opencode", "openhands", "ollama"}
+			platforms = []string{"codex", "github-copilot", "claude-code", "gitlab-duo", "opencode", "openhands", "ollama"}
 		default:
 			return nil, fmt.Errorf("unsupported preset: %s", preset)
+		}
+		platforms, err = models.NormalizePlatforms(platforms)
+		if err != nil {
+			return nil, err
 		}
 	}
 
 	if len(platforms) == 0 {
-		platforms = []string{"codex", "github-copilot", "claude", "gitlab-duo", "opencode", "openhands", "ollama"}
+		platforms = []string{"codex", "github-copilot", "claude-code", "gitlab-duo", "opencode", "openhands", "ollama"}
 	}
 
 	variables := map[string]any{
@@ -211,10 +254,10 @@ func BuildInitialConfig(
 		}
 	}
 
-	if slices.Contains(platforms, "claude") {
+	if slices.Contains(platforms, "claude-code") {
 		targets["claude"] = &models.TargetConfig{
 			Description: "Claude Code CLAUDE.md and project skills",
-			Platforms:   []string{"claude"},
+			Platforms:   []string{"claude-code"},
 			Profiles:    []string{"base", "devsecops"},
 			Skills:      slices.Clone(catalog.CoreSkills),
 			Rules:       deepMerge(map[string]any{}, catalog.BaseRules),
@@ -278,6 +321,10 @@ func BuildInitialConfig(
 	return &models.BakeConfig{
 		Version:   "1",
 		Variables: variables,
-		Targets:   targets,
+		Skills: &models.SkillIntegrationConfig{
+			Source: "agent-skills.lock",
+			Mode:   models.SkillModeReference,
+		},
+		Targets: targets,
 	}, nil
 }

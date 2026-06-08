@@ -32,6 +32,16 @@ Use skills explicitly with `$skill-name` when helpful.
 - `${{ skill.name }}` — {{ skill.description }}
 {% endfor %}
 
+{% if locked_skills %}
+## Available Skills
+
+The following skills are managed by skpm and available in this project:
+
+{% for skill in locked_skills %}
+- {{ skill.name }}{% if skill.version %} {{ skill.version }}{% endif %}: `{{ skill.path }}`
+{% endfor %}
+{% endif %}
+
 ## Skill routing
 
 For feature work, prefer:

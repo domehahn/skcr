@@ -113,6 +113,16 @@ Use slash commands where supported, or apply the matching skill instructions dir
 
 /{{ skill.name }} — {{ skill.description }}
 {% endfor %}
+
+{% if locked_skills %}
+Available Skills
+
+The following skills are managed by skpm and available in this project:
+
+{% for skill in locked_skills %}
+{{ skill.name }}{% if skill.version %} {{ skill.version }}{% endif %}: `{{ skill.path }}`
+{% endfor %}
+{% endif %}
 Project Subagents
 
 Claude Code project subagents are stored under:

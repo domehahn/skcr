@@ -12,6 +12,10 @@ var cliAbsPathValidate = filepath.Abs
 
 func newValidateCommand() *cobra.Command {
 	var target string
+	var againstLock string
+	var skills bool
+	var platform string
+	var ci bool
 
 	cmd := &cobra.Command{
 		Use:   "validate",
@@ -21,7 +25,12 @@ func newValidateCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			errors, err := validator.ValidateProject(absTarget)
+			errors, err := validator.ValidateProjectWithOptions(absTarget, validator.Options{
+				AgainstLock: againstLock,
+				Skills:      skills,
+				Platform:    platform,
+				CI:          ci,
+			})
 			if err != nil {
 				return err
 			}
@@ -37,5 +46,9 @@ func newValidateCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&target, "target", "t", ".", "Target repository path")
+	cmd.Flags().StringVar(&againstLock, "against-lock", "", "Validate against skpm agent-skills.lock")
+	cmd.Flags().BoolVar(&skills, "skills", false, "Validate configured skpm skill lock state")
+	cmd.Flags().StringVar(&platform, "platform", "", "Validate only the selected canonical platform")
+	cmd.Flags().BoolVar(&ci, "ci", false, "Enable CI-oriented validation output")
 	return cmd
 }

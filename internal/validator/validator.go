@@ -7,11 +7,26 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/agentic-template-kit/skcr/internal/bake"
+	"github.com/agentic-template-kit/skcr/internal/lockfile"
 	"github.com/agentic-template-kit/skcr/internal/models"
+	"github.com/agentic-template-kit/skcr/internal/renderer"
+	"github.com/agentic-template-kit/skcr/internal/skilllock"
 	"gopkg.in/yaml.v3"
 )
 
+type Options struct {
+	AgainstLock string
+	Skills      bool
+	Platform    string
+	CI          bool
+}
+
 func ValidateProject(target string) ([]string, error) {
+	return ValidateProjectWithOptions(target, Options{})
+}
+
+func ValidateProjectWithOptions(target string, opts Options) ([]string, error) {
 	errors := []string{}
 
 	bakePath := filepath.Join(target, "agentic.bake.yaml")
@@ -44,10 +59,15 @@ func ValidateProject(target string) ([]string, error) {
 		platforms, _ := cfg["platforms"].([]any)
 		for _, p := range platforms {
 			platform, _ := p.(string)
-			if _, ok := models.SupportedPlatforms[platform]; !ok {
+			if _, err := models.NormalizePlatform(platform); err != nil {
 				errors = append(errors, fmt.Sprintf("Target %s: unsupported platform %s", name, platform))
 			}
 		}
+	}
+
+	cfg, cfgErr := bake.LoadBakeFile(bakePath)
+	if cfgErr != nil {
+		cfg = nil
 	}
 
 	for _, baseDir := range []string{"skills", ".agents/skills", ".claude/skills", ".agentic/skills"} {
@@ -104,7 +124,185 @@ func ValidateProject(target string) ([]string, error) {
 		}
 	}
 
+	if cfg != nil {
+		targetName := "default"
+		if _, ok := cfg.Targets[targetName]; !ok {
+			for name := range cfg.Targets {
+				targetName = name
+				break
+			}
+		}
+		if targetName != "" {
+			resolved, err := bake.ResolveTarget(cfg, targetName)
+			if err != nil {
+				errors = append(errors, err.Error())
+			} else {
+				if opts.Platform != "" {
+					platforms, err := models.ParsePlatforms(opts.Platform)
+					if err != nil {
+						return nil, err
+					}
+					resolved.Platforms = filterPlatforms(resolved.Platforms, platforms)
+				}
+				renderOpts := renderer.Options{}
+				if opts.AgainstLock != "" || opts.Skills {
+					source := opts.AgainstLock
+					if source == "" && cfg.Skills != nil {
+						source = cfg.Skills.Source
+					}
+					if source == "" {
+						source = "agent-skills.lock"
+					}
+					sourcePath := source
+					if !filepath.IsAbs(sourcePath) {
+						sourcePath = filepath.Join(target, sourcePath)
+					}
+					state, err := skilllock.Load(sourcePath)
+					if err != nil {
+						errors = append(errors, err.Error())
+					} else {
+						filtered := skilllock.FilterByPlatforms(state.Skills, resolved.Platforms)
+						renderOpts.LockedSkills = skilllock.References(filtered)
+						if cfg.Skills != nil {
+							renderOpts.SkillsMode = cfg.Skills.Mode
+						}
+					}
+				}
+				files, err := renderer.RenderFilesWithOptions(cfg, resolved, renderOpts)
+				if err != nil {
+					errors = append(errors, fmt.Sprintf("Template rendering failed: %v", err))
+				} else {
+					errors = append(errors, validateGeneratedState(target, files)...)
+				}
+				if opts.AgainstLock != "" || opts.Skills {
+					source := opts.AgainstLock
+					if source == "" && cfg.Skills != nil {
+						source = cfg.Skills.Source
+					}
+					if source == "" {
+						source = "agent-skills.lock"
+					}
+					errors = append(errors, validateSkillLock(target, source, resolved.Platforms)...)
+				}
+			}
+		}
+	}
+
 	return errors, nil
+}
+
+func validateGeneratedState(target string, files []models.RenderedFile) []string {
+	errors := []string{}
+	lock, err := lockfile.LoadLockfile(target)
+	if err != nil {
+		return append(errors, err.Error())
+	}
+	stateFiles := lockfile.ManagedFilesByPath(lock)
+	expected := map[string]models.RenderedFile{}
+	for _, file := range files {
+		expected[file.Destination] = file
+	}
+	for path, file := range expected {
+		fullPath := filepath.Join(target, path)
+		payload, err := os.ReadFile(fullPath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				errors = append(errors, fmt.Sprintf("Generated file missing: %s", path))
+				continue
+			}
+			errors = append(errors, err.Error())
+			continue
+		}
+		if file.LinkTarget == "" && lockfile.Sha256Text(string(payload)) != lockfile.Sha256Text(file.Content) {
+			errors = append(errors, fmt.Sprintf("Generated file checksum mismatch: %s", path))
+		}
+		if entry, ok := stateFiles[path]; ok {
+			if checksum, _ := entry["checksum"].(string); checksum != renderedChecksum(file) {
+				errors = append(errors, fmt.Sprintf("Lockfile checksum mismatch: %s", path))
+			}
+		}
+	}
+	for path := range stateFiles {
+		if _, ok := expected[path]; !ok {
+			errors = append(errors, fmt.Sprintf("Stale generated file remains in lock state: %s", path))
+		}
+		if _, err := os.Stat(filepath.Join(target, path)); os.IsNotExist(err) {
+			errors = append(errors, fmt.Sprintf("Generated file from lock is missing: %s", path))
+		}
+	}
+	return errors
+}
+
+func renderedChecksum(file models.RenderedFile) string {
+	if file.LinkTarget != "" {
+		return lockfile.Sha256Text("link:" + file.LinkTarget)
+	}
+	return lockfile.Sha256Text(file.Content)
+}
+
+func validateSkillLock(target, source string, platforms []string) []string {
+	errors := []string{}
+	sourcePath := source
+	if !filepath.IsAbs(sourcePath) {
+		sourcePath = filepath.Join(target, sourcePath)
+	}
+	state, err := skilllock.Load(sourcePath)
+	if err != nil {
+		return append(errors, err.Error())
+	}
+	compatible := skilllock.FilterByPlatforms(state.Skills, platforms)
+	for _, skill := range compatible {
+		if len(skill.InstalledPaths) == 0 {
+			errors = append(errors, fmt.Sprintf("Locked skill %s has no install path; run skpm install", skill.Name))
+			continue
+		}
+		for _, p := range skill.InstalledPaths {
+			checkPath := p
+			if !filepath.IsAbs(checkPath) {
+				checkPath = filepath.Join(target, checkPath)
+			}
+			stat, err := os.Stat(checkPath)
+			if err != nil {
+				if os.IsNotExist(err) {
+					errors = append(errors, fmt.Sprintf("Locked skill path missing: %s; run skpm install", p))
+					continue
+				}
+				errors = append(errors, err.Error())
+				continue
+			}
+			skillFile := checkPath
+			if stat.IsDir() {
+				skillFile = filepath.Join(checkPath, "SKILL.md")
+			}
+			if _, err := os.Stat(skillFile); err != nil {
+				if os.IsNotExist(err) {
+					errors = append(errors, fmt.Sprintf("Locked skill SKILL.md missing: %s; run skpm install", skillFile))
+					continue
+				}
+				errors = append(errors, err.Error())
+			}
+		}
+		for _, platform := range skill.CompatibleWith {
+			if _, err := models.NormalizePlatform(platform); err != nil {
+				errors = append(errors, fmt.Sprintf("Locked skill %s has unsupported platform %s; run skpm verify", skill.Name, platform))
+			}
+		}
+	}
+	return errors
+}
+
+func filterPlatforms(current, selected []string) []string {
+	allowed := map[string]struct{}{}
+	for _, platform := range selected {
+		allowed[platform] = struct{}{}
+	}
+	filtered := []string{}
+	for _, platform := range current {
+		if _, ok := allowed[platform]; ok {
+			filtered = append(filtered, platform)
+		}
+	}
+	return filtered
 }
 
 func containsAll(s string, terms []string) bool {

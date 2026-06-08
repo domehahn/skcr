@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/agentic-template-kit/skcr/internal/models"
+	"github.com/agentic-template-kit/skcr/internal/scaffold"
 	"gopkg.in/yaml.v3"
 )
 
@@ -124,6 +125,12 @@ func TestInitListBakeValidateFlow(t *testing.T) {
 		t.Fatalf("bake plan failed: %v", err)
 	}
 
+	if err := runRoot("validate", "--target", dir); err == nil {
+		t.Fatal("expected validate to detect changed generated file")
+	}
+	if err := runRoot("bake", "default", "--target", dir, "--write"); err != nil {
+		t.Fatalf("bake rewrite failed: %v", err)
+	}
 	if err := runRoot("validate", "--target", dir); err != nil {
 		t.Fatalf("validate failed: %v", err)
 	}
@@ -151,6 +158,43 @@ func TestCommandErrorPaths(t *testing.T) {
 	}
 	if err := runRoot("init", "--target", dir, "--platform", "invalid"); err == nil {
 		t.Fatal("expected init parse error")
+	}
+	if err := runRoot("scaffold", "skill", "Invalid_Name", "--output-dir", dir); err == nil {
+		t.Fatal("expected scaffold invalid name error")
+	}
+}
+
+func TestScaffoldSkillCommand(t *testing.T) {
+	dir := t.TempDir()
+	if err := runRoot("scaffold", "skill", "secure-code-review",
+		"--output-dir", dir,
+		"--version", "0.1.0",
+		"--description", "Security-focused code review skill",
+		"--owner", "platform-engineering",
+		"--platform", "codex",
+		"--platform", "claude-code",
+		"--platform", "gitlab-duo",
+	); err != nil {
+		t.Fatalf("scaffold skill failed: %v", err)
+	}
+	for _, rel := range []string{"SKILL.md", "skill.yaml", "VERSION", "CHANGELOG.md", "README.md", "LICENSE", filepath.Join("tests", "README.md")} {
+		if _, err := os.Stat(filepath.Join(dir, "secure-code-review", rel)); err != nil {
+			t.Fatalf("missing %s: %v", rel, err)
+		}
+	}
+	if err := runRoot("scaffold", "skill", "secure-code-review", "--output-dir", dir); err == nil {
+		t.Fatal("expected existing scaffold error")
+	}
+	if err := runRoot("scaffold", "skill", "secure-code-review", "--output-dir", dir, "--force"); err != nil {
+		t.Fatalf("expected force scaffold to succeed: %v", err)
+	}
+
+	dryRunDir := filepath.Join(dir, "dry-run")
+	if err := runRoot("scaffold", "skill", "test-generator", "--output-dir", dryRunDir, "--dry-run"); err != nil {
+		t.Fatalf("dry-run failed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dryRunDir, "test-generator")); !os.IsNotExist(err) {
+		t.Fatalf("dry-run should not write files, err=%v", err)
 	}
 }
 
@@ -195,6 +239,23 @@ func TestInjectedErrorPaths(t *testing.T) {
 		t.Fatal("expected validate abs error")
 	}
 	cliAbsPathValidate = origAbsValidate
+
+	// scaffold abs and write errors
+	origAbsScaffold := cliAbsPathScaffold
+	cliAbsPathScaffold = func(string) (string, error) { return "", errors.New("abs fail") }
+	if err := runRoot("scaffold", "skill", "secure-code-review"); err == nil {
+		t.Fatal("expected scaffold abs error")
+	}
+	cliAbsPathScaffold = origAbsScaffold
+
+	origWriteSkill := cliWriteSkill
+	cliWriteSkill = func(scaffold.SkillOptions) ([]scaffold.PlannedFile, error) {
+		return nil, errors.New("scaffold fail")
+	}
+	if err := runRoot("scaffold", "skill", "secure-code-review", "--output-dir", t.TempDir()); err == nil {
+		t.Fatal("expected scaffold write error")
+	}
+	cliWriteSkill = origWriteSkill
 }
 
 func TestBakeInjectedErrorPaths(t *testing.T) {
@@ -336,6 +397,60 @@ func TestBakePlanCoversStateAndDiffBranches(t *testing.T) {
 
 	if err := runRoot("bake", "default", "--target", dir, "--plan"); err != nil {
 		t.Fatalf("expected plan to succeed, got %v", err)
+	}
+}
+
+func TestSkillIntegrationValidateAndCleanFlow(t *testing.T) {
+	dir := t.TempDir()
+	if err := runRoot("init", "--target", dir, "--platform", "codex", "--project-name", "Demo"); err != nil {
+		t.Fatal(err)
+	}
+	skillDir := filepath.Join(dir, ".skpm", "skills", "secure-code-review")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("name: secure-code-review\ndescription: ok\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	lock := `skills:
+  - name: secure-code-review
+    version: v1.2.3
+    source: registry
+    compatible_with:
+      - codex
+    installed_paths:
+      - .skpm/skills/secure-code-review
+`
+	if err := os.WriteFile(filepath.Join(dir, "agent-skills.lock"), []byte(lock), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := runRoot("bake", "default", "--target", dir, "--skills-from", "agent-skills.lock", "--write"); err != nil {
+		t.Fatal(err)
+	}
+	agents, err := os.ReadFile(filepath.Join(dir, ".agentic", "codex", "AGENTS.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(agents), "secure-code-review v1.2.3") {
+		t.Fatalf("expected skpm skill reference, got:\n%s", agents)
+	}
+	if err := runRoot("validate", "--target", dir, "--against-lock", "agent-skills.lock"); err != nil {
+		t.Fatalf("validate against lock failed: %v", err)
+	}
+	if err := runRoot("list-targets", "--target", dir, "--with-skills"); err != nil {
+		t.Fatalf("list-targets with skills failed: %v", err)
+	}
+	if err := runRoot("clean", "--target", dir, "--plan"); err != nil {
+		t.Fatalf("clean plan failed: %v", err)
+	}
+	if err := runRoot("clean", "--target", dir, "--write"); err != nil {
+		t.Fatalf("clean write failed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".agentic", "codex", "AGENTS.md")); !os.IsNotExist(err) {
+		t.Fatalf("expected generated AGENTS.md removed, err=%v", err)
+	}
+	if _, err := os.Stat(filepath.Join(skillDir, "SKILL.md")); err != nil {
+		t.Fatalf("clean should not remove skpm-managed skill file: %v", err)
 	}
 }
 

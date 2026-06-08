@@ -166,6 +166,34 @@ func TestRenderFilesWithoutPlatformDocs(t *testing.T) {
 	}
 }
 
+func TestRenderFilesWithLockedSkillReferences(t *testing.T) {
+	cfg, err := bake.BuildInitialConfig([]string{"codex"}, "Demo", "team", "de", "strict", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := bake.ResolveTarget(cfg, "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, err := RenderFilesWithOptions(cfg, resolved, Options{
+		SkillsMode: models.SkillModeReference,
+		LockedSkills: []map[string]any{{
+			"name":    "secure-code-review",
+			"version": "v1.2.3",
+			"path":    ".agents/skills/secure-code-review/SKILL.md",
+		}},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range files {
+		if file.Destination == ".agentic/codex/AGENTS.md" && strings.Contains(file.Content, "secure-code-review v1.2.3") {
+			return
+		}
+	}
+	t.Fatal("expected locked skill reference in codex AGENTS.md")
+}
+
 func TestRenderFilesExecuteError(t *testing.T) {
 	root, err := templateRoot()
 	if err != nil {

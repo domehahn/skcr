@@ -25,11 +25,15 @@ func Sha256Text(value string) string {
 func WriteLockfile(targetDir string, files []models.RenderedFile, targetName string) error {
 	managed := make([]map[string]any, 0, len(files))
 	for _, rendered := range files {
+		checksum := Sha256Text(rendered.Content)
+		if rendered.LinkTarget != "" {
+			checksum = Sha256Text("link:" + rendered.LinkTarget)
+		}
 		managed = append(managed, map[string]any{
 			"path":     rendered.Destination,
 			"platform": rendered.Platform,
 			"source":   rendered.Source,
-			"checksum": Sha256Text(rendered.Content),
+			"checksum": checksum,
 		})
 	}
 	payload := map[string]any{

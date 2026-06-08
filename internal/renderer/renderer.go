@@ -16,6 +16,11 @@ var (
 	rendererStat   = os.Stat
 )
 
+type Options struct {
+	LockedSkills []map[string]any
+	SkillsMode   string
+}
+
 func templateRoot() (string, error) {
 	_, file, _, ok := rendererCaller(0)
 	if !ok {
@@ -88,6 +93,16 @@ func claudeSubagentsForTarget(target *models.TargetConfig) []map[string]any {
 }
 
 func RenderFiles(config *models.BakeConfig, target *models.TargetConfig) ([]models.RenderedFile, error) {
+	return RenderFilesWithOptions(config, target, Options{})
+}
+
+func RenderFilesWithOptions(config *models.BakeConfig, target *models.TargetConfig, opts Options) ([]models.RenderedFile, error) {
+	if opts.SkillsMode == "" {
+		opts.SkillsMode = models.SkillModeReference
+	}
+	if opts.LockedSkills == nil {
+		opts.LockedSkills = []map[string]any{}
+	}
 	root, err := templateRoot()
 	if err != nil {
 		return nil, err
@@ -105,6 +120,8 @@ func RenderFiles(config *models.BakeConfig, target *models.TargetConfig) ([]mode
 		"flows":            target.Flows,
 		"rules":            target.Rules,
 		"model":            target.Model,
+		"locked_skills":    opts.LockedSkills,
+		"skills_mode":      opts.SkillsMode,
 	}
 
 	files := []models.RenderedFile{}
@@ -183,7 +200,7 @@ func RenderFiles(config *models.BakeConfig, target *models.TargetConfig) ([]mode
 		}
 	}
 
-	if contains("claude") {
+	if contains("claude-code") {
 		if err := add("claude", "claude/CLAUDE.md.j2", ".agentic/claude/AGENTS.md", nil); err != nil {
 			return nil, err
 		}

@@ -9,11 +9,14 @@ var SupportedPlatforms = map[string]struct{}{
 	"codex":          {},
 	"gitlab-duo":     {},
 	"github-copilot": {},
-	"claude":         {},
+	"claude-code":    {},
+	"cursor":         {},
+	"windsurf":       {},
 	"openhands":      {},
 	"opencode":       {},
 	"ollama":         {},
 	"generic":        {},
+	"all":            {},
 }
 
 var PlatformAliases = map[string]string{
@@ -23,9 +26,33 @@ var PlatformAliases = map[string]string{
 	"copilot":                   "github-copilot",
 	"github":                    "github-copilot",
 	"github-copilot-chat":       "github-copilot",
-	"claude-code":               "claude",
+	"claude":                    "claude-code",
 	"open-code":                 "opencode",
 	"open-hands":                "openhands",
+}
+
+var CanonicalPlatforms = []string{
+	"codex",
+	"claude-code",
+	"gitlab-duo",
+	"github-copilot",
+	"cursor",
+	"windsurf",
+	"generic",
+	"all",
+}
+
+const (
+	SkillModeReference = "reference"
+	SkillModeCopy      = "copy"
+	SkillModeLink      = "link"
+	SkillModeEmbed     = "embed"
+)
+
+type SkillIntegrationConfig struct {
+	Source    string   `yaml:"source,omitempty"`
+	Mode      string   `yaml:"mode,omitempty"`
+	Platforms []string `yaml:"platforms,omitempty"`
 }
 
 type TargetConfig struct {
@@ -43,6 +70,7 @@ type TargetConfig struct {
 type BakeConfig struct {
 	Version   string                   `yaml:"version,omitempty"`
 	Variables map[string]any           `yaml:"variables,omitempty"`
+	Skills    *SkillIntegrationConfig  `yaml:"skills,omitempty"`
 	Targets   map[string]*TargetConfig `yaml:"targets,omitempty"`
 }
 
@@ -51,6 +79,7 @@ type RenderedFile struct {
 	Destination string
 	Content     string
 	Platform    string
+	LinkTarget  string
 }
 
 func NormalizePlatform(value string) (string, error) {
@@ -64,17 +93,26 @@ func NormalizePlatform(value string) (string, error) {
 	return normalized, nil
 }
 
-func ParsePlatforms(value string) ([]string, error) {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return []string{}, nil
-	}
+func NormalizePlatforms(values []string) ([]string, error) {
 	result := []string{}
 	seen := map[string]struct{}{}
-	for _, item := range strings.Split(value, ",") {
+	for _, item := range values {
 		p, err := NormalizePlatform(item)
 		if err != nil {
 			return nil, err
+		}
+		if p == "all" {
+			for _, canonical := range CanonicalPlatforms {
+				if canonical == "all" {
+					continue
+				}
+				if _, ok := seen[canonical]; ok {
+					continue
+				}
+				seen[canonical] = struct{}{}
+				result = append(result, canonical)
+			}
+			continue
 		}
 		if _, ok := seen[p]; ok {
 			continue
@@ -83,4 +121,16 @@ func ParsePlatforms(value string) ([]string, error) {
 		result = append(result, p)
 	}
 	return result, nil
+}
+
+func ParsePlatforms(value string) ([]string, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return []string{}, nil
+	}
+	items := []string{}
+	for _, item := range strings.Split(value, ",") {
+		items = append(items, item)
+	}
+	return NormalizePlatforms(items)
 }

@@ -6,6 +6,14 @@ variables:
   default_language: de
   governance_level: strict
 
+skills:
+  source: agent-skills.lock
+  mode: reference
+  platforms:
+    - codex
+    - claude-code
+    - gitlab-duo
+
 targets:
   gitlab:
     description: GitLab Duo Agent Platform with full DevSecOps SDLC skills

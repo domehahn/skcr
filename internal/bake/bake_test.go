@@ -85,6 +85,9 @@ func TestLoadBakeFileDefaultsAndErrors(t *testing.T) {
 	if cfg.Version != "1" || cfg.Variables == nil || cfg.Targets == nil {
 		t.Fatalf("expected defaults initialized, got %#v", cfg)
 	}
+	if cfg.Skills == nil || cfg.Skills.Source != "agent-skills.lock" || cfg.Skills.Mode != models.SkillModeReference {
+		t.Fatalf("expected default skill integration config, got %#v", cfg.Skills)
+	}
 }
 
 func TestResolveTargetErrorsAndNormalization(t *testing.T) {
