@@ -1,8 +1,9 @@
 module github.com/domehahn/skcr
 
-go 1.23.0
+go 1.26.3
 
 require (
+	github.com/domehahn/sklib v0.0.0
 	github.com/flosch/pongo2/v6 v6.0.0
 	github.com/pmezard/go-difflib v1.0.0
 	github.com/spf13/cobra v1.9.1

@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"regexp"
 	"strings"
 
+	"github.com/domehahn/sklib/spec"
 	"github.com/domehahn/skcr/internal/models"
 )
 
@@ -28,11 +28,9 @@ type PlannedFile struct {
 }
 
 var (
-	validSkillName    = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
-	validSkillVersion = regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$`)
-	writeFile         = os.WriteFile
-	mkdirAll          = os.MkdirAll
-	stat              = os.Stat
+	writeFile = os.WriteFile
+	mkdirAll  = os.MkdirAll
+	stat      = os.Stat
 )
 
 func PlanSkill(opts SkillOptions) ([]PlannedFile, error) {
@@ -47,9 +45,17 @@ func PlanSkill(opts SkillOptions) ([]PlannedFile, error) {
 		description = "Describe what this skill helps an agent do."
 	}
 
+	ownersBlock := ""
+	if opts.Owner != "" {
+		ownersBlock = "owners:\n  - " + quoteYAML(opts.Owner) + "\n"
+	}
+
 	return []PlannedFile{
 		{Path: filepath.Join(root, "SKILL.md"), Content: skillMarkdown(opts.Name)},
-		{Path: filepath.Join(root, "skill.yaml"), Content: fmt.Sprintf("name: %s\nversion: %s\ndescription: %s\nowner: %s\nlicense: %s\ncompatible_with:\n%s", opts.Name, opts.Version, quoteYAML(description), quoteYAML(opts.Owner), quoteYAML(opts.License), yamlPlatforms)},
+		{Path: filepath.Join(root, "skill.yaml"), Content: fmt.Sprintf(
+			"name: %s\nversion: %s\ndescription: %s\nentrypoint: SKILL.md\n%slicense: %s\ncompatible_with:\n%s",
+			opts.Name, opts.Version, quoteYAML(description), ownersBlock, quoteYAML(opts.License), yamlPlatforms,
+		)},
 		{Path: filepath.Join(root, "VERSION"), Content: opts.Version + "\n"},
 		{Path: filepath.Join(root, "CHANGELOG.md"), Content: fmt.Sprintf("# Changelog\n\n## %s\n\n- Initial skill scaffold.\n", opts.Version)},
 		{Path: filepath.Join(root, "README.md"), Content: fmt.Sprintf("# %s\n\nThis is an AI agent skill scaffolded with `skcr`.\n\n## Version\n\nCurrent version: `%s`\n\n## Compatible platforms\n\n%s\n## Lifecycle\n\nAfter editing this skill, use `skpm` for lifecycle management:\n\n```bash\nskpm validate %s\nskpm package %s\nskpm publish %s\n```\n", opts.Name, opts.Version, platformBlock, opts.Name, opts.Name, opts.Name)},
@@ -124,7 +130,7 @@ func WriteSkillSafe(opts SkillOptions) (*SkillWriteResult, error) {
 
 func validateSkillOptions(opts *SkillOptions) error {
 	opts.Name = strings.TrimSpace(opts.Name)
-	if !validSkillName.MatchString(opts.Name) {
+	if err := spec.ValidateSkillName(opts.Name); err != nil {
 		return fmt.Errorf("invalid skill name %q: use lowercase letters, digits, and hyphens; do not start or end with a hyphen", opts.Name)
 	}
 	if opts.OutputDir == "" {
@@ -133,7 +139,7 @@ func validateSkillOptions(opts *SkillOptions) error {
 	if opts.Version == "" {
 		opts.Version = "0.1.0"
 	}
-	if !validSkillVersion.MatchString(opts.Version) {
+	if _, err := spec.NormalizeVersion(opts.Version); err != nil {
 		return fmt.Errorf("invalid skill version %q: expected semver like 0.1.0", opts.Version)
 	}
 	if opts.License == "" {

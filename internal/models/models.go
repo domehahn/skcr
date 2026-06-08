@@ -3,8 +3,15 @@ package models
 import (
 	"fmt"
 	"strings"
+
+	"github.com/domehahn/sklib/spec"
 )
 
+// Platform type aliases from sklib/spec for backward compatibility.
+type Platform = spec.Platform
+
+// SupportedPlatforms is the set of valid platform identifiers (including "all").
+// Kept for callers that check map membership; prefer spec.IsKnownPlatform for new code.
 var SupportedPlatforms = map[string]struct{}{
 	"codex":          {},
 	"gitlab-duo":     {},
@@ -19,6 +26,8 @@ var SupportedPlatforms = map[string]struct{}{
 	"all":            {},
 }
 
+// PlatformAliases maps non-canonical platform names to canonical ones.
+// Kept for backward compatibility; sklib/spec.NormalizePlatform is the canonical implementation.
 var PlatformAliases = map[string]string{
 	"gitlab":                    "gitlab-duo",
 	"duo":                       "gitlab-duo",
@@ -31,6 +40,7 @@ var PlatformAliases = map[string]string{
 	"open-hands":                "openhands",
 }
 
+// CanonicalPlatforms is the ordered list of canonical platform identifiers.
 var CanonicalPlatforms = []string{
 	"codex",
 	"claude-code",
@@ -114,20 +124,27 @@ type RenderedFile struct {
 	LinkTarget  string
 }
 
+// NormalizePlatform normalizes a platform string using sklib/spec rules.
+// Returns (canonical, nil) on success; ("", error) for unknown platforms.
 func NormalizePlatform(value string) (string, error) {
-	normalized := strings.ToLower(strings.TrimSpace(value))
-	if alias, ok := PlatformAliases[normalized]; ok {
-		normalized = alias
-	}
-	if _, ok := SupportedPlatforms[normalized]; !ok {
+	p, err := spec.NormalizePlatform(value)
+	if err != nil {
+		// skcr has an extra alias not in sklib; handle it here.
+		normalized := strings.ToLower(strings.TrimSpace(value))
+		if alias, ok := PlatformAliases[normalized]; ok {
+			return alias, nil
+		}
 		return "", fmt.Errorf("unsupported platform: %s", value)
 	}
-	return normalized, nil
+	return string(p), nil
 }
 
+// NormalizePlatforms normalizes and deduplicates a slice of platform strings.
+// "all" is expanded to all canonical platforms.
 func NormalizePlatforms(values []string) ([]string, error) {
 	result := []string{}
 	seen := map[string]struct{}{}
+
 	for _, item := range values {
 		p, err := NormalizePlatform(item)
 		if err != nil {
@@ -155,6 +172,7 @@ func NormalizePlatforms(values []string) ([]string, error) {
 	return result, nil
 }
 
+// ParsePlatforms parses a comma-separated platform string.
 func ParsePlatforms(value string) ([]string, error) {
 	value = strings.TrimSpace(value)
 	if value == "" {

@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/domehahn/sklib/spec"
 	"github.com/domehahn/skcr/internal/bake"
 	"github.com/domehahn/skcr/internal/lockfile"
 	"github.com/domehahn/skcr/internal/models"
@@ -15,7 +16,6 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-var validSkillSourceName = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
 
 type Options struct {
 	AgainstLock string
@@ -204,7 +204,7 @@ func validateSkillSources(target string, ss *models.SkillSourceConfig) []string 
 	}
 	seen := map[string]struct{}{}
 	for _, skillDef := range ss.Skills {
-		if !validSkillSourceName.MatchString(skillDef.Name) {
+		if err := spec.ValidateSkillName(skillDef.Name); err != nil {
 			errors = append(errors, fmt.Sprintf("skill_sources: invalid skill name %q (use lowercase letters, digits, and hyphens)", skillDef.Name))
 		}
 		if _, dup := seen[skillDef.Name]; dup {
