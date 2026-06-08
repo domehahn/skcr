@@ -8,6 +8,7 @@ import (
 
 	"github.com/domehahn/sklib/spec"
 	"github.com/domehahn/skcr/internal/models"
+	"gopkg.in/yaml.v3"
 )
 
 type SkillOptions struct {
@@ -39,23 +40,30 @@ func PlanSkill(opts SkillOptions) ([]PlannedFile, error) {
 	}
 	root := filepath.Join(opts.OutputDir, opts.Name)
 	platformBlock := markdownList(opts.Platforms)
-	yamlPlatforms := yamlList(opts.Platforms)
 	description := opts.Description
 	if description == "" {
 		description = "Describe what this skill helps an agent do."
 	}
 
-	ownersBlock := ""
+	skillSpec := spec.Skill{
+		Name:           opts.Name,
+		Version:        opts.Version,
+		Description:    description,
+		Entrypoint:     spec.DefaultEntrypointValue,
+		License:        opts.License,
+		CompatibleWith: stringsToSpecPlatforms(opts.Platforms),
+	}
 	if opts.Owner != "" {
-		ownersBlock = "owners:\n  - " + quoteYAML(opts.Owner) + "\n"
+		skillSpec.Owners = []string{opts.Owner}
+	}
+	skillYAMLBytes, err := yaml.Marshal(skillSpec)
+	if err != nil {
+		return nil, fmt.Errorf("marshal skill.yaml: %w", err)
 	}
 
 	return []PlannedFile{
 		{Path: filepath.Join(root, "SKILL.md"), Content: skillMarkdown(opts.Name)},
-		{Path: filepath.Join(root, "skill.yaml"), Content: fmt.Sprintf(
-			"name: %s\nversion: %s\ndescription: %s\nentrypoint: SKILL.md\n%slicense: %s\ncompatible_with:\n%s",
-			opts.Name, opts.Version, quoteYAML(description), ownersBlock, quoteYAML(opts.License), yamlPlatforms,
-		)},
+		{Path: filepath.Join(root, "skill.yaml"), Content: string(skillYAMLBytes)},
 		{Path: filepath.Join(root, "VERSION"), Content: opts.Version + "\n"},
 		{Path: filepath.Join(root, "CHANGELOG.md"), Content: fmt.Sprintf("# Changelog\n\n## %s\n\n- Initial skill scaffold.\n", opts.Version)},
 		{Path: filepath.Join(root, "README.md"), Content: fmt.Sprintf("# %s\n\nThis is an AI agent skill scaffolded with `skcr`.\n\n## Version\n\nCurrent version: `%s`\n\n## Compatible platforms\n\n%s\n## Lifecycle\n\nAfter editing this skill, use `skpm` for lifecycle management:\n\n```bash\nskpm validate %s\nskpm package %s\nskpm publish %s\n```\n", opts.Name, opts.Version, platformBlock, opts.Name, opts.Name, opts.Name)},
@@ -139,9 +147,11 @@ func validateSkillOptions(opts *SkillOptions) error {
 	if opts.Version == "" {
 		opts.Version = "0.1.0"
 	}
-	if _, err := spec.NormalizeVersion(opts.Version); err != nil {
+	normalized, err := spec.NormalizeVersion(opts.Version)
+	if err != nil {
 		return fmt.Errorf("invalid skill version %q: expected semver like 0.1.0", opts.Version)
 	}
+	opts.Version = normalized
 	if opts.License == "" {
 		opts.License = "MIT"
 	}
@@ -186,14 +196,6 @@ Describe the expected output format.
 `, name)
 }
 
-func yamlList(values []string) string {
-	lines := []string{}
-	for _, value := range values {
-		lines = append(lines, "  - "+value)
-	}
-	return strings.Join(lines, "\n") + "\n"
-}
-
 func markdownList(values []string) string {
 	lines := []string{}
 	for _, value := range values {
@@ -202,12 +204,13 @@ func markdownList(values []string) string {
 	return strings.Join(lines, "\n") + "\n\n"
 }
 
-func quoteYAML(value string) string {
-	if value == "" {
-		return `""`
+
+func stringsToSpecPlatforms(values []string) []spec.Platform {
+	out := make([]spec.Platform, len(values))
+	for i, v := range values {
+		out[i] = spec.Platform(v)
 	}
-	escaped := strings.ReplaceAll(value, `"`, `\"`)
-	return `"` + escaped + `"`
+	return out
 }
 
 func licenseText(name string) string {

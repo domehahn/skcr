@@ -11,46 +11,28 @@ import (
 type Platform = spec.Platform
 
 // SupportedPlatforms is the set of valid platform identifiers (including "all").
-// Kept for callers that check map membership; prefer spec.IsKnownPlatform for new code.
-var SupportedPlatforms = map[string]struct{}{
-	"codex":          {},
-	"gitlab-duo":     {},
-	"github-copilot": {},
-	"claude-code":    {},
-	"cursor":         {},
-	"windsurf":       {},
-	"openhands":      {},
-	"opencode":       {},
-	"ollama":         {},
-	"generic":        {},
-	"all":            {},
-}
+// Derived from sklib/spec so it stays in sync automatically.
+var SupportedPlatforms = func() map[string]struct{} {
+	m := map[string]struct{}{"all": {}}
+	for _, p := range spec.ExpandAllPlatforms([]spec.Platform{spec.PlatformAll}) {
+		m[string(p)] = struct{}{}
+	}
+	return m
+}()
 
 // PlatformAliases maps non-canonical platform names to canonical ones.
-// Kept for backward compatibility; sklib/spec.NormalizePlatform is the canonical implementation.
+// These are skcr-specific aliases not covered by sklib/spec.
 var PlatformAliases = map[string]string{
-	"gitlab":                    "gitlab-duo",
-	"duo":                       "gitlab-duo",
 	"gitlab-duo-agent-platform": "gitlab-duo",
-	"copilot":                   "github-copilot",
-	"github":                    "github-copilot",
 	"github-copilot-chat":       "github-copilot",
-	"claude":                    "claude-code",
-	"open-code":                 "opencode",
-	"open-hands":                "openhands",
 }
 
-// CanonicalPlatforms is the ordered list of canonical platform identifiers.
-var CanonicalPlatforms = []string{
-	"codex",
-	"claude-code",
-	"gitlab-duo",
-	"github-copilot",
-	"cursor",
-	"windsurf",
-	"generic",
+// CanonicalPlatforms is the ordered list of all concrete canonical platforms followed by "all".
+// Derived from sklib/spec so it stays in sync automatically.
+var CanonicalPlatforms = append(
+	spec.PlatformStrings(spec.ExpandAllPlatforms([]spec.Platform{spec.PlatformAll})),
 	"all",
-}
+)
 
 const (
 	SkillModeReference = "reference"
@@ -124,12 +106,11 @@ type RenderedFile struct {
 	LinkTarget  string
 }
 
-// NormalizePlatform normalizes a platform string using sklib/spec rules.
-// Returns (canonical, nil) on success; ("", error) for unknown platforms.
+// NormalizePlatform normalizes a platform string to its canonical form.
+// sklib/spec handles the common aliases; PlatformAliases covers skcr-specific ones.
 func NormalizePlatform(value string) (string, error) {
 	p, err := spec.NormalizePlatform(value)
 	if err != nil {
-		// skcr has an extra alias not in sklib; handle it here.
 		normalized := strings.ToLower(strings.TrimSpace(value))
 		if alias, ok := PlatformAliases[normalized]; ok {
 			return alias, nil
@@ -140,34 +121,29 @@ func NormalizePlatform(value string) (string, error) {
 }
 
 // NormalizePlatforms normalizes and deduplicates a slice of platform strings.
-// "all" is expanded to all canonical platforms.
+// "all" is expanded to every concrete canonical platform via sklib/spec.ExpandAllPlatforms.
 func NormalizePlatforms(values []string) ([]string, error) {
 	result := []string{}
 	seen := map[string]struct{}{}
-
 	for _, item := range values {
 		p, err := NormalizePlatform(item)
 		if err != nil {
 			return nil, err
 		}
 		if p == "all" {
-			for _, canonical := range CanonicalPlatforms {
-				if canonical == "all" {
-					continue
+			for _, canonical := range spec.ExpandAllPlatforms([]spec.Platform{spec.PlatformAll}) {
+				s := string(canonical)
+				if _, ok := seen[s]; !ok {
+					seen[s] = struct{}{}
+					result = append(result, s)
 				}
-				if _, ok := seen[canonical]; ok {
-					continue
-				}
-				seen[canonical] = struct{}{}
-				result = append(result, canonical)
 			}
 			continue
 		}
-		if _, ok := seen[p]; ok {
-			continue
+		if _, ok := seen[p]; !ok {
+			seen[p] = struct{}{}
+			result = append(result, p)
 		}
-		seen[p] = struct{}{}
-		result = append(result, p)
 	}
 	return result, nil
 }
