@@ -1,4 +1,4 @@
-module github.com/agentic-template-kit/skcr
+module github.com/domehahn/skcr
 
 go 1.23.0
 
