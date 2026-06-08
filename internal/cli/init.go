@@ -27,6 +27,7 @@ func newInitCommand() *cobra.Command {
 	var language string
 	var governanceLevel string
 	var force bool
+	var skills []string
 
 	cmd := &cobra.Command{
 		Use:   "init",
@@ -56,6 +57,19 @@ func newInitCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+
+			for _, name := range skills {
+				if cfg.SkillSources == nil {
+					cfg.SkillSources = &models.SkillSourceConfig{
+						OutputDir: "skills",
+						Skills:    []models.SkillSourceDefinition{},
+					}
+				}
+				cfg.SkillSources.Skills = append(cfg.SkillSources.Skills, models.SkillSourceDefinition{
+					Name: name,
+				})
+			}
+
 			if err := cliDumpBakeFile(cfg, bakePath); err != nil {
 				return err
 			}
@@ -73,6 +87,7 @@ func newInitCommand() *cobra.Command {
 	cmd.Flags().StringVar(&language, "language", "de", "Default documentation language")
 	cmd.Flags().StringVar(&governanceLevel, "governance-level", "standard", "relaxed, standard, strict")
 	cmd.Flags().BoolVar(&force, "force", false, "Overwrite existing agentic.bake.yaml")
+	cmd.Flags().StringArrayVar(&skills, "skill", []string{}, "Add a skill entry to skill_sources.skills; may be repeated")
 
 	return cmd
 }

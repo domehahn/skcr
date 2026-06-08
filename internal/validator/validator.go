@@ -15,6 +15,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+var validSkillSourceName = regexp.MustCompile(`^[a-z0-9]+(?:-[a-z0-9]+)*$`)
+
 type Options struct {
 	AgainstLock string
 	Skills      bool
@@ -68,6 +70,10 @@ func ValidateProjectWithOptions(target string, opts Options) ([]string, error) {
 	cfg, cfgErr := bake.LoadBakeFile(bakePath)
 	if cfgErr != nil {
 		cfg = nil
+	}
+
+	if cfg != nil && cfg.SkillSources != nil {
+		errors = append(errors, validateSkillSources(target, cfg.SkillSources)...)
 	}
 
 	for _, baseDir := range []string{"skills", ".agents/skills", ".claude/skills", ".agentic/skills"} {
@@ -189,6 +195,44 @@ func ValidateProjectWithOptions(target string, opts Options) ([]string, error) {
 	}
 
 	return errors, nil
+}
+
+func validateSkillSources(target string, ss *models.SkillSourceConfig) []string {
+	errors := []string{}
+	if ss.OutputDir == "" {
+		ss.OutputDir = "skills"
+	}
+	seen := map[string]struct{}{}
+	for _, skillDef := range ss.Skills {
+		if !validSkillSourceName.MatchString(skillDef.Name) {
+			errors = append(errors, fmt.Sprintf("skill_sources: invalid skill name %q (use lowercase letters, digits, and hyphens)", skillDef.Name))
+		}
+		if _, dup := seen[skillDef.Name]; dup {
+			errors = append(errors, fmt.Sprintf("skill_sources: duplicate skill name %q", skillDef.Name))
+		}
+		seen[skillDef.Name] = struct{}{}
+		for _, p := range skillDef.CompatibleWith {
+			if _, err := models.NormalizePlatform(p); err != nil {
+				errors = append(errors, fmt.Sprintf("skill_sources: skill %q has unsupported platform %q", skillDef.Name, p))
+			}
+		}
+	}
+	for _, p := range ss.Defaults.CompatibleWith {
+		if _, err := models.NormalizePlatform(p); err != nil {
+			errors = append(errors, fmt.Sprintf("skill_sources.defaults: unsupported platform %q", p))
+		}
+	}
+	if len(errors) > 0 {
+		return errors
+	}
+	// Check that skill source directories exist for configured skills.
+	for _, skillDef := range ss.Skills {
+		skillDir := filepath.Join(target, ss.OutputDir, skillDef.Name)
+		if _, err := os.Stat(skillDir); os.IsNotExist(err) {
+			errors = append(errors, fmt.Sprintf("skill_sources: skill directory missing: %s (run: skcr scaffold skills)", filepath.Join(ss.OutputDir, skillDef.Name)))
+		}
+	}
+	return errors
 }
 
 func validateGeneratedState(target string, files []models.RenderedFile) []string {

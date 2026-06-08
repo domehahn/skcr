@@ -93,3 +93,71 @@ func TestWriteSkillForce(t *testing.T) {
 		t.Fatalf("expected force overwrite to succeed: %v", err)
 	}
 }
+
+func TestWriteSkillSafe(t *testing.T) {
+	dir := t.TempDir()
+	opts := SkillOptions{Name: "my-safe-skill", OutputDir: dir}
+
+	// First write: all files created.
+	result, err := WriteSkillSafe(opts)
+	if err != nil {
+		t.Fatalf("WriteSkillSafe first write: %v", err)
+	}
+	if len(result.Created) != 7 {
+		t.Fatalf("expected 7 created files, got %d", len(result.Created))
+	}
+	if len(result.Skipped) != 0 {
+		t.Fatalf("expected 0 skipped files, got %d", len(result.Skipped))
+	}
+
+	// Second write without force: all files skipped, no error.
+	result2, err := WriteSkillSafe(opts)
+	if err != nil {
+		t.Fatalf("WriteSkillSafe second write (no-force): %v", err)
+	}
+	if len(result2.Created) != 0 {
+		t.Fatalf("expected 0 created (all exist), got %d", len(result2.Created))
+	}
+	if len(result2.Skipped) != 7 {
+		t.Fatalf("expected 7 skipped, got %d", len(result2.Skipped))
+	}
+
+	// With force: all files overwritten.
+	opts.Force = true
+	result3, err := WriteSkillSafe(opts)
+	if err != nil {
+		t.Fatalf("WriteSkillSafe force: %v", err)
+	}
+	if len(result3.Created) != 7 {
+		t.Fatalf("expected 7 created with force, got %d", len(result3.Created))
+	}
+	if len(result3.Skipped) != 0 {
+		t.Fatalf("expected 0 skipped with force, got %d", len(result3.Skipped))
+	}
+}
+
+func TestWriteSkillSafeDryRun(t *testing.T) {
+	dir := t.TempDir()
+	opts := SkillOptions{Name: "dry-skill", OutputDir: dir, DryRun: true}
+	result, err := WriteSkillSafe(opts)
+	if err != nil {
+		t.Fatalf("WriteSkillSafe dry-run: %v", err)
+	}
+	if len(result.Created) != 7 {
+		t.Fatalf("expected 7 planned files, got %d", len(result.Created))
+	}
+	if len(result.Skipped) != 0 {
+		t.Fatalf("expected 0 skipped in dry-run, got %d", len(result.Skipped))
+	}
+	if _, err := os.Stat(filepath.Join(dir, "dry-skill")); !os.IsNotExist(err) {
+		t.Fatalf("dry-run should not write files, err=%v", err)
+	}
+}
+
+func TestWriteSkillSafeInvalidOptions(t *testing.T) {
+	dir := t.TempDir()
+	_, err := WriteSkillSafe(SkillOptions{Name: "Invalid_Name", OutputDir: dir})
+	if err == nil {
+		t.Fatal("expected error for invalid name")
+	}
+}

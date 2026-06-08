@@ -497,6 +497,305 @@ func TestHelpers(t *testing.T) {
 	}
 }
 
+func TestInitWithSkillFlag(t *testing.T) {
+	dir := t.TempDir()
+	if err := runRoot("init", "--target", dir, "--platform", "codex",
+		"--project-name", "Demo",
+		"--skill", "my-skill",
+		"--skill", "another-skill",
+	); err != nil {
+		t.Fatalf("init with --skill failed: %v", err)
+	}
+	bakeBytes, err := os.ReadFile(filepath.Join(dir, "agentic.bake.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bakeContent := string(bakeBytes)
+	if !strings.Contains(bakeContent, "my-skill") {
+		t.Fatalf("expected my-skill in bakefile:\n%s", bakeContent)
+	}
+	if !strings.Contains(bakeContent, "another-skill") {
+		t.Fatalf("expected another-skill in bakefile:\n%s", bakeContent)
+	}
+	if !strings.Contains(bakeContent, "skill_sources") {
+		t.Fatalf("expected skill_sources block in bakefile:\n%s", bakeContent)
+	}
+}
+
+func TestInitGeneratesSkillSourcesBlock(t *testing.T) {
+	dir := t.TempDir()
+	if err := runRoot("init", "--target", dir, "--platform", "codex,gitlab-duo", "--project-name", "Demo"); err != nil {
+		t.Fatalf("init failed: %v", err)
+	}
+	bakeBytes, err := os.ReadFile(filepath.Join(dir, "agentic.bake.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	bakeContent := string(bakeBytes)
+	if !strings.Contains(bakeContent, "skill_sources") {
+		t.Fatalf("expected skill_sources block in generated bakefile:\n%s", bakeContent)
+	}
+	if !strings.Contains(bakeContent, "output_dir") {
+		t.Fatalf("expected output_dir in skill_sources:\n%s", bakeContent)
+	}
+}
+
+func TestScaffoldSkillsCommand(t *testing.T) {
+	dir := t.TempDir()
+	// Create a bakefile with skill_sources configured.
+	bakeContent := `version: "1"
+skill_sources:
+  output_dir: skills
+  defaults:
+    version: 0.1.0
+    owner: platform-engineering
+    license: MIT
+    compatible_with:
+      - codex
+  skills:
+    - name: my-skill
+      description: My great skill.
+    - name: another-skill
+      compatible_with:
+        - claude-code
+targets:
+  default:
+    platforms:
+      - codex
+`
+	if err := os.WriteFile(filepath.Join(dir, "agentic.bake.yaml"), []byte(bakeContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := runRoot("scaffold", "skills", "--target", dir); err != nil {
+		t.Fatalf("scaffold skills failed: %v", err)
+	}
+
+	for _, skillName := range []string{"my-skill", "another-skill"} {
+		for _, rel := range []string{"SKILL.md", "skill.yaml", "VERSION", "CHANGELOG.md", "README.md", "LICENSE", filepath.Join("tests", "README.md")} {
+			if _, err := os.Stat(filepath.Join(dir, "skills", skillName, rel)); err != nil {
+				t.Fatalf("missing %s/%s/%s: %v", skillName, rel, skillName, err)
+			}
+		}
+	}
+
+	// Second run: all files exist, no error.
+	if err := runRoot("scaffold", "skills", "--target", dir); err != nil {
+		t.Fatalf("scaffold skills second run (skip-existing) failed: %v", err)
+	}
+
+	// Force run: succeeds with --force.
+	if err := runRoot("scaffold", "skills", "--target", dir, "--force"); err != nil {
+		t.Fatalf("scaffold skills --force failed: %v", err)
+	}
+}
+
+func TestScaffoldSkillsDryRun(t *testing.T) {
+	dir := t.TempDir()
+	bakeContent := `version: "1"
+skill_sources:
+  output_dir: skills
+  skills:
+    - name: dry-skill
+targets:
+  default:
+    platforms:
+      - codex
+`
+	if err := os.WriteFile(filepath.Join(dir, "agentic.bake.yaml"), []byte(bakeContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := runRoot("scaffold", "skills", "--target", dir, "--dry-run"); err != nil {
+		t.Fatalf("scaffold skills --dry-run failed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "skills", "dry-skill")); !os.IsNotExist(err) {
+		t.Fatalf("dry-run should not write files, err=%v", err)
+	}
+}
+
+func TestScaffoldSkillsNoBakefile(t *testing.T) {
+	dir := t.TempDir()
+	if err := runRoot("scaffold", "skills", "--target", dir); err == nil {
+		t.Fatal("expected error when no bakefile")
+	}
+}
+
+func TestScaffoldSkillsEmpty(t *testing.T) {
+	dir := t.TempDir()
+	bakeContent := `version: "1"
+skill_sources:
+  output_dir: skills
+  skills: []
+targets:
+  default:
+    platforms:
+      - codex
+`
+	if err := os.WriteFile(filepath.Join(dir, "agentic.bake.yaml"), []byte(bakeContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Should succeed gracefully with a "nothing to scaffold" message.
+	if err := runRoot("scaffold", "skills", "--target", dir); err != nil {
+		t.Fatalf("scaffold skills with empty skills list: %v", err)
+	}
+}
+
+func TestScaffoldSkillsDuplicateNames(t *testing.T) {
+	dir := t.TempDir()
+	bakeContent := `version: "1"
+skill_sources:
+  output_dir: skills
+  skills:
+    - name: my-skill
+    - name: my-skill
+targets:
+  default:
+    platforms:
+      - codex
+`
+	if err := os.WriteFile(filepath.Join(dir, "agentic.bake.yaml"), []byte(bakeContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := runRoot("scaffold", "skills", "--target", dir); err == nil {
+		t.Fatal("expected error for duplicate skill name")
+	}
+}
+
+func TestBakeWithSkillSources(t *testing.T) {
+	dir := t.TempDir()
+	bakeContent := `version: "1"
+skill_sources:
+  output_dir: skills
+  defaults:
+    version: 0.1.0
+    owner: platform-engineering
+    license: MIT
+    compatible_with:
+      - codex
+  skills:
+    - name: test-skill
+      description: A test skill.
+targets:
+  default:
+    platforms:
+      - codex
+`
+	if err := os.WriteFile(filepath.Join(dir, "agentic.bake.yaml"), []byte(bakeContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// bake --write should create skill source skeleton and platform skill file.
+	if err := runRoot("bake", "default", "--target", dir, "--write"); err != nil {
+		t.Fatalf("bake write with skill_sources failed: %v", err)
+	}
+
+	// Canonical skill source should be created.
+	if _, err := os.Stat(filepath.Join(dir, "skills", "test-skill", "SKILL.md")); err != nil {
+		t.Fatalf("skill source SKILL.md not created: %v", err)
+	}
+
+	// Platform skill output should be created for codex.
+	if _, err := os.Stat(filepath.Join(dir, ".agents", "skills", "test-skill", "SKILL.md")); err != nil {
+		t.Fatalf("platform skill output not created for codex: %v", err)
+	}
+
+	// bake --plan should also succeed.
+	if err := runRoot("bake", "default", "--target", dir, "--plan"); err != nil {
+		t.Fatalf("bake plan with skill_sources failed: %v", err)
+	}
+}
+
+func TestBakeCanonicalSkillPlatformOutputs(t *testing.T) {
+	dir := t.TempDir()
+	bakeContent := `version: "1"
+skill_sources:
+  output_dir: skills
+  defaults:
+    compatible_with:
+      - codex
+      - claude-code
+      - gitlab-duo
+  skills:
+    - name: multi-platform-skill
+targets:
+  default:
+    platforms:
+      - codex
+      - claude-code
+      - gitlab-duo
+`
+	if err := os.WriteFile(filepath.Join(dir, "agentic.bake.yaml"), []byte(bakeContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := runRoot("bake", "default", "--target", dir, "--write"); err != nil {
+		t.Fatalf("bake write failed: %v", err)
+	}
+
+	// Codex: .agents/skills/<name>/SKILL.md
+	if _, err := os.Stat(filepath.Join(dir, ".agents", "skills", "multi-platform-skill", "SKILL.md")); err != nil {
+		t.Fatalf("codex platform skill missing: %v", err)
+	}
+	// Claude Code: .claude/skills/<name>/SKILL.md
+	if _, err := os.Stat(filepath.Join(dir, ".claude", "skills", "multi-platform-skill", "SKILL.md")); err != nil {
+		t.Fatalf("claude-code platform skill missing: %v", err)
+	}
+	// GitLab Duo: .agents/skills/<name>/SKILL.md (canonical source is skills/<name>/)
+	// Both codex and gitlab-duo map to .agents/skills/<name>/SKILL.md, so the file already exists.
+
+	// Canonical source must NOT be deleted or treated as generated output.
+	if _, err := os.Stat(filepath.Join(dir, "skills", "multi-platform-skill", "SKILL.md")); err != nil {
+		t.Fatalf("canonical skill source was removed or not created: %v", err)
+	}
+}
+
+func TestScaffoldSkillCommandNextSteps(t *testing.T) {
+	dir := t.TempDir()
+	// Just verify the command succeeds and produces the skill directory.
+	if err := runRoot("scaffold", "skill", "policy-reviewer",
+		"--output-dir", dir,
+		"--platform", "codex",
+	); err != nil {
+		t.Fatalf("scaffold skill failed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "policy-reviewer", "SKILL.md")); err != nil {
+		t.Fatalf("SKILL.md not created: %v", err)
+	}
+}
+
+func TestScaffoldSkillsAbsError(t *testing.T) {
+	origAbs := cliAbsPathScaffold
+	cliAbsPathScaffold = func(string) (string, error) { return "", errors.New("abs fail") }
+	t.Cleanup(func() { cliAbsPathScaffold = origAbs })
+	if err := runRoot("scaffold", "skills", "--target", "."); err == nil {
+		t.Fatal("expected abs error")
+	}
+}
+
+func TestScaffoldSkillsWriteSkillSafeError(t *testing.T) {
+	dir := t.TempDir()
+	bakeContent := `version: "1"
+skill_sources:
+  output_dir: skills
+  skills:
+    - name: fail-skill
+targets:
+  default:
+    platforms:
+      - codex
+`
+	if err := os.WriteFile(filepath.Join(dir, "agentic.bake.yaml"), []byte(bakeContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	orig := cliWriteSkillSafe
+	cliWriteSkillSafe = func(scaffold.SkillOptions) (*scaffold.SkillWriteResult, error) {
+		return nil, errors.New("safe write fail")
+	}
+	t.Cleanup(func() { cliWriteSkillSafe = orig })
+	if err := runRoot("scaffold", "skills", "--target", dir); err == nil {
+		t.Fatal("expected safe write error")
+	}
+}
+
 func TestExecuteErrorSubprocess(t *testing.T) {
 	if os.Getenv("SKCR_EXECUTE_ERR") == "1" {
 		orig := os.Args

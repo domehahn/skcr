@@ -56,6 +56,7 @@ func LoadBakeFile(path string) (*models.BakeConfig, error) {
 		cfg.Variables = map[string]any{}
 	}
 	normalizeSkillConfig(cfg)
+	normalizeSkillSourceConfig(cfg)
 	if cfg.Targets == nil {
 		cfg.Targets = map[string]*models.TargetConfig{}
 	}
@@ -91,6 +92,34 @@ func normalizeSkillConfig(cfg *models.BakeConfig) {
 		platforms, err := models.NormalizePlatforms(cfg.Skills.Platforms)
 		if err == nil {
 			cfg.Skills.Platforms = platforms
+		}
+	}
+}
+
+func normalizeSkillSourceConfig(cfg *models.BakeConfig) {
+	if cfg.SkillSources == nil {
+		return
+	}
+	ss := cfg.SkillSources
+	if ss.OutputDir == "" {
+		ss.OutputDir = "skills"
+	}
+	if ss.Defaults.Version == "" {
+		ss.Defaults.Version = "0.1.0"
+	}
+	if ss.Defaults.License == "" {
+		ss.Defaults.License = "MIT"
+	}
+	if len(ss.Defaults.CompatibleWith) > 0 {
+		if normalized, err := models.NormalizePlatforms(ss.Defaults.CompatibleWith); err == nil {
+			ss.Defaults.CompatibleWith = normalized
+		}
+	}
+	for i := range ss.Skills {
+		if len(ss.Skills[i].CompatibleWith) > 0 {
+			if normalized, err := models.NormalizePlatforms(ss.Skills[i].CompatibleWith); err == nil {
+				ss.Skills[i].CompatibleWith = normalized
+			}
 		}
 	}
 }
@@ -318,9 +347,24 @@ func BuildInitialConfig(
 		Inherits:    slices.Clone(targetNames),
 	}
 
+	defaultPlatforms := []string{"codex"}
+	if len(platforms) > 0 {
+		defaultPlatforms = platforms
+	}
+
 	return &models.BakeConfig{
 		Version:   "1",
 		Variables: variables,
+		SkillSources: &models.SkillSourceConfig{
+			OutputDir: "skills",
+			Defaults: models.SkillSourceDefaults{
+				Version:        "0.1.0",
+				Owner:          ownerTeam,
+				License:        "MIT",
+				CompatibleWith: defaultPlatforms,
+			},
+			Skills: []models.SkillSourceDefinition{},
+		},
 		Skills: &models.SkillIntegrationConfig{
 			Source: "agent-skills.lock",
 			Mode:   models.SkillModeReference,

@@ -84,6 +84,44 @@ func WriteSkill(opts SkillOptions) ([]PlannedFile, error) {
 	return files, nil
 }
 
+// SkillWriteResult records which files were created or skipped during a safe write.
+type SkillWriteResult struct {
+	Created []PlannedFile
+	Skipped []PlannedFile
+}
+
+// WriteSkillSafe writes a skill skeleton, skipping existing files instead of erroring.
+// Use --force to overwrite, --dry-run to preview without writing.
+func WriteSkillSafe(opts SkillOptions) (*SkillWriteResult, error) {
+	files, err := PlanSkill(opts)
+	if err != nil {
+		return nil, err
+	}
+	result := &SkillWriteResult{}
+	if opts.DryRun {
+		result.Created = files
+		return result, nil
+	}
+	for _, file := range files {
+		if !opts.Force {
+			if _, statErr := stat(file.Path); statErr == nil {
+				result.Skipped = append(result.Skipped, file)
+				continue
+			} else if !os.IsNotExist(statErr) {
+				return nil, statErr
+			}
+		}
+		if err := mkdirAll(filepath.Dir(file.Path), 0o755); err != nil {
+			return nil, err
+		}
+		if err := writeFile(file.Path, []byte(file.Content), 0o644); err != nil {
+			return nil, err
+		}
+		result.Created = append(result.Created, file)
+	}
+	return result, nil
+}
+
 func validateSkillOptions(opts *SkillOptions) error {
 	opts.Name = strings.TrimSpace(opts.Name)
 	if !validSkillName.MatchString(opts.Name) {

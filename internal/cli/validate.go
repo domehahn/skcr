@@ -8,6 +8,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+// cliLoadBakeFileValidate reuses the package-level var from bake.go (same package).
+// This alias exists only for documentation clarity.
+var _ = cliLoadBakeFile // ensure the bake.go var is used here too
+
 var cliAbsPathValidate = filepath.Abs
 
 func newValidateCommand() *cobra.Command {
@@ -41,6 +45,10 @@ func newValidateCommand() *cobra.Command {
 				return fmt.Errorf("validation failed")
 			}
 			fmt.Println("Validation passed")
+			cfg, cfgErr := cliLoadBakeFile(filepath.Join(absTarget, "agentic.bake.yaml"))
+			if cfgErr == nil && cfg.SkillSources != nil && len(cfg.SkillSources.Skills) > 0 {
+				fmt.Printf("\nFor package/lifecycle validation, run:\n  skpm validate %s/<name>\n", cfg.SkillSources.OutputDir)
+			}
 			return nil
 		},
 	}

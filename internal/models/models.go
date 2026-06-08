@@ -55,6 +55,36 @@ type SkillIntegrationConfig struct {
 	Platforms []string `yaml:"platforms,omitempty"`
 }
 
+type SkillSourceDefaults struct {
+	Version        string   `yaml:"version,omitempty"`
+	Owner          string   `yaml:"owner,omitempty"`
+	License        string   `yaml:"license,omitempty"`
+	CompatibleWith []string `yaml:"compatible_with,omitempty"`
+	Template       string   `yaml:"template,omitempty"`
+}
+
+type SkillSourceDefinition struct {
+	Name           string   `yaml:"name"`
+	Version        string   `yaml:"version,omitempty"`
+	Description    string   `yaml:"description,omitempty"`
+	Owner          string   `yaml:"owner,omitempty"`
+	License        string   `yaml:"license,omitempty"`
+	CompatibleWith []string `yaml:"compatible_with,omitempty"`
+	Template       string   `yaml:"template,omitempty"`
+}
+
+type SkillSourceConfig struct {
+	OutputDir string                  `yaml:"output_dir,omitempty"`
+	Defaults  SkillSourceDefaults     `yaml:"defaults,omitempty"`
+	Skills    []SkillSourceDefinition `yaml:"skills,omitempty"`
+}
+
+type RenderConfig struct {
+	SkillSources   *bool `yaml:"skill_sources,omitempty"`
+	PlatformFiles  *bool `yaml:"platform_files,omitempty"`
+	PlatformSkills *bool `yaml:"platform_skills,omitempty"`
+}
+
 type TargetConfig struct {
 	Description string         `yaml:"description,omitempty"`
 	Inherits    []string       `yaml:"inherits,omitempty"`
@@ -65,13 +95,15 @@ type TargetConfig struct {
 	Rules       map[string]any `yaml:"rules,omitempty"`
 	Model       map[string]any `yaml:"model,omitempty"`
 	GitLabDuo   map[string]any `yaml:"gitlab_duo,omitempty"`
+	Render      *RenderConfig  `yaml:"render,omitempty"`
 }
 
 type BakeConfig struct {
-	Version   string                   `yaml:"version,omitempty"`
-	Variables map[string]any           `yaml:"variables,omitempty"`
-	Skills    *SkillIntegrationConfig  `yaml:"skills,omitempty"`
-	Targets   map[string]*TargetConfig `yaml:"targets,omitempty"`
+	Version      string                   `yaml:"version,omitempty"`
+	Variables    map[string]any           `yaml:"variables,omitempty"`
+	SkillSources *SkillSourceConfig       `yaml:"skill_sources,omitempty"`
+	Skills       *SkillIntegrationConfig  `yaml:"skills,omitempty"`
+	Targets      map[string]*TargetConfig `yaml:"targets,omitempty"`
 }
 
 type RenderedFile struct {

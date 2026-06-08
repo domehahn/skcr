@@ -128,6 +128,115 @@ targets:
 	}
 }
 
+func TestValidateSkillSources(t *testing.T) {
+	// Use no targets in these tests to isolate skill_sources validation from
+	// platform file rendering checks.
+	dir := t.TempDir()
+	bakePath := filepath.Join(dir, "agentic.bake.yaml")
+
+	// Valid skill_sources with existing directories — should pass.
+	bakeContent := `version: "1"
+skill_sources:
+  output_dir: skills
+  defaults:
+    compatible_with:
+      - codex
+  skills:
+    - name: valid-skill
+`
+	if err := os.WriteFile(bakePath, []byte(bakeContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(dir, "skills", "valid-skill"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "skills", "valid-skill", "SKILL.md"),
+		[]byte("name: valid-skill\ndescription: A valid skill.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	errs, err := ValidateProject(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range errs {
+		if strings.Contains(e, "valid-skill") {
+			t.Fatalf("unexpected skill_sources error for valid config: %q", e)
+		}
+	}
+
+	// Missing skill source directory.
+	bakeWithMissing := `version: "1"
+skill_sources:
+  output_dir: skills
+  skills:
+    - name: missing-skill
+`
+	if err := os.WriteFile(bakePath, []byte(bakeWithMissing), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	errs, err = ValidateProject(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(errs, "\n"), "missing-skill") {
+		t.Fatalf("expected missing-skill error, got: %v", errs)
+	}
+
+	// Invalid skill name.
+	bakeWithInvalid := `version: "1"
+skill_sources:
+  skills:
+    - name: "Invalid_Name"
+`
+	if err := os.WriteFile(bakePath, []byte(bakeWithInvalid), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	errs, err = ValidateProject(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(errs, "\n"), "invalid skill name") {
+		t.Fatalf("expected invalid name error, got: %v", errs)
+	}
+
+	// Duplicate skill names.
+	bakeWithDup := `version: "1"
+skill_sources:
+  skills:
+    - name: dup-skill
+    - name: dup-skill
+`
+	if err := os.WriteFile(bakePath, []byte(bakeWithDup), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	errs, err = ValidateProject(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(errs, "\n"), "duplicate") {
+		t.Fatalf("expected duplicate error, got: %v", errs)
+	}
+
+	// Invalid platform in skill_sources defaults.
+	bakeWithBadPlatform := `version: "1"
+skill_sources:
+  defaults:
+    compatible_with:
+      - not-a-platform
+  skills: []
+`
+	if err := os.WriteFile(bakePath, []byte(bakeWithBadPlatform), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	errs, err = ValidateProject(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(errs, "\n"), "unsupported platform") {
+		t.Fatalf("expected unsupported platform error, got: %v", errs)
+	}
+}
+
 func TestValidateProjectCoversContinueBranches(t *testing.T) {
 	dir := t.TempDir()
 	bakePath := filepath.Join(dir, "agentic.bake.yaml")
