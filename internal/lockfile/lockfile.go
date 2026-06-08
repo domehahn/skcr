@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/agentic-template-kit/skcr/internal/models"
+	"github.com/domehahn/skcr/internal/models"
 	"gopkg.in/yaml.v3"
 )
 

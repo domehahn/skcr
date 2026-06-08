@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/agentic-template-kit/skcr/internal/validator"
+	"github.com/domehahn/skcr/internal/validator"
 	"github.com/spf13/cobra"
 )
 

@@ -5,8 +5,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/agentic-template-kit/skcr/internal/bake"
-	"github.com/agentic-template-kit/skcr/internal/models"
+	"github.com/domehahn/skcr/internal/bake"
+	"github.com/domehahn/skcr/internal/models"
 	"github.com/spf13/cobra"
 )
 

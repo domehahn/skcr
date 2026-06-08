@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/agentic-template-kit/skcr/internal/bake"
-	"github.com/agentic-template-kit/skcr/internal/models"
+	"github.com/domehahn/skcr/internal/bake"
+	"github.com/domehahn/skcr/internal/models"
 )
 
 func TestTemplateRootAndHelpers(t *testing.T) {

@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/agentic-template-kit/skcr/internal/scaffold"
+	"github.com/domehahn/skcr/internal/scaffold"
 	"github.com/spf13/cobra"
 )
 

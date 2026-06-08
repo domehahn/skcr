@@ -6,8 +6,8 @@ import (
 	"os"
 	"slices"
 
-	"github.com/agentic-template-kit/skcr/internal/catalog"
-	"github.com/agentic-template-kit/skcr/internal/models"
+	"github.com/domehahn/skcr/internal/catalog"
+	"github.com/domehahn/skcr/internal/models"
 	"gopkg.in/yaml.v3"
 )
 

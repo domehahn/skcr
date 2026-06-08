@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/agentic-template-kit/skcr/internal/models"
+	"github.com/domehahn/skcr/internal/models"
 )
 
 func TestLoadDumpAndResolveTarget(t *testing.T) {

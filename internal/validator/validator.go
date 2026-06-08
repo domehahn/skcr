@@ -7,11 +7,11 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/agentic-template-kit/skcr/internal/bake"
-	"github.com/agentic-template-kit/skcr/internal/lockfile"
-	"github.com/agentic-template-kit/skcr/internal/models"
-	"github.com/agentic-template-kit/skcr/internal/renderer"
-	"github.com/agentic-template-kit/skcr/internal/skilllock"
+	"github.com/domehahn/skcr/internal/bake"
+	"github.com/domehahn/skcr/internal/lockfile"
+	"github.com/domehahn/skcr/internal/models"
+	"github.com/domehahn/skcr/internal/renderer"
+	"github.com/domehahn/skcr/internal/skilllock"
 	"gopkg.in/yaml.v3"
 )
 

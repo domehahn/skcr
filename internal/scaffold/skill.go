@@ -7,7 +7,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/agentic-template-kit/skcr/internal/models"
+	"github.com/domehahn/skcr/internal/models"
 )
 
 type SkillOptions struct {

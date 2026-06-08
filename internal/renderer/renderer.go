@@ -6,8 +6,8 @@ import (
 	"path/filepath"
 	"runtime"
 
-	"github.com/agentic-template-kit/skcr/internal/catalog"
-	"github.com/agentic-template-kit/skcr/internal/models"
+	"github.com/domehahn/skcr/internal/catalog"
+	"github.com/domehahn/skcr/internal/models"
 	"github.com/flosch/pongo2/v6"
 )
 

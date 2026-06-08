@@ -1,6 +1,6 @@
 package main
 
-import "github.com/agentic-template-kit/skcr/internal/cli"
+import "github.com/domehahn/skcr/internal/cli"
 
 func main() {
 	cli.Execute()

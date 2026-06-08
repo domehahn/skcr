@@ -10,8 +10,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/agentic-template-kit/skcr/internal/models"
-	"github.com/agentic-template-kit/skcr/internal/scaffold"
+	"github.com/domehahn/skcr/internal/models"
+	"github.com/domehahn/skcr/internal/scaffold"
 	"gopkg.in/yaml.v3"
 )
 
