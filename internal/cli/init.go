@@ -73,8 +73,26 @@ func newInitCommand() *cobra.Command {
 			if err := cliDumpBakeFile(cfg, bakePath); err != nil {
 				return err
 			}
-
 			fmt.Println("Created", bakePath)
+
+			if cfg.SkillSources != nil && len(cfg.SkillSources.Skills) > 0 {
+				outputDir := filepath.Join(absTarget, cfg.SkillSources.OutputDir)
+				fmt.Println()
+				for _, skillDef := range cfg.SkillSources.Skills {
+					opts := skillDefToScaffoldOpts(skillDef, cfg.SkillSources, outputDir, false, force)
+					result, err := cliWriteSkillSafe(opts)
+					if err != nil {
+						return fmt.Errorf("scaffold skill %s: %w", skillDef.Name, err)
+					}
+					for _, f := range result.Created {
+						fmt.Println("create", f.Path)
+					}
+				}
+				fmt.Println()
+				fmt.Println("Next steps:")
+				fmt.Printf("  Edit the SKILL.md files under %s/\n", cfg.SkillSources.OutputDir)
+				fmt.Println("  skcr bake")
+			}
 			return nil
 		},
 	}
