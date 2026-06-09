@@ -94,9 +94,6 @@ func newBakeCommand() *cobra.Command {
 				}
 			}
 			files = append(files, skillFiles...)
-			if len(resolved.Skills) > 0 {
-				files = append(files, renderCanonicalSkillFiles(absTarget, resolved.Skills, cfg.SkillSources, resolved.Platforms)...)
-			}
 
 			lock, err := cliLoadLockfile(absTarget)
 			if err != nil {
@@ -157,14 +154,30 @@ func newBakeCommand() *cobra.Command {
 			fmt.Printf("\nPlan summary: %d to create, %d to update, %d to delete, %d unchanged in state.\n", stateCounts["create"], stateCounts["update"], stateCounts["delete"], stateCounts["noop"])
 
 			if len(resolved.Skills) > 0 {
-				fmt.Println("\nSkill Sources Plan (.agents/skills/ directory)")
-				outputDir := skillSourceOutputDir(cfg.SkillSources)
-				for _, name := range resolved.Skills {
-					skillDir := filepath.Join(absTarget, outputDir, name)
-					if _, statErr := cliStatBake(skillDir); os.IsNotExist(statErr) {
-						fmt.Printf("create\tskill-source\t%s/%s/\n", outputDir, name)
-					} else {
-						fmt.Printf("exists\tskill-source\t%s/%s/\n", outputDir, name)
+				// Collect unique base directories to scaffold.
+				dirSeen := map[string]struct{}{}
+				var planDirs []string
+				for _, p := range resolved.Platforms {
+					d := canonicalPlatformSkillBaseDir(p)
+					if _, dup := dirSeen[d]; !dup {
+						dirSeen[d] = struct{}{}
+						planDirs = append(planDirs, d)
+					}
+				}
+				if _, ok := dirSeen[".agents/skills"]; !ok {
+					planDirs = append(planDirs, ".agents/skills")
+				}
+
+				fmt.Printf("\nSkill Sources Plan (%d director(ies))\n", len(planDirs))
+				fmt.Println("Action\tDir\tSkill")
+				for _, baseDir := range planDirs {
+					for _, name := range resolved.Skills {
+						skillDir := filepath.Join(absTarget, baseDir, name)
+						if _, statErr := cliStatBake(skillDir); os.IsNotExist(statErr) {
+							fmt.Printf("create\t%s\t%s\n", baseDir, name)
+						} else {
+							fmt.Printf("exists\t%s\t%s\n", baseDir, name)
+						}
 					}
 				}
 			}
@@ -213,7 +226,7 @@ func newBakeCommand() *cobra.Command {
 			}
 
 			if len(resolved.Skills) > 0 {
-				created, skipped, err := scaffoldTargetSkills(absTarget, resolved.Skills, cfg.SkillSources, false)
+				created, skipped, err := scaffoldTargetSkills(absTarget, resolved.Skills, cfg.SkillSources, resolved.Platforms, false)
 				if err != nil {
 					return err
 				}
@@ -264,29 +277,28 @@ func newBakeCommand() *cobra.Command {
 	return cmd
 }
 
-// canonicalPlatformSkillDest returns the platform-specific destination for a canonical skill source.
-// Platforms with their own skills directories use those; all others use the universal .agents/skills/ path.
-// Note: gitlab-duo uses .agents/skills/ rather than skills/ to avoid overwriting the canonical source.
-func canonicalPlatformSkillDest(platform, name string) string {
+// canonicalPlatformSkillBaseDir returns the base directory where skills are stored for a platform.
+// Platforms with dedicated directories use those; all others share .agents/skills/.
+func canonicalPlatformSkillBaseDir(platform string) string {
 	switch platform {
 	case "claude-code":
-		return filepath.ToSlash(filepath.Join(".claude", "skills", name, "SKILL.md"))
+		return ".claude/skills"
 	case "github-copilot":
-		return filepath.ToSlash(filepath.Join(".github", "skills", name, "SKILL.md"))
+		return ".github/skills"
 	case "cursor":
-		return filepath.ToSlash(filepath.Join(".cursor", "skills", name, "SKILL.md"))
+		return ".cursor/skills"
 	case "junie":
-		return filepath.ToSlash(filepath.Join(".junie", "skills", name, "SKILL.md"))
+		return ".junie/skills"
 	case "gemini-cli":
-		return filepath.ToSlash(filepath.Join(".gemini", "skills", name, "SKILL.md"))
+		return ".gemini/skills"
 	case "roo-code":
-		return filepath.ToSlash(filepath.Join(".roo", "skills", name, "SKILL.md"))
+		return ".roo/skills"
 	case "kiro":
-		return filepath.ToSlash(filepath.Join(".kiro", "skills", name, "SKILL.md"))
+		return ".kiro/skills"
 	case "opencode":
-		return filepath.ToSlash(filepath.Join(".opencode", "skills", name, "SKILL.md"))
+		return ".opencode/skills"
 	default:
-		return filepath.ToSlash(filepath.Join(".agents", "skills", name, "SKILL.md"))
+		return ".agents/skills"
 	}
 }
 
@@ -299,93 +311,55 @@ func skillSourceOutputDir(ss *models.SkillSourceConfig) string {
 	return ".agents/skills"
 }
 
-// renderCanonicalSkillFiles generates RenderedFile entries that copy SKILL.md from
-// .agents/skills/<name>/SKILL.md into platform-specific output directories for platforms
-// that have their own dedicated directories (e.g. .claude/skills/, .github/skills/).
-// Platforms that already read from .agents/skills/ are skipped (src == dest).
-func renderCanonicalSkillFiles(root string, skillNames []string, ss *models.SkillSourceConfig, platforms []string) []models.RenderedFile {
-	if len(skillNames) == 0 {
-		return nil
-	}
-	outputDir := skillSourceOutputDir(ss)
-	skillsDir := outputDir
-	if !filepath.IsAbs(skillsDir) {
-		skillsDir = filepath.Join(root, skillsDir)
-	}
-
-	// Deduplicate skill names while preserving order.
-	seen := map[string]struct{}{}
-	var files []models.RenderedFile
-	for _, name := range skillNames {
-		if _, dup := seen[name]; dup {
-			continue
-		}
-		seen[name] = struct{}{}
-
-		skillMDPath := filepath.Join(skillsDir, name, "SKILL.md")
-		content := ""
-		if data, err := cliReadFile(skillMDPath); err == nil {
-			content = string(data)
-		} else {
-			// File not yet on disk (pre-scaffold plan): generate template content.
-			fakeSS := &models.SkillSourceConfig{OutputDir: outputDir}
-			if ss != nil {
-				fakeSS.Defaults = ss.Defaults
-			}
-			opts := skillDefToScaffoldOpts(models.SkillSourceDefinition{Name: name}, fakeSS, skillsDir, true, false)
-			if planned, err := scaffold.PlanSkill(opts); err == nil {
-				for _, f := range planned {
-					if strings.HasSuffix(f.Path, "SKILL.md") {
-						content = f.Content
-						break
-					}
-				}
-			}
-		}
-		src := filepath.ToSlash(filepath.Join(outputDir, name, "SKILL.md"))
-		for _, platform := range platforms {
-			dest := canonicalPlatformSkillDest(platform, name)
-			if dest == "" || dest == src {
-				continue
-			}
-			files = append(files, models.RenderedFile{
-				Source:      src,
-				Destination: dest,
-				Content:     content,
-				Platform:    platform,
-			})
-		}
-	}
-	return files
-}
-
-// scaffoldTargetSkills creates skill source skeletons for every skill listed in the
-// resolved target. Existing files are skipped unless force is true.
-func scaffoldTargetSkills(root string, skillNames []string, ss *models.SkillSourceConfig, force bool) (created, skipped int, err error) {
+// scaffoldTargetSkills creates the full skill directory structure for every skill in every
+// platform-specific skills directory derived from the active platforms. Existing files are
+// skipped so user edits are never overwritten.
+func scaffoldTargetSkills(root string, skillNames []string, ss *models.SkillSourceConfig, platforms []string, force bool) (created, skipped int, err error) {
 	if len(skillNames) == 0 {
 		return 0, 0, nil
 	}
-	outputDir := skillSourceOutputDir(ss)
-	if !filepath.IsAbs(outputDir) {
-		outputDir = filepath.Join(root, outputDir)
+
+	// Collect unique base directories across all platforms.
+	dirSeen := map[string]struct{}{}
+	var baseDirs []string
+	for _, p := range platforms {
+		d := canonicalPlatformSkillBaseDir(p)
+		if _, dup := dirSeen[d]; !dup {
+			dirSeen[d] = struct{}{}
+			baseDirs = append(baseDirs, d)
+		}
 	}
-	fakeSS := &models.SkillSourceConfig{OutputDir: outputDir}
+	// Always include .agents/skills/ as the universal fallback.
+	if _, ok := dirSeen[".agents/skills"]; !ok {
+		baseDirs = append(baseDirs, ".agents/skills")
+	}
+
+	fakeSS := &models.SkillSourceConfig{}
 	if ss != nil {
 		fakeSS.Defaults = ss.Defaults
 	}
-	seen := map[string]struct{}{}
+
+	skillSeen := map[string]struct{}{}
 	for _, name := range skillNames {
-		if _, dup := seen[name]; dup {
+		if _, dup := skillSeen[name]; dup {
 			continue
 		}
-		seen[name] = struct{}{}
-		opts := skillDefToScaffoldOpts(models.SkillSourceDefinition{Name: name}, fakeSS, outputDir, false, force)
-		result, writeErr := scaffold.WriteSkillSafe(opts)
-		if writeErr != nil {
-			return created, skipped, fmt.Errorf("skill %s: %w", name, writeErr)
+		skillSeen[name] = struct{}{}
+
+		for _, baseDir := range baseDirs {
+			absDir := baseDir
+			if !filepath.IsAbs(absDir) {
+				absDir = filepath.Join(root, baseDir)
+			}
+			fakeSS.OutputDir = absDir
+			opts := skillDefToScaffoldOpts(models.SkillSourceDefinition{Name: name}, fakeSS, absDir, false, force)
+			result, writeErr := scaffold.WriteSkillSafe(opts)
+			if writeErr != nil {
+				return created, skipped, fmt.Errorf("skill %s in %s: %w", name, baseDir, writeErr)
+			}
+			created += len(result.Created)
+			skipped += len(result.Skipped)
 		}
-		created += len(result.Created)
-		skipped += len(result.Skipped)
 	}
 	return created, skipped, nil
 }
