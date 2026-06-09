@@ -62,7 +62,7 @@ func PlanSkill(opts SkillOptions) ([]PlannedFile, error) {
 	}
 
 	return []PlannedFile{
-		{Path: filepath.Join(root, "SKILL.md"), Content: skillMarkdown(opts.Name)},
+		{Path: filepath.Join(root, "SKILL.md"), Content: skillMarkdown(opts.Name, description, opts.License)},
 		{Path: filepath.Join(root, "skill.yaml"), Content: string(skillYAMLBytes)},
 		{Path: filepath.Join(root, "VERSION"), Content: opts.Version + "\n"},
 		{Path: filepath.Join(root, "CHANGELOG.md"), Content: fmt.Sprintf("# Changelog\n\n## %s\n\n- Initial skill scaffold.\n", opts.Version)},
@@ -166,12 +166,18 @@ func validateSkillOptions(opts *SkillOptions) error {
 	return nil
 }
 
-func skillMarkdown(name string) string {
-	return fmt.Sprintf(`# %s
+func skillMarkdown(name, description, license string) string {
+	frontmatter := fmt.Sprintf("---\nname: %s\ndescription: %s\n", name, description)
+	if license != "" {
+		frontmatter += fmt.Sprintf("license: %s\n", license)
+	}
+	frontmatter += "---\n"
+	return frontmatter + fmt.Sprintf(`
+# %s
 
 ## Purpose
 
-Describe what this skill helps an agent do.
+%s
 
 ## When to use this skill
 
@@ -193,7 +199,7 @@ Use this skill when...
 ## Output
 
 Describe the expected output format.
-`, name)
+`, name, description)
 }
 
 func markdownList(values []string) string {

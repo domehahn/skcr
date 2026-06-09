@@ -269,22 +269,28 @@ func newBakeCommand() *cobra.Command {
 }
 
 // canonicalPlatformSkillDest returns the platform-specific destination for a canonical skill source.
-// For gitlab-duo, the output is .agents/skills/<name>/SKILL.md because the canonical source
-// already lives at skills/<name>/SKILL.md.
+// Platforms with their own skills directories use those; all others use the universal .agents/skills/ path.
+// Note: gitlab-duo uses .agents/skills/ rather than skills/ to avoid overwriting the canonical source.
 func canonicalPlatformSkillDest(platform, name string) string {
 	switch platform {
-	case "codex":
-		return filepath.ToSlash(filepath.Join(".agents", "skills", name, "SKILL.md"))
 	case "claude-code":
 		return filepath.ToSlash(filepath.Join(".claude", "skills", name, "SKILL.md"))
 	case "github-copilot":
 		return filepath.ToSlash(filepath.Join(".github", "skills", name, "SKILL.md"))
-	case "gitlab-duo":
-		return filepath.ToSlash(filepath.Join(".agents", "skills", name, "SKILL.md"))
-	case "cursor", "windsurf", "generic", "openhands", "opencode":
-		return filepath.ToSlash(filepath.Join(".agentic", "skills", name, "SKILL.md"))
+	case "cursor":
+		return filepath.ToSlash(filepath.Join(".cursor", "skills", name, "SKILL.md"))
+	case "junie":
+		return filepath.ToSlash(filepath.Join(".junie", "skills", name, "SKILL.md"))
+	case "gemini-cli":
+		return filepath.ToSlash(filepath.Join(".gemini", "skills", name, "SKILL.md"))
+	case "roo-code":
+		return filepath.ToSlash(filepath.Join(".roo", "skills", name, "SKILL.md"))
+	case "kiro":
+		return filepath.ToSlash(filepath.Join(".kiro", "skills", name, "SKILL.md"))
+	case "opencode":
+		return filepath.ToSlash(filepath.Join(".opencode", "skills", name, "SKILL.md"))
 	default:
-		return ""
+		return filepath.ToSlash(filepath.Join(".agents", "skills", name, "SKILL.md"))
 	}
 }
 

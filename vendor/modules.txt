@@ -1,4 +1,4 @@
-# github.com/domehahn/sklib v0.1.0
+# github.com/domehahn/sklib v0.2.0
 ## explicit; go 1.22
 github.com/domehahn/sklib/spec
 # github.com/flosch/pongo2/v6 v6.0.0

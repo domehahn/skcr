@@ -9,17 +9,49 @@ import (
 type Platform string
 
 const (
-	PlatformCodex         Platform = "codex"
-	PlatformClaudeCode    Platform = "claude-code"
-	PlatformGitLabDuo     Platform = "gitlab-duo"
-	PlatformGitHubCopilot Platform = "github-copilot"
-	PlatformCursor        Platform = "cursor"
-	PlatformWindsurf      Platform = "windsurf"
-	PlatformOpenHands     Platform = "openhands"
-	PlatformOpenCode      Platform = "opencode"
-	PlatformOllama        Platform = "ollama"
-	PlatformGeneric       Platform = "generic"
-	PlatformAll           Platform = "all"
+	PlatformCodex          Platform = "codex"
+	PlatformClaudeCode     Platform = "claude-code"
+	PlatformGitLabDuo      Platform = "gitlab-duo"
+	PlatformGitHubCopilot  Platform = "github-copilot"
+	PlatformCursor         Platform = "cursor"
+	PlatformWindsurf       Platform = "windsurf"
+	PlatformOpenHands      Platform = "openhands"
+	PlatformOpenCode       Platform = "opencode"
+	PlatformOllama         Platform = "ollama"
+	PlatformJunie          Platform = "junie"
+	PlatformGeminiCLI      Platform = "gemini-cli"
+	PlatformAmp            Platform = "amp"
+	PlatformGoose          Platform = "goose"
+	PlatformRooCode        Platform = "roo-code"
+	PlatformKiro           Platform = "kiro"
+	PlatformLetta          Platform = "letta"
+	PlatformFirebender     Platform = "firebender"
+	PlatformTRAE           Platform = "trae"
+	PlatformMux            Platform = "mux"
+	PlatformAutohand       Platform = "autohand"
+	PlatformFactory        Platform = "factory"
+	PlatformTabnine        Platform = "tabnine"
+	PlatformQodo           Platform = "qodo"
+	PlatformVibe           Platform = "vibe"
+	PlatformCommandCode    Platform = "command-code"
+	PlatformOna            Platform = "ona"
+	PlatformFastAgent      Platform = "fast-agent"
+	PlatformNanobot        Platform = "nanobot"
+	PlatformBub            Platform = "bub"
+	PlatformVita           Platform = "vita"
+	PlatformSuperconductor Platform = "superconductor"
+	PlatformEmdash         Platform = "emdash"
+	PlatformWorkshop       Platform = "workshop"
+	PlatformVTCode         Platform = "vt-code"
+	PlatformPiebald        Platform = "piebald"
+	PlatformSpringAI       Platform = "spring-ai"
+	PlatformDatabricks     Platform = "databricks"
+	PlatformSnowflake      Platform = "snowflake"
+	PlatformLaravelBoost   Platform = "laravel-boost"
+	PlatformGoogleAIEdge   Platform = "google-ai-edge"
+	PlatformAgentman       Platform = "agentman"
+	PlatformGeneric        Platform = "generic"
+	PlatformAll            Platform = "all"
 )
 
 // knownPlatforms is the ordered set of all concrete canonical platforms (excludes "all").
@@ -33,18 +65,57 @@ var knownPlatforms = []Platform{
 	PlatformOpenHands,
 	PlatformOpenCode,
 	PlatformOllama,
+	PlatformJunie,
+	PlatformGeminiCLI,
+	PlatformAmp,
+	PlatformGoose,
+	PlatformRooCode,
+	PlatformKiro,
+	PlatformLetta,
+	PlatformFirebender,
+	PlatformTRAE,
+	PlatformMux,
+	PlatformAutohand,
+	PlatformFactory,
+	PlatformTabnine,
+	PlatformQodo,
+	PlatformVibe,
+	PlatformCommandCode,
+	PlatformOna,
+	PlatformFastAgent,
+	PlatformNanobot,
+	PlatformBub,
+	PlatformVita,
+	PlatformSuperconductor,
+	PlatformEmdash,
+	PlatformWorkshop,
+	PlatformVTCode,
+	PlatformPiebald,
+	PlatformSpringAI,
+	PlatformDatabricks,
+	PlatformSnowflake,
+	PlatformLaravelBoost,
+	PlatformGoogleAIEdge,
+	PlatformAgentman,
 	PlatformGeneric,
 }
 
 // platformAliases maps non-canonical strings to their canonical Platform value.
 var platformAliases = map[string]Platform{
-	"gitlab":     PlatformGitLabDuo,
-	"duo":        PlatformGitLabDuo,
-	"github":     PlatformGitHubCopilot,
-	"copilot":    PlatformGitHubCopilot,
-	"claude":     PlatformClaudeCode,
-	"open-code":  PlatformOpenCode,
-	"open-hands": PlatformOpenHands,
+	"gitlab":            PlatformGitLabDuo,
+	"duo":               PlatformGitLabDuo,
+	"github":            PlatformGitHubCopilot,
+	"copilot":           PlatformGitHubCopilot,
+	"claude":            PlatformClaudeCode,
+	"open-code":         PlatformOpenCode,
+	"open-hands":        PlatformOpenHands,
+	"gemini":            PlatformGeminiCLI,
+	"roo":               PlatformRooCode,
+	"laravel":           PlatformLaravelBoost,
+	"databricks-genie":  PlatformDatabricks,
+	"snowflake-cortex":  PlatformSnowflake,
+	"mistral-vibe":      PlatformVibe,
+	"jetbrains":         PlatformJunie,
 }
 
 // NormalizePlatform resolves a string (including aliases) to a canonical Platform.
