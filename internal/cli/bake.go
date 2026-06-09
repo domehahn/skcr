@@ -94,8 +94,8 @@ func newBakeCommand() *cobra.Command {
 				}
 			}
 			files = append(files, skillFiles...)
-			if renderPlatformSkillsEnabled(cfg, resolved) && cfg.SkillSources != nil {
-				files = append(files, renderCanonicalSkillFiles(absTarget, cfg.SkillSources, resolved.Platforms)...)
+			if len(resolved.Skills) > 0 {
+				files = append(files, renderCanonicalSkillFiles(absTarget, resolved.Skills, cfg.SkillSources, resolved.Platforms)...)
 			}
 
 			lock, err := cliLoadLockfile(absTarget)
@@ -156,19 +156,15 @@ func newBakeCommand() *cobra.Command {
 
 			fmt.Printf("\nPlan summary: %d to create, %d to update, %d to delete, %d unchanged in state.\n", stateCounts["create"], stateCounts["update"], stateCounts["delete"], stateCounts["noop"])
 
-			if renderSkillSourcesEnabled(cfg, resolved) && cfg.SkillSources != nil {
-				fmt.Println("\nSkill Sources Plan (skills/ directory)")
-				ss := cfg.SkillSources
-				outputDir := ss.OutputDir
-				if outputDir == "" {
-					outputDir = "skills"
-				}
-				for _, skillDef := range ss.Skills {
-					skillDir := filepath.Join(absTarget, outputDir, skillDef.Name)
+			if len(resolved.Skills) > 0 {
+				fmt.Println("\nSkill Sources Plan (.agents/skills/ directory)")
+				outputDir := skillSourceOutputDir(cfg.SkillSources)
+				for _, name := range resolved.Skills {
+					skillDir := filepath.Join(absTarget, outputDir, name)
 					if _, statErr := cliStatBake(skillDir); os.IsNotExist(statErr) {
-						fmt.Printf("create\tskill-source\t%s/%s/\n", outputDir, skillDef.Name)
+						fmt.Printf("create\tskill-source\t%s/%s/\n", outputDir, name)
 					} else {
-						fmt.Printf("exists\tskill-source\t%s/%s/\n", outputDir, skillDef.Name)
+						fmt.Printf("exists\tskill-source\t%s/%s/\n", outputDir, name)
 					}
 				}
 			}
@@ -216,13 +212,13 @@ func newBakeCommand() *cobra.Command {
 				return nil
 			}
 
-			if renderSkillSourcesEnabled(cfg, resolved) && cfg.SkillSources != nil {
-				created, skipped, err := scaffoldSkillSources(absTarget, cfg.SkillSources, false)
+			if len(resolved.Skills) > 0 {
+				created, skipped, err := scaffoldTargetSkills(absTarget, resolved.Skills, cfg.SkillSources, false)
 				if err != nil {
 					return err
 				}
 				if created > 0 || skipped > 0 {
-					fmt.Printf("Skill sources: %d created, %d skipped (existing files preserved; use --force via scaffold skills)\n", created, skipped)
+					fmt.Printf("Skill sources: %d created, %d skipped (existing files preserved)\n", created, skipped)
 				}
 			}
 
@@ -294,29 +290,49 @@ func canonicalPlatformSkillDest(platform, name string) string {
 	}
 }
 
-// renderCanonicalSkillFiles generates RenderedFile entries by copying SKILL.md from canonical
-// skill sources (skills/<name>/SKILL.md) into platform-specific output directories.
-func renderCanonicalSkillFiles(root string, ss *models.SkillSourceConfig, platforms []string) []models.RenderedFile {
-	if ss == nil || len(ss.Skills) == 0 {
+// skillSourceOutputDir returns the configured output directory for skill sources,
+// defaulting to .agents/skills if not set.
+func skillSourceOutputDir(ss *models.SkillSourceConfig) string {
+	if ss != nil && ss.OutputDir != "" {
+		return ss.OutputDir
+	}
+	return ".agents/skills"
+}
+
+// renderCanonicalSkillFiles generates RenderedFile entries that copy SKILL.md from
+// .agents/skills/<name>/SKILL.md into platform-specific output directories for platforms
+// that have their own dedicated directories (e.g. .claude/skills/, .github/skills/).
+// Platforms that already read from .agents/skills/ are skipped (src == dest).
+func renderCanonicalSkillFiles(root string, skillNames []string, ss *models.SkillSourceConfig, platforms []string) []models.RenderedFile {
+	if len(skillNames) == 0 {
 		return nil
 	}
-	skillsDir := ss.OutputDir
-	if skillsDir == "" {
-		skillsDir = "skills"
-	}
+	outputDir := skillSourceOutputDir(ss)
+	skillsDir := outputDir
 	if !filepath.IsAbs(skillsDir) {
 		skillsDir = filepath.Join(root, skillsDir)
 	}
 
+	// Deduplicate skill names while preserving order.
+	seen := map[string]struct{}{}
 	var files []models.RenderedFile
-	for _, skillDef := range ss.Skills {
-		skillMDPath := filepath.Join(skillsDir, skillDef.Name, "SKILL.md")
+	for _, name := range skillNames {
+		if _, dup := seen[name]; dup {
+			continue
+		}
+		seen[name] = struct{}{}
+
+		skillMDPath := filepath.Join(skillsDir, name, "SKILL.md")
 		content := ""
 		if data, err := cliReadFile(skillMDPath); err == nil {
 			content = string(data)
 		} else {
 			// File not yet on disk (pre-scaffold plan): generate template content.
-			opts := skillDefToScaffoldOpts(skillDef, ss, skillsDir, true, false)
+			fakeSS := &models.SkillSourceConfig{OutputDir: outputDir}
+			if ss != nil {
+				fakeSS.Defaults = ss.Defaults
+			}
+			opts := skillDefToScaffoldOpts(models.SkillSourceDefinition{Name: name}, fakeSS, skillsDir, true, false)
 			if planned, err := scaffold.PlanSkill(opts); err == nil {
 				for _, f := range planned {
 					if strings.HasSuffix(f.Path, "SKILL.md") {
@@ -326,9 +342,9 @@ func renderCanonicalSkillFiles(root string, ss *models.SkillSourceConfig, platfo
 				}
 			}
 		}
-		src := filepath.ToSlash(filepath.Join(ss.OutputDir, skillDef.Name, "SKILL.md"))
+		src := filepath.ToSlash(filepath.Join(outputDir, name, "SKILL.md"))
 		for _, platform := range platforms {
-			dest := canonicalPlatformSkillDest(platform, skillDef.Name)
+			dest := canonicalPlatformSkillDest(platform, name)
 			if dest == "" || dest == src {
 				continue
 			}
@@ -343,24 +359,30 @@ func renderCanonicalSkillFiles(root string, ss *models.SkillSourceConfig, platfo
 	return files
 }
 
-// scaffoldSkillSources creates canonical skill source skeletons from skill_sources.skills.
-// Existing files are skipped unless force is true. Returns a report of created/skipped files.
-func scaffoldSkillSources(root string, ss *models.SkillSourceConfig, force bool) (created, skipped int, err error) {
-	if ss == nil || len(ss.Skills) == 0 {
+// scaffoldTargetSkills creates skill source skeletons for every skill listed in the
+// resolved target. Existing files are skipped unless force is true.
+func scaffoldTargetSkills(root string, skillNames []string, ss *models.SkillSourceConfig, force bool) (created, skipped int, err error) {
+	if len(skillNames) == 0 {
 		return 0, 0, nil
 	}
-	outputDir := ss.OutputDir
-	if outputDir == "" {
-		outputDir = "skills"
-	}
+	outputDir := skillSourceOutputDir(ss)
 	if !filepath.IsAbs(outputDir) {
 		outputDir = filepath.Join(root, outputDir)
 	}
-	for _, skillDef := range ss.Skills {
-		opts := skillDefToScaffoldOpts(skillDef, ss, outputDir, false, force)
+	fakeSS := &models.SkillSourceConfig{OutputDir: outputDir}
+	if ss != nil {
+		fakeSS.Defaults = ss.Defaults
+	}
+	seen := map[string]struct{}{}
+	for _, name := range skillNames {
+		if _, dup := seen[name]; dup {
+			continue
+		}
+		seen[name] = struct{}{}
+		opts := skillDefToScaffoldOpts(models.SkillSourceDefinition{Name: name}, fakeSS, outputDir, false, force)
 		result, writeErr := scaffold.WriteSkillSafe(opts)
 		if writeErr != nil {
-			return created, skipped, fmt.Errorf("skill %s: %w", skillDef.Name, writeErr)
+			return created, skipped, fmt.Errorf("skill %s: %w", name, writeErr)
 		}
 		created += len(result.Created)
 		skipped += len(result.Skipped)
@@ -368,26 +390,11 @@ func scaffoldSkillSources(root string, ss *models.SkillSourceConfig, force bool)
 	return created, skipped, nil
 }
 
-func renderSkillSourcesEnabled(cfg *models.BakeConfig, resolved *models.TargetConfig) bool {
-	if resolved.Render != nil && resolved.Render.SkillSources != nil {
-		return *resolved.Render.SkillSources
-	}
-	return cfg.SkillSources != nil && len(cfg.SkillSources.Skills) > 0
-}
-
 func renderPlatformFilesEnabled(resolved *models.TargetConfig) bool {
 	if resolved.Render != nil && resolved.Render.PlatformFiles != nil {
 		return *resolved.Render.PlatformFiles
 	}
 	return true
-}
-
-func renderPlatformSkillsEnabled(cfg *models.BakeConfig, resolved *models.TargetConfig) bool {
-	if resolved.Render != nil && resolved.Render.PlatformSkills != nil {
-		return *resolved.Render.PlatformSkills
-	}
-	return (cfg.SkillSources != nil && len(cfg.SkillSources.Skills) > 0) ||
-		(cfg.Skills != nil && cfg.Skills.Source != "")
 }
 
 func loadSkillRenderOptions(root string, cfg *models.BakeConfig, target *models.TargetConfig, from, mode string) (renderer.Options, []models.RenderedFile, error) {

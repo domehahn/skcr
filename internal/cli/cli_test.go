@@ -535,9 +535,6 @@ func TestInitGeneratesSkillSourcesBlock(t *testing.T) {
 	if !strings.Contains(bakeContent, "skill_sources") {
 		t.Fatalf("expected skill_sources block in generated bakefile:\n%s", bakeContent)
 	}
-	if !strings.Contains(bakeContent, "output_dir") {
-		t.Fatalf("expected output_dir in skill_sources:\n%s", bakeContent)
-	}
 }
 
 func TestScaffoldSkillsCommand(t *testing.T) {
@@ -665,38 +662,31 @@ func TestBakeWithSkillSources(t *testing.T) {
 	dir := t.TempDir()
 	bakeContent := `version: "1"
 skill_sources:
-  output_dir: skills
   defaults:
     version: 0.1.0
     owner: platform-engineering
     license: MIT
     compatible_with:
       - codex
-  skills:
-    - name: test-skill
-      description: A test skill.
 targets:
   default:
     platforms:
       - codex
+    skills:
+      - test-skill
 `
 	if err := os.WriteFile(filepath.Join(dir, "agentic.bake.yaml"), []byte(bakeContent), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	// bake --write should create skill source skeleton and platform skill file.
+	// bake --write should scaffold the skill and render the platform skill file.
 	if err := runRoot("bake", "default", "--target", dir, "--write"); err != nil {
 		t.Fatalf("bake write with skill_sources failed: %v", err)
 	}
 
-	// Canonical skill source should be created.
-	if _, err := os.Stat(filepath.Join(dir, "skills", "test-skill", "SKILL.md")); err != nil {
-		t.Fatalf("skill source SKILL.md not created: %v", err)
-	}
-
-	// Platform skill output should be created for codex.
+	// Canonical skill source created directly in .agents/skills/.
 	if _, err := os.Stat(filepath.Join(dir, ".agents", "skills", "test-skill", "SKILL.md")); err != nil {
-		t.Fatalf("platform skill output not created for codex: %v", err)
+		t.Fatalf("skill source SKILL.md not created: %v", err)
 	}
 
 	// bake --plan should also succeed.
@@ -708,21 +698,14 @@ targets:
 func TestBakeCanonicalSkillPlatformOutputs(t *testing.T) {
 	dir := t.TempDir()
 	bakeContent := `version: "1"
-skill_sources:
-  output_dir: skills
-  defaults:
-    compatible_with:
-      - codex
-      - claude-code
-      - gitlab-duo
-  skills:
-    - name: multi-platform-skill
 targets:
   default:
     platforms:
       - codex
       - claude-code
       - gitlab-duo
+    skills:
+      - multi-platform-skill
 `
 	if err := os.WriteFile(filepath.Join(dir, "agentic.bake.yaml"), []byte(bakeContent), 0o644); err != nil {
 		t.Fatal(err)
@@ -731,20 +714,13 @@ targets:
 		t.Fatalf("bake write failed: %v", err)
 	}
 
-	// Codex: .agents/skills/<name>/SKILL.md
+	// Canonical source and codex/gitlab-duo: .agents/skills/<name>/SKILL.md
 	if _, err := os.Stat(filepath.Join(dir, ".agents", "skills", "multi-platform-skill", "SKILL.md")); err != nil {
-		t.Fatalf("codex platform skill missing: %v", err)
+		t.Fatalf("canonical skill source missing: %v", err)
 	}
-	// Claude Code: .claude/skills/<name>/SKILL.md
+	// Claude Code gets its own copy: .claude/skills/<name>/SKILL.md
 	if _, err := os.Stat(filepath.Join(dir, ".claude", "skills", "multi-platform-skill", "SKILL.md")); err != nil {
 		t.Fatalf("claude-code platform skill missing: %v", err)
-	}
-	// GitLab Duo: .agents/skills/<name>/SKILL.md (canonical source is skills/<name>/)
-	// Both codex and gitlab-duo map to .agents/skills/<name>/SKILL.md, so the file already exists.
-
-	// Canonical source must NOT be deleted or treated as generated output.
-	if _, err := os.Stat(filepath.Join(dir, "skills", "multi-platform-skill", "SKILL.md")); err != nil {
-		t.Fatalf("canonical skill source was removed or not created: %v", err)
 	}
 }
 

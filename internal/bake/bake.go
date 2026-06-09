@@ -356,14 +356,12 @@ func BuildInitialConfig(
 		Version:   "1",
 		Variables: variables,
 		SkillSources: &models.SkillSourceConfig{
-			OutputDir: ".agents/skills",
 			Defaults: models.SkillSourceDefaults{
 				Version:        "0.1.0",
 				Owner:          ownerTeam,
 				License:        "MIT",
 				CompatibleWith: defaultPlatforms,
 			},
-			Skills: []models.SkillSourceDefinition{},
 		},
 		Skills: &models.SkillIntegrationConfig{
 			Source: "agent-skills.lock",
