@@ -62,7 +62,7 @@ func PlanSkill(opts SkillOptions) ([]PlannedFile, error) {
 	}
 
 	return []PlannedFile{
-		{Path: filepath.Join(root, "SKILL.md"), Content: skillMarkdown(opts.Name, description, opts.License)},
+		{Path: filepath.Join(root, "SKILL.md"), Content: skillMarkdown(opts.Name, description, opts.License, opts.Version, opts.Platforms)},
 		{Path: filepath.Join(root, "skill.yaml"), Content: string(skillYAMLBytes)},
 		{Path: filepath.Join(root, "VERSION"), Content: opts.Version + "\n"},
 		{Path: filepath.Join(root, "CHANGELOG.md"), Content: fmt.Sprintf("# Changelog\n\n## %s\n\n- Initial skill scaffold.\n", opts.Version)},
@@ -166,10 +166,19 @@ func validateSkillOptions(opts *SkillOptions) error {
 	return nil
 }
 
-func skillMarkdown(name, description, license string) string {
+func skillMarkdown(name, description, license, version string, platforms []string) string {
 	frontmatter := fmt.Sprintf("---\nname: %s\ndescription: %s\n", name, description)
 	if license != "" {
 		frontmatter += fmt.Sprintf("license: %s\n", license)
+	}
+	if len(platforms) > 0 {
+		frontmatter += "compatibility:\n  platforms:\n"
+		for _, p := range platforms {
+			frontmatter += fmt.Sprintf("    - %s\n", p)
+		}
+	}
+	if version != "" {
+		frontmatter += fmt.Sprintf("metadata:\n  version: %s\n", version)
 	}
 	frontmatter += "---\n"
 	return frontmatter + fmt.Sprintf(`
