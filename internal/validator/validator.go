@@ -200,7 +200,7 @@ func ValidateProjectWithOptions(target string, opts Options) ([]string, error) {
 func validateSkillSources(target string, ss *models.SkillSourceConfig) []string {
 	errors := []string{}
 	if ss.OutputDir == "" {
-		ss.OutputDir = "skills"
+		ss.OutputDir = ".agents/skills"
 	}
 	seen := map[string]struct{}{}
 	for _, skillDef := range ss.Skills {

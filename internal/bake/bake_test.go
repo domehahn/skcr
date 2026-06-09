@@ -247,8 +247,8 @@ targets:
 	if err != nil {
 		t.Fatalf("LoadBakeFile: %v", err)
 	}
-	if cfg.SkillSources.OutputDir != "skills" {
-		t.Fatalf("expected default output_dir 'skills', got %q", cfg.SkillSources.OutputDir)
+	if cfg.SkillSources.OutputDir != ".agents/skills" {
+		t.Fatalf("expected default output_dir '.agents/skills', got %q", cfg.SkillSources.OutputDir)
 	}
 	if cfg.SkillSources.Defaults.Version != "0.1.0" {
 		t.Fatalf("expected default version '0.1.0', got %q", cfg.SkillSources.Defaults.Version)
@@ -288,8 +288,8 @@ func TestBuildInitialConfigHasSkillSources(t *testing.T) {
 	if cfg.SkillSources == nil {
 		t.Fatal("expected skill_sources block in generated config")
 	}
-	if cfg.SkillSources.OutputDir != "skills" {
-		t.Fatalf("expected output_dir 'skills', got %q", cfg.SkillSources.OutputDir)
+	if cfg.SkillSources.OutputDir != ".agents/skills" {
+		t.Fatalf("expected output_dir '.agents/skills', got %q", cfg.SkillSources.OutputDir)
 	}
 	if cfg.SkillSources.Defaults.Version != "0.1.0" {
 		t.Fatalf("expected default version '0.1.0', got %q", cfg.SkillSources.Defaults.Version)

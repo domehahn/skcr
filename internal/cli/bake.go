@@ -326,13 +326,14 @@ func renderCanonicalSkillFiles(root string, ss *models.SkillSourceConfig, platfo
 				}
 			}
 		}
+		src := filepath.ToSlash(filepath.Join(ss.OutputDir, skillDef.Name, "SKILL.md"))
 		for _, platform := range platforms {
 			dest := canonicalPlatformSkillDest(platform, skillDef.Name)
-			if dest == "" {
+			if dest == "" || dest == src {
 				continue
 			}
 			files = append(files, models.RenderedFile{
-				Source:      filepath.ToSlash(filepath.Join(ss.OutputDir, skillDef.Name, "SKILL.md")),
+				Source:      src,
 				Destination: dest,
 				Content:     content,
 				Platform:    platform,

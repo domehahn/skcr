@@ -102,7 +102,7 @@ func normalizeSkillSourceConfig(cfg *models.BakeConfig) {
 	}
 	ss := cfg.SkillSources
 	if ss.OutputDir == "" {
-		ss.OutputDir = "skills"
+		ss.OutputDir = ".agents/skills"
 	}
 	if ss.Defaults.Version == "" {
 		ss.Defaults.Version = "0.1.0"
@@ -356,7 +356,7 @@ func BuildInitialConfig(
 		Version:   "1",
 		Variables: variables,
 		SkillSources: &models.SkillSourceConfig{
-			OutputDir: "skills",
+			OutputDir: ".agents/skills",
 			Defaults: models.SkillSourceDefaults{
 				Version:        "0.1.0",
 				Owner:          ownerTeam,
