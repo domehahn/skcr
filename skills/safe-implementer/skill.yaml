@@ -1,8 +1,19 @@
 name: safe-implementer
-version: 0.1.0
-description: Describe what this skill helps an agent do.
+version: "1.0.0"
+description: Create or modify code, tests, configuration, and project files safely with real file changes.
 license: MIT
 entrypoint: SKILL.md
 compatible_with:
-    - claude-code
     - codex
+    - claude-code
+    - github-copilot
+    - gitlab-duo
+    - opencode
+    - openhands
+    - ollama
+    - cursor
+    - roo-code
+    - kiro
+    - junie
+    - gemini-cli
+    - windsurf

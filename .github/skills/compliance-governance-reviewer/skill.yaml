@@ -1,8 +1,19 @@
 name: compliance-governance-reviewer
-version: 0.1.0
-description: Describe what this skill helps an agent do.
+version: "1.0.0"
+description: Review governance controls such as CODEOWNERS, branch protection, approvals, auditability, and policy compliance.
 license: MIT
 entrypoint: SKILL.md
 compatible_with:
-    - claude-code
     - codex
+    - claude-code
+    - github-copilot
+    - gitlab-duo
+    - opencode
+    - openhands
+    - ollama
+    - cursor
+    - roo-code
+    - kiro
+    - junie
+    - gemini-cli
+    - windsurf

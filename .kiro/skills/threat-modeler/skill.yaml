@@ -1,8 +1,19 @@
 name: threat-modeler
-version: 0.1.0
-description: Describe what this skill helps an agent do.
+version: "1.0.0"
+description: Identify assets, trust boundaries, abuse cases, attack paths, threats, and required security controls.
 license: MIT
 entrypoint: SKILL.md
 compatible_with:
-    - claude-code
     - codex
+    - claude-code
+    - github-copilot
+    - gitlab-duo
+    - opencode
+    - openhands
+    - ollama
+    - cursor
+    - roo-code
+    - kiro
+    - junie
+    - gemini-cli
+    - windsurf

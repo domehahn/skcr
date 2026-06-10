@@ -366,6 +366,17 @@ func scaffoldTargetSkills(root string, skillNames []string, ss *models.SkillSour
 		fakeSS.Defaults = ss.Defaults
 	}
 
+	// Build description lookup from skill_sources.skills definitions so that
+	// scaffolded skill.yaml gets the real description instead of the placeholder.
+	descLookup := map[string]string{}
+	if ss != nil {
+		for _, def := range ss.Skills {
+			if def.Description != "" {
+				descLookup[def.Name] = def.Description
+			}
+		}
+	}
+
 	skillSeen := map[string]struct{}{}
 	for _, name := range skillNames {
 		if _, dup := skillSeen[name]; dup {
@@ -379,7 +390,7 @@ func scaffoldTargetSkills(root string, skillNames []string, ss *models.SkillSour
 				absDir = filepath.Join(root, baseDir)
 			}
 			fakeSS.OutputDir = absDir
-			opts := skillDefToScaffoldOpts(models.SkillSourceDefinition{Name: name}, fakeSS, absDir, false, force)
+			opts := skillDefToScaffoldOpts(models.SkillSourceDefinition{Name: name, Description: descLookup[name]}, fakeSS, absDir, false, force)
 			result, writeErr := scaffold.WriteSkillSafe(opts)
 			if writeErr != nil {
 				return created, skipped, fmt.Errorf("skill %s in %s: %w", name, baseDir, writeErr)

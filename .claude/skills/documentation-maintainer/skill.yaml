@@ -1,8 +1,19 @@
 name: documentation-maintainer
-version: 0.1.0
-description: Describe what this skill helps an agent do.
+version: "1.0.0"
+description: Create and update README files, ADRs, setup guides, API docs, runbooks, and operational documentation.
 license: MIT
 entrypoint: SKILL.md
 compatible_with:
-    - claude-code
     - codex
+    - claude-code
+    - github-copilot
+    - gitlab-duo
+    - opencode
+    - openhands
+    - ollama
+    - cursor
+    - roo-code
+    - kiro
+    - junie
+    - gemini-cli
+    - windsurf
