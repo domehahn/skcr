@@ -50,6 +50,8 @@ func NewRootCommand() *cobra.Command {
 
 	root.AddCommand(newInitCommand())
 	root.AddCommand(newAddCommand())
+	root.AddCommand(newRemoveCommand())
+	root.AddCommand(newRenameCommand())
 	root.AddCommand(newListTargetsCommand())
 	root.AddCommand(newBakeCommand())
 	root.AddCommand(newSyncCommand())

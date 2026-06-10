@@ -3,7 +3,7 @@
 `skcr` is a Go CLI for creating versioned AI agent skill structures and rendering agentic project and platform files across multiple agent platforms.
 
 ```text
-skcr  = init / add / bake / sync / status / validate / clean
+skcr  = init / add / remove / rename / bake / sync / status / validate / clean
 skpm  = validate / version / package / publish / install / update / lock / verify
 ```
 
@@ -17,6 +17,12 @@ skcr init
 
 skcr add skill <name>
   → adds skill to all bakefile targets and scaffolds immediately
+
+skcr remove skill <name>
+  → removes skill from bakefile targets; --delete-dirs also removes directories
+
+skcr rename skill <old> <new>
+  → renames skill in bakefile targets and moves directories across all platform dirs
 
 skcr bake [target] --write
   → scaffolds skill directories in all platform dirs + renders platform files
@@ -123,6 +129,8 @@ skcr validate
 | --- | --- |
 | `skcr init` | Create `agentic.bake.yaml` |
 | `skcr add skill <name>` | Add a skill to all bakefile targets and scaffold its directories |
+| `skcr remove skill <name>` | Remove a skill from bakefile targets, optionally deleting directories |
+| `skcr rename skill <old> <new>` | Rename a skill across bakefile targets and all platform directories |
 | `skcr bake [target]` | Scaffold skill directories and render platform-specific output |
 | `skcr sync` | Propagate `SKILL.md` edits from `.agents/skills/` to all platform dirs |
 | `skcr status` | Show skill scaffold status across all platform directories |
@@ -224,6 +232,64 @@ skcr add skill threat-modeler
 
 # Add only to the codex target
 skcr add skill threat-modeler --in-target codex
+```
+
+## `skcr remove skill`
+
+Removes a skill from bakefile targets and optionally deletes its directories in all platform dirs.
+
+```bash
+skcr remove skill <name> [flags]
+```
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--target` | `.` | Repository path |
+| `--in-target` | all | Bake target(s) to remove skill from (repeatable) |
+| `--delete-dirs` | | Also delete skill directories from all platform dirs |
+| `--dry-run` | | Preview changes without writing |
+
+```bash
+# Remove from bakefile only (directories preserved)
+skcr remove skill deprecated-skill
+
+# Remove from bakefile and delete all directories
+skcr remove skill deprecated-skill --delete-dirs
+
+# Preview first
+skcr remove skill deprecated-skill --delete-dirs --dry-run
+```
+
+## `skcr rename skill`
+
+Renames a skill in all bakefile targets and moves the corresponding directories in every platform dir. Skips directories that are already absent; aborts on naming conflicts.
+
+```bash
+skcr rename skill <old-name> <new-name> [flags]
+```
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--target` | `.` | Repository path |
+| `--dry-run` | | Preview changes without writing |
+
+```bash
+# Preview
+skcr rename skill policy-reviewer security-policy-reviewer --dry-run
+
+# Apply
+skcr rename skill policy-reviewer security-policy-reviewer
+```
+
+Output:
+
+```text
+Renamed "policy-reviewer" → "security-policy-reviewer" in targets: all, codex, gitlab
+moved  .agents/skills/policy-reviewer/  →  .agents/skills/security-policy-reviewer/
+moved  .claude/skills/policy-reviewer/  →  .claude/skills/security-policy-reviewer/
+moved  .github/skills/policy-reviewer/  →  .github/skills/security-policy-reviewer/
+
+Done: 3 director(ies) moved.
 ```
 
 ## `skcr bake`
