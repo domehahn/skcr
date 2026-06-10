@@ -321,7 +321,7 @@ func canonicalPlatformSkillBaseDir(platform string) string {
 	case "windsurf":
 		return ".windsurf/skills"
 	case "gitlab-duo":
-		return ".gitlab/skills"
+		return "skills"
 	case "ollama":
 		return ".ollama/skills"
 	default:
