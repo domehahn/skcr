@@ -68,16 +68,20 @@ func newBakeCommand() *cobra.Command {
 			if len(args) > 0 {
 				targetName = args[0]
 			} else if _, ok := cfg.Targets[targetName]; !ok {
-				// No explicit arg and no "default" target — pick the only target or error.
-				names := make([]string, 0, len(cfg.Targets))
-				for n := range cfg.Targets {
-					names = append(names, n)
-				}
-				if len(names) == 1 {
-					targetName = names[0]
+				// No explicit arg and no "default" target — try "all", then sole target, then error.
+				if _, ok := cfg.Targets["all"]; ok {
+					targetName = "all"
 				} else {
-					sort.Strings(names)
-					return fmt.Errorf("no %q target found; specify one of: %s", "default", strings.Join(names, ", "))
+					names := make([]string, 0, len(cfg.Targets))
+					for n := range cfg.Targets {
+						names = append(names, n)
+					}
+					if len(names) == 1 {
+						targetName = names[0]
+					} else {
+						sort.Strings(names)
+						return fmt.Errorf("no %q target found; specify one of: %s", "default", strings.Join(names, ", "))
+					}
 				}
 			}
 
