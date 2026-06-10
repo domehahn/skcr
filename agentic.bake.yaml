@@ -4,6 +4,26 @@ variables:
   owner_team: platform-engineering
   default_language: de
   governance_level: strict
+skill_sources:
+  output_dir: .agents/skills
+  defaults:
+    version: "1.0.0"
+    owner: platform-engineering
+    license: MIT
+    compatible_with:
+      - codex
+      - claude-code
+      - github-copilot
+      - gitlab-duo
+      - opencode
+      - openhands
+      - ollama
+      - cursor
+      - roo-code
+      - kiro
+      - junie
+      - gemini-cli
+      - windsurf
 targets:
   codex:
     description: Codex AGENTS.md and project skills
