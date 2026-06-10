@@ -382,6 +382,25 @@ func scaffoldTargetSkills(root string, skillNames []string, ss *models.SkillSour
 	return created, skipped, nil
 }
 
+// resolveDefaultTarget picks the best target for commands that need a single resolved view
+// of the bakefile (status, sync). Priority: "default" → "all" → sole target → error.
+func resolveDefaultTarget(cfg *models.BakeConfig) (*models.TargetConfig, error) {
+	for _, name := range []string{"default", "all"} {
+		if _, ok := cfg.Targets[name]; ok {
+			return cliResolveTarget(cfg, name)
+		}
+	}
+	names := make([]string, 0, len(cfg.Targets))
+	for n := range cfg.Targets {
+		names = append(names, n)
+	}
+	if len(names) == 1 {
+		return cliResolveTarget(cfg, names[0])
+	}
+	sort.Strings(names)
+	return nil, fmt.Errorf("no default target; specify one of: %s", strings.Join(names, ", "))
+}
+
 func renderPlatformFilesEnabled(resolved *models.TargetConfig) bool {
 	if resolved.Render != nil && resolved.Render.PlatformFiles != nil {
 		return *resolved.Render.PlatformFiles
