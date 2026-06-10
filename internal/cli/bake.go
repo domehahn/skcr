@@ -50,10 +50,6 @@ func newBakeCommand() *cobra.Command {
 		Short: "Render files for a target and preview or write them",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			targetName := "default"
-			if len(args) > 0 {
-				targetName = args[0]
-			}
 			if !plan && !write {
 				plan = true
 			}
@@ -67,6 +63,24 @@ func newBakeCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+
+			targetName := "default"
+			if len(args) > 0 {
+				targetName = args[0]
+			} else if _, ok := cfg.Targets[targetName]; !ok {
+				// No explicit arg and no "default" target — pick the only target or error.
+				names := make([]string, 0, len(cfg.Targets))
+				for n := range cfg.Targets {
+					names = append(names, n)
+				}
+				if len(names) == 1 {
+					targetName = names[0]
+				} else {
+					sort.Strings(names)
+					return fmt.Errorf("no %q target found; specify one of: %s", "default", strings.Join(names, ", "))
+				}
+			}
+
 			resolved, err := cliResolveTarget(cfg, targetName)
 			if err != nil {
 				return err
