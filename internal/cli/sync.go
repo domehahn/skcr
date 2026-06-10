@@ -115,5 +115,6 @@ run "skcr bake --write" first to create them.`,
 	cmd.Flags().StringVarP(&target, "target", "t", ".", "Repository path")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview changes without writing")
 	cmd.Flags().StringVar(&skillFilter, "skill", "", "Sync only this skill")
+	_ = cmd.RegisterFlagCompletionFunc("skill", completeSkillNames)
 	return cmd
 }

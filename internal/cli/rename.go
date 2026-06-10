@@ -24,9 +24,10 @@ func newRenameSkillCommand() *cobra.Command {
 	var dryRun bool
 
 	cmd := &cobra.Command{
-		Use:   "skill <old-name> <new-name>",
-		Short: "Rename a skill in all bakefile targets and move its platform directories",
-		Args:  cobra.ExactArgs(2),
+		Use:               "skill <old-name> <new-name>",
+		Short:             "Rename a skill in all bakefile targets and move its platform directories",
+		Args:              cobra.ExactArgs(2),
+		ValidArgsFunction: completeSkillNames,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			oldName, newName := args[0], args[1]
 

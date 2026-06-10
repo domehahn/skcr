@@ -71,5 +71,6 @@ func newListSkillsCommand() *cobra.Command {
 	cmd.Flags().StringVarP(&target, "target", "t", ".", "Repository path")
 	cmd.Flags().StringVar(&inTarget, "in-target", "", "List skills only from this bake target")
 	cmd.Flags().BoolVar(&withTargets, "with-targets", false, "Show which bake targets each skill belongs to")
+	_ = cmd.RegisterFlagCompletionFunc("in-target", completeBakeTargets)
 	return cmd
 }

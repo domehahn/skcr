@@ -119,5 +119,6 @@ func newAddSkillCommand() *cobra.Command {
 	cmd.Flags().StringVarP(&target, "target", "t", ".", "Repository path")
 	cmd.Flags().StringArrayVar(&inTargets, "in-target", nil, "Bake target(s) to add skill to (default: all)")
 	cmd.Flags().BoolVar(&noScaffold, "no-scaffold", false, "Update bakefile only, skip directory scaffolding")
+	_ = cmd.RegisterFlagCompletionFunc("in-target", completeBakeTargets)
 	return cmd
 }

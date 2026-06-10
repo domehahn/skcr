@@ -27,9 +27,10 @@ func newRemoveSkillCommand() *cobra.Command {
 	var dryRun bool
 
 	cmd := &cobra.Command{
-		Use:   "skill <name>",
-		Short: "Remove a skill from bakefile targets and optionally delete its directories",
-		Args:  cobra.ExactArgs(1),
+		Use:               "skill <name>",
+		Short:             "Remove a skill from bakefile targets and optionally delete its directories",
+		Args:              cobra.ExactArgs(1),
+		ValidArgsFunction: completeSkillNames,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			name := args[0]
 
@@ -133,6 +134,7 @@ func newRemoveSkillCommand() *cobra.Command {
 	cmd.Flags().StringArrayVar(&inTargets, "in-target", nil, "Bake target(s) to remove skill from (default: all)")
 	cmd.Flags().BoolVar(&deleteDirs, "delete-dirs", false, "Also delete skill directories from all platform dirs")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview changes without writing")
+	_ = cmd.RegisterFlagCompletionFunc("in-target", completeBakeTargets)
 	return cmd
 }
 

@@ -46,9 +46,10 @@ func newBakeCommand() *cobra.Command {
 	var platform string
 
 	cmd := &cobra.Command{
-		Use:   "bake [target]",
-		Short: "Render files for a target and preview or write them",
-		Args:  cobra.MaximumNArgs(1),
+		Use:               "bake [target]",
+		Short:             "Render files for a target and preview or write them",
+		Args:              cobra.MaximumNArgs(1),
+		ValidArgsFunction: completeBakeTargets,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if !plan && !write {
 				plan = true

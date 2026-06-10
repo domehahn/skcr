@@ -130,6 +130,8 @@ By default the YAML frontmatter is stripped; use --keep-frontmatter to retain it
 	cmd.Flags().StringVar(&skillFilter, "skill", "", "Export only this skill")
 	cmd.Flags().StringVar(&inTarget, "in-target", "", "Export only skills from this bake target")
 	cmd.Flags().BoolVar(&keepFrontmatter, "keep-frontmatter", false, "Retain YAML frontmatter in output")
+	_ = cmd.RegisterFlagCompletionFunc("skill", completeSkillNames)
+	_ = cmd.RegisterFlagCompletionFunc("in-target", completeBakeTargets)
 	return cmd
 }
 
