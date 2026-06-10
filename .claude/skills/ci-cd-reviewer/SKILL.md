@@ -1,7 +1,33 @@
 ---
 name: ci-cd-reviewer
 description: Review CI/CD pipelines, runners, permissions, artifacts, caches, deployment gates, and token exposure.
-
+version: "1.0.0"
+since: "2025-01-01"
+last_modified: "2026-06-10"
+authors:
+  - platform-engineering
+stability: stable
+min_platform_version:
+  codex: "unknown"
+  claude-code: "unknown"
+  github-copilot: "unknown"
+  gitlab-duo: "unknown"
+  opencode: "unknown"
+  openhands: "unknown"
+  cursor: "unknown"
+  roo-code: "unknown"
+  kiro: "unknown"
+  junie: "unknown"
+  gemini-cli: "unknown"
+  windsurf: "unknown"
+  ollama: "unknown"
+deprecated_since:
+replaces:
+supersedes: []
+changelog:
+  - version: "1.0.0"
+    date: "2025-01-01"
+    change: "Initial release"
 ---
 
 # Ci Cd Reviewer
@@ -12,7 +38,7 @@ Review CI/CD pipelines, runners, permissions, artifacts, caches, deployment gate
 
 ## When to use
 
-Use this skill when the task matches the description above or when the central agent instructions route work to `/ci-cd-reviewer`.
+Use this skill when the task matches the description above or when the central agent instructions route work to `$ci-cd-reviewer`.
 
 ## Operating model
 
@@ -40,3 +66,9 @@ Provide:
 - Validation performed
 - Findings or risks
 - Recommended next step
+
+## Changelog
+
+### 1.0.0 - 2025-01-01
+
+- Initial release.

@@ -167,20 +167,40 @@ func validateSkillOptions(opts *SkillOptions) error {
 }
 
 func skillMarkdown(name, description, license, version string, platforms []string) string {
-	frontmatter := fmt.Sprintf("---\nname: %s\ndescription: %s\n", name, description)
+	today := "YYYY-MM-DD"
+
+	platformBlock := ""
+	for _, p := range platforms {
+		platformBlock += fmt.Sprintf("  %s: \"unknown\"\n", p)
+	}
+	if platformBlock == "" {
+		platformBlock = "  codex: \"unknown\"\n"
+	}
+
+	frontmatter := fmt.Sprintf(`---
+name: %s
+description: %s
+version: "%s"
+since: "%s"
+last_modified: "%s"
+authors:
+  - platform-engineering
+stability: experimental
+min_platform_version:
+%sdeprecated_since:
+replaces:
+supersedes: []
+changelog:
+  - version: "%s"
+    date: "%s"
+    change: "Initial release"
+`, name, description, version, today, today, platformBlock, version, today)
+
 	if license != "" {
 		frontmatter += fmt.Sprintf("license: %s\n", license)
 	}
-	if len(platforms) > 0 {
-		frontmatter += "compatibility:\n  platforms:\n"
-		for _, p := range platforms {
-			frontmatter += fmt.Sprintf("    - %s\n", p)
-		}
-	}
-	if version != "" {
-		frontmatter += fmt.Sprintf("metadata:\n  version: %s\n", version)
-	}
 	frontmatter += "---\n"
+
 	return frontmatter + fmt.Sprintf(`
 # %s
 
@@ -208,7 +228,13 @@ Use this skill when...
 ## Output
 
 Describe the expected output format.
-`, name, description)
+
+## Changelog
+
+### %s - %s
+
+- Initial release.
+`, name, description, version, today)
 }
 
 func markdownList(values []string) string {
