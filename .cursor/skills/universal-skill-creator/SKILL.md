@@ -1,7 +1,7 @@
 ---
 name: universal-skill-creator
 description: Create, adapt, validate, and optimize reusable agent skills across agentic platforms.
-version: "1.1.0"
+version: "1.1.1"
 since: "2025-01-01"
 last_modified: "2026-06-10"
 authors:
@@ -25,6 +25,9 @@ deprecated_since:
 replaces:
 supersedes: []
 changelog:
+  - version: "1.1.1"
+    date: "2026-06-10"
+    change: "Explicitly require applying the versioning schema while creating every new skill"
   - version: "1.1.0"
     date: "2026-06-10"
     change: "Mandatory versioning schema for generated skills: full YAML frontmatter, stability, min_platform_version, changelog"
@@ -47,10 +50,11 @@ Use this skill when the task matches the description above or when the central a
 
 1. Clarify the goal and constraints.
 2. Inspect the minimum relevant repository context.
-3. Produce a concise execution plan for non-trivial work.
-4. Execute with tools when implementation is requested.
-5. Validate the result with repository-native checks.
-6. Summarize changed files, validation results, and residual risks.
+3. When creating a new skill, apply the mandatory versioning schema before drafting the body content.
+4. Produce a concise execution plan for non-trivial work.
+5. Execute with tools when implementation is requested.
+6. Validate the result with repository-native checks, including the versioning schema checklist below.
+7. Summarize changed files, validation results, and residual risks.
 
 ## DevSecOps guardrails
 
@@ -62,7 +66,7 @@ Use this skill when the task matches the description above or when the central a
 
 ## Mandatory versioning schema for new skills
 
-Every skill created by this skill MUST include a complete YAML frontmatter block and a `## Changelog` body section.
+Every skill created by this skill MUST apply this versioning schema. Do not create, scaffold, or finalize a new skill unless its `SKILL.md` includes a complete YAML frontmatter block and a `## Changelog` body section.
 
 ### Required YAML frontmatter
 
@@ -83,6 +87,13 @@ min_platform_version:
   gitlab-duo: "unknown"
   opencode: "unknown"
   openhands: "unknown"
+  cursor: "unknown"
+  roo-code: "unknown"
+  kiro: "unknown"
+  junie: "unknown"
+  gemini-cli: "unknown"
+  windsurf: "unknown"
+  ollama: "unknown"
 deprecated_since:
 replaces:
 supersedes: []
@@ -101,7 +112,7 @@ changelog:
 - Set `stability: stable` for skills that are ready for production use.
 - Set `stability: deprecated` and fill `deprecated_since` when a skill is retired.
 - Set `since` and `last_modified` to the current date in `YYYY-MM-DD` format.
-- Set `min_platform_version` for every target platform. Use `"unknown"` if the minimum version is not known — do not omit the field.
+- Set `min_platform_version` for every target platform supported by the repository. Use `"unknown"` if the minimum version is not known — do not omit configured platforms.
 - Set `replaces` if this skill directly succeeds a previously named skill.
 - Set `supersedes` if this skill fachlich replaces multiple older skills.
 - The `changelog` in the frontmatter is machine-readable. Keep it in sync with the `## Changelog` body section.
@@ -131,7 +142,7 @@ Before finalising a new or updated skill, verify:
 4. `since` and `last_modified` are in `YYYY-MM-DD` format.
 5. `stability` is one of `experimental`, `stable`, `deprecated`.
 6. `deprecated_since` is set when `stability: deprecated`.
-7. `min_platform_version` is present with at least one entry.
+7. `min_platform_version` is present and includes every configured target platform.
 8. `changelog` in frontmatter has at least one entry matching `version`.
 9. `## Changelog` section exists in the body.
 10. Frontmatter `version` matches the most recent body changelog entry.
@@ -147,6 +158,12 @@ Provide:
 - Recommended next step
 
 ## Changelog
+
+### 1.1.1 - 2026-06-10
+
+- Made schema application an explicit required step in the skill creation workflow.
+- Expanded the required frontmatter example to include all currently configured target platforms.
+- Tightened validation so `min_platform_version` must cover every configured target platform.
 
 ### 1.1.0 - 2026-06-10
 

@@ -92,6 +92,25 @@ func claudeSubagentsForTarget(target *models.TargetConfig) []map[string]any {
 	return selected
 }
 
+func skillsOnlyPlatformDoc(platform string) (map[string]any, bool) {
+	known := map[string]map[string]string{
+		"cursor":     {"path": ".cursor/skills/", "description": "Cursor skill directory scaffold"},
+		"gemini-cli": {"path": ".gemini/skills/", "description": "Gemini CLI skill directory scaffold"},
+		"junie":      {"path": ".junie/skills/", "description": "JetBrains Junie skill directory scaffold"},
+		"kiro":       {"path": ".kiro/skills/", "description": "Kiro skill directory scaffold"},
+		"roo-code":   {"path": ".roo/skills/", "description": "Roo Code skill directory scaffold"},
+		"windsurf":   {"path": ".windsurf/skills/", "description": "Windsurf skill directory scaffold"},
+	}
+	if doc, ok := known[platform]; ok {
+		return map[string]any{"platform": platform, "path": doc["path"], "description": doc["description"]}, true
+	}
+	return map[string]any{
+		"platform":    platform,
+		"path":        ".agents/skills/",
+		"description": "Shared skill directory scaffold",
+	}, true
+}
+
 func RenderFiles(config *models.BakeConfig, target *models.TargetConfig) ([]models.RenderedFile, error) {
 	return RenderFilesWithOptions(config, target, Options{})
 }
@@ -204,7 +223,7 @@ func RenderFilesWithOptions(config *models.BakeConfig, target *models.TargetConf
 		if err := add("claude", "claude/CLAUDE.md.j2", ".agentic/claude/AGENTS.md", nil); err != nil {
 			return nil, err
 		}
-		platformDocs = append(platformDocs, map[string]any{"platform": "claude", "path": ".agentic/claude/AGENTS.md", "description": "Claude Code integration, skills, and subagent routing"})
+		platformDocs = append(platformDocs, map[string]any{"platform": "claude-code", "path": ".agentic/claude/AGENTS.md", "description": "Claude Code integration, skills, and subagent routing"})
 		for _, skill := range skills {
 			extra := map[string]any{"skill": skill, "invocation_prefix": "/", "slash_command": false}
 			if err := add("claude", "shared/SKILL.md.j2", fmt.Sprintf(".claude/skills/%s/SKILL.md", skill["name"]), extra); err != nil {
@@ -275,6 +294,23 @@ func RenderFilesWithOptions(config *models.BakeConfig, target *models.TargetConf
 				return nil, err
 			}
 		}
+	}
+
+	documented := map[string]struct{}{}
+	for _, doc := range platformDocs {
+		if platform, ok := doc["platform"].(string); ok {
+			documented[platform] = struct{}{}
+		}
+	}
+	for _, platform := range target.Platforms {
+		if _, ok := documented[platform]; ok {
+			continue
+		}
+		doc, ok := skillsOnlyPlatformDoc(platform)
+		if !ok {
+			continue
+		}
+		platformDocs = append(platformDocs, doc)
 	}
 
 	if len(platformDocs) > 0 {

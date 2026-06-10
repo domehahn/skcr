@@ -5,17 +5,17 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"strings"
 
-	"github.com/domehahn/sklib/spec"
 	"github.com/domehahn/skcr/internal/bake"
 	"github.com/domehahn/skcr/internal/lockfile"
 	"github.com/domehahn/skcr/internal/models"
 	"github.com/domehahn/skcr/internal/renderer"
 	"github.com/domehahn/skcr/internal/skilllock"
+	"github.com/domehahn/sklib/spec"
 	"gopkg.in/yaml.v3"
 )
-
 
 type Options struct {
 	AgainstLock string
@@ -76,7 +76,7 @@ func ValidateProjectWithOptions(target string, opts Options) ([]string, error) {
 		errors = append(errors, validateSkillSources(target, cfg.SkillSources)...)
 	}
 
-	for _, baseDir := range []string{"skills", ".agents/skills", ".claude/skills", ".agentic/skills"} {
+	for _, baseDir := range skillMetadataBaseDirs(cfg) {
 		skillsDir := filepath.Join(target, baseDir)
 		if entries, err := os.ReadDir(skillsDir); err == nil {
 			for _, entry := range entries {
@@ -89,7 +89,7 @@ func ValidateProjectWithOptions(target string, opts Options) ([]string, error) {
 					errors = append(errors, fmt.Sprintf("Skill missing SKILL.md: %s", filepath.Dir(skillFile)))
 					continue
 				}
-				if errMsg := validateSkillMetadata(string(text)); errMsg != "" {
+				if errMsg := validateSkillMetadataForName(string(text), entry.Name()); errMsg != "" {
 					errors = append(errors, fmt.Sprintf("%s: %s", errMsg, skillFile))
 				}
 			}
@@ -257,6 +257,9 @@ func validateGeneratedState(target string, files []models.RenderedFile) []string
 			errors = append(errors, err.Error())
 			continue
 		}
+		if isSkillMarkdownPath(path) {
+			continue
+		}
 		if file.LinkTarget == "" && lockfile.Sha256Text(string(payload)) != lockfile.Sha256Text(file.Content) {
 			errors = append(errors, fmt.Sprintf("Generated file checksum mismatch: %s", path))
 		}
@@ -275,6 +278,19 @@ func validateGeneratedState(target string, files []models.RenderedFile) []string
 		}
 	}
 	return errors
+}
+
+func isSkillMarkdownPath(path string) bool {
+	parts := strings.Split(filepath.ToSlash(path), "/")
+	if len(parts) < 3 || parts[len(parts)-1] != "SKILL.md" {
+		return false
+	}
+	for _, part := range parts[:len(parts)-2] {
+		if part == "skills" {
+			return true
+		}
+	}
+	return false
 }
 
 func renderedChecksum(file models.RenderedFile) string {
@@ -359,26 +375,175 @@ func containsAll(s string, terms []string) bool {
 }
 
 var (
-	nameRegex        = regexp.MustCompile(`(?m)^name:\s*(.+?)\s*$`)
-	descriptionRegex = regexp.MustCompile(`(?m)^description:\s*(.+?)\s*$`)
+	bodyChangelogHeadingRE = regexp.MustCompile(`(?m)^## Changelog\s*$`)
+	bodyChangelogEntryRE   = regexp.MustCompile(`(?m)^###\s+([0-9A-Za-z.+-]+)\s+-\s+(\d{4}-\d{2}-\d{2})\s*$`)
 )
 
 func validateSkillMetadata(content string) string {
-	nameMatch := nameRegex.FindStringSubmatch(content)
-	if len(nameMatch) < 2 || isEmptyMetadataValue(nameMatch[1]) {
-		return "Skill metadata name is missing or empty"
+	return validateSkillMetadataForName(content, "")
+}
+
+func ValidateSkillMetadata(content string) string {
+	return validateSkillMetadata(content)
+}
+
+func validateSkillMetadataForName(content, expectedName string) string {
+	frontmatter, body, ok := splitSkillFrontmatter(content)
+	if !ok {
+		return "Skill metadata frontmatter is missing"
 	}
 
-	descriptionMatch := descriptionRegex.FindStringSubmatch(content)
-	if len(descriptionMatch) < 2 || isEmptyMetadataValue(descriptionMatch[1]) {
-		return "Skill metadata description is missing or empty"
+	raw := map[string]any{}
+	if err := yaml.Unmarshal([]byte(frontmatter), &raw); err != nil {
+		return "Skill metadata frontmatter is invalid YAML"
 	}
 
-	return ""
+	fm := spec.SkillMDFrontmatter{}
+	if err := yaml.Unmarshal([]byte(frontmatter), &fm); err != nil {
+		return "Skill metadata frontmatter is invalid YAML"
+	}
+
+	errs := []string{}
+	for _, field := range []string{
+		"name",
+		"description",
+		"version",
+		"since",
+		"last_modified",
+		"authors",
+		"stability",
+		"min_platform_version",
+		"deprecated_since",
+		"replaces",
+		"supersedes",
+		"changelog",
+	} {
+		if _, ok := raw[field]; !ok {
+			errs = append(errs, "missing required field: "+field)
+		}
+	}
+	if isEmptyMetadataValue(fm.Description) {
+		errs = append(errs, "missing required field: description")
+	}
+	if expectedName != "" && fm.Name != "" && fm.Name != expectedName {
+		errs = append(errs, "name does not match skill directory: "+fm.Name+" != "+expectedName)
+	}
+	errs = append(errs, spec.ValidateSkillMDFrontmatter(fm)...)
+	if !bodyChangelogHeadingRE.MatchString(body) {
+		errs = append(errs, "missing required body section: ## Changelog")
+	} else {
+		bodyEntries := bodyChangelogEntryRE.FindAllStringSubmatch(body, -1)
+		if len(bodyEntries) == 0 {
+			errs = append(errs, "body Changelog has no version entries")
+		} else if fm.Version != "" && bodyEntries[0][1] != fm.Version {
+			errs = append(errs, "version mismatch: frontmatter version "+fm.Version+" does not match newest body changelog entry "+bodyEntries[0][1])
+		}
+	}
+	if len(errs) == 0 {
+		return ""
+	}
+	return "Skill metadata invalid: " + strings.Join(dedupeStrings(errs), "; ")
 }
 
 func isEmptyMetadataValue(value string) bool {
 	v := strings.TrimSpace(value)
 	v = strings.Trim(v, `"'`)
 	return strings.TrimSpace(v) == ""
+}
+
+func splitSkillFrontmatter(content string) (frontmatter, body string, ok bool) {
+	if !strings.HasPrefix(content, "---\n") {
+		return "", content, false
+	}
+	rest := strings.TrimPrefix(content, "---\n")
+	end := strings.Index(rest, "\n---")
+	if end < 0 {
+		return "", content, false
+	}
+	frontmatter = rest[:end]
+	bodyStart := end + len("\n---")
+	if len(rest) > bodyStart && rest[bodyStart] == '\r' {
+		bodyStart++
+	}
+	if len(rest) > bodyStart && rest[bodyStart] == '\n' {
+		bodyStart++
+	}
+	return frontmatter, rest[bodyStart:], true
+}
+
+func skillMetadataBaseDirs(cfg *models.BakeConfig) []string {
+	baseDirs := []string{
+		".agents/skills",
+		"skills",
+		".claude/skills",
+		".github/skills",
+		".opencode/skills",
+		".openhands/skills",
+		".ollama/skills",
+		".cursor/skills",
+		".roo/skills",
+		".kiro/skills",
+		".junie/skills",
+		".gemini/skills",
+		".windsurf/skills",
+		".agentic/skills",
+	}
+	if cfg != nil {
+		for _, target := range cfg.Targets {
+			for _, platform := range target.Platforms {
+				if dir := platformSkillBaseDir(platform); dir != "" {
+					baseDirs = append(baseDirs, dir)
+				}
+			}
+		}
+		if cfg.SkillSources != nil && cfg.SkillSources.OutputDir != "" {
+			baseDirs = append(baseDirs, cfg.SkillSources.OutputDir)
+		}
+	}
+	slices.Sort(baseDirs)
+	return slices.Compact(baseDirs)
+}
+
+func platformSkillBaseDir(platform string) string {
+	switch platform {
+	case "claude-code":
+		return ".claude/skills"
+	case "github-copilot":
+		return ".github/skills"
+	case "cursor":
+		return ".cursor/skills"
+	case "junie":
+		return ".junie/skills"
+	case "gemini-cli":
+		return ".gemini/skills"
+	case "roo-code":
+		return ".roo/skills"
+	case "kiro":
+		return ".kiro/skills"
+	case "opencode":
+		return ".opencode/skills"
+	case "openhands":
+		return ".openhands/skills"
+	case "windsurf":
+		return ".windsurf/skills"
+	case "gitlab-duo":
+		return "skills"
+	case "ollama":
+		return ".ollama/skills"
+	default:
+		return ".agents/skills"
+	}
+}
+
+func dedupeStrings(values []string) []string {
+	seen := map[string]struct{}{}
+	result := []string{}
+	for _, value := range values {
+		if _, ok := seen[value]; ok {
+			continue
+		}
+		seen[value] = struct{}{}
+		result = append(result, value)
+	}
+	return result
 }

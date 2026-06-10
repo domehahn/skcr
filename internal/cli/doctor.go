@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/domehahn/skcr/internal/validator"
 	"github.com/domehahn/sklib/spec"
 	"github.com/spf13/cobra"
 )
@@ -205,11 +206,5 @@ func doctorExitCode(findings []doctorFinding) error {
 }
 
 func checkSkillMDFrontmatter(content string) string {
-	if !strings.Contains(content, "name:") {
-		return "frontmatter missing 'name' field"
-	}
-	if !strings.Contains(content, "description:") {
-		return "frontmatter missing 'description' field"
-	}
-	return ""
+	return validator.ValidateSkillMetadata(content)
 }

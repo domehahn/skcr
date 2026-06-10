@@ -5,9 +5,10 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"time"
 
-	"github.com/domehahn/sklib/spec"
 	"github.com/domehahn/skcr/internal/models"
+	"github.com/domehahn/sklib/spec"
 	"gopkg.in/yaml.v3"
 )
 
@@ -167,7 +168,7 @@ func validateSkillOptions(opts *SkillOptions) error {
 }
 
 func skillMarkdown(name, description, license, version string, platforms []string) string {
-	today := "YYYY-MM-DD"
+	today := time.Now().Format("2006-01-02")
 
 	platformBlock := ""
 	for _, p := range platforms {
@@ -244,7 +245,6 @@ func markdownList(values []string) string {
 	}
 	return strings.Join(lines, "\n") + "\n\n"
 }
-
 
 func stringsToSpecPlatforms(values []string) []spec.Platform {
 	out := make([]spec.Platform, len(values))

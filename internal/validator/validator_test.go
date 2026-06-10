@@ -14,18 +14,60 @@ func TestValidateHelpers(t *testing.T) {
 	if containsAll("abc", []string{"abc", "def"}) {
 		t.Fatal("containsAll should be false")
 	}
-	if msg := validateSkillMetadata("name: test\ndescription: ok\n"); msg != "" {
+	validSkill := validSkillFixture()
+	if msg := validateSkillMetadata(validSkill); msg != "" {
 		t.Fatalf("unexpected validateSkillMetadata msg: %q", msg)
 	}
-	if msg := validateSkillMetadata("description: ok\n"); !strings.Contains(msg, "name") {
-		t.Fatalf("expected name error, got %q", msg)
+	if msg := validateSkillMetadata("description: ok\n"); !strings.Contains(msg, "frontmatter") {
+		t.Fatalf("expected frontmatter error, got %q", msg)
 	}
-	if msg := validateSkillMetadata("name: x\ndescription: \"\"\n"); !strings.Contains(msg, "description") {
+	if msg := validateSkillMetadata(strings.Replace(validSkill, "description: ok", "description: \"\"", 1)); !strings.Contains(msg, "description") {
 		t.Fatalf("expected description error, got %q", msg)
+	}
+	for name, tc := range map[string]string{
+		"leading v":                 strings.Replace(validSkill, `version: "1.0.0"`, `version: "v1.0.0"`, 1),
+		"missing changelog section": strings.Replace(validSkill, "## Changelog", "## History", 1),
+		"deprecated missing date":   strings.Replace(validSkill, "stability: stable", "stability: deprecated", 1),
+		"old last modified":         strings.Replace(validSkill, `last_modified: "2026-06-10"`, `last_modified: "2026-06-09"`, 1),
+	} {
+		if msg := validateSkillMetadata(tc); msg == "" {
+			t.Fatalf("expected metadata error for %s", name)
+		}
 	}
 	if !isEmptyMetadataValue("  \"\"  ") || !isEmptyMetadataValue(" '' ") || isEmptyMetadataValue("x") {
 		t.Fatal("isEmptyMetadataValue behavior mismatch")
 	}
+}
+
+func validSkillFixture() string {
+	return `---
+name: test-skill
+description: ok
+version: "1.0.0"
+since: "2025-01-01"
+last_modified: "2026-06-10"
+authors:
+  - platform-engineering
+stability: stable
+min_platform_version:
+  codex: "unknown"
+deprecated_since:
+replaces:
+supersedes: []
+changelog:
+  - version: "1.0.0"
+    date: "2026-06-10"
+    change: "Initial release"
+---
+
+# Test Skill
+
+## Changelog
+
+### 1.0.0 - 2026-06-10
+
+- Initial release.
+`
 }
 
 func TestValidateProjectScenarios(t *testing.T) {
@@ -93,7 +135,7 @@ targets:
 	joined := strings.Join(errs, "\n")
 	checks := []string{
 		"unsupported platform",
-		"Skill metadata name is missing or empty",
+		"Skill metadata frontmatter is missing",
 		"Skill missing SKILL.md",
 		"GitLab Duo output missing .gitlab/duo/chat-rules.md",
 		"forbidden top-level field",
@@ -151,7 +193,7 @@ skill_sources:
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "skills", "valid-skill", "SKILL.md"),
-		[]byte("name: valid-skill\ndescription: A valid skill.\n"), 0o644); err != nil {
+		[]byte(strings.Replace(validSkillFixture(), "name: test-skill", "name: valid-skill", 1)), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	errs, err := ValidateProject(dir)

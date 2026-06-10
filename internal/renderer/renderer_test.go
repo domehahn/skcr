@@ -51,7 +51,7 @@ func TestTemplateRootAndHelpers(t *testing.T) {
 }
 
 func TestRenderFilesAllPlatformsAndContent(t *testing.T) {
-	cfg, err := bake.BuildInitialConfig([]string{"codex", "gitlab-duo", "github-copilot", "claude", "openhands", "opencode", "ollama", "generic"}, "Demo", "team", "de", "strict", "")
+	cfg, err := bake.BuildInitialConfig([]string{"codex", "gitlab-duo", "github-copilot", "claude", "openhands", "opencode", "ollama", "kiro", "junie", "generic"}, "Demo", "team", "de", "strict", "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -88,6 +88,11 @@ func TestRenderFilesAllPlatformsAndContent(t *testing.T) {
 	for _, p := range required {
 		if _, ok := paths[p]; !ok {
 			t.Fatalf("missing rendered file: %s", p)
+		}
+	}
+	for _, want := range []string{".kiro/skills/", ".junie/skills/", "`generic`: `.agents/skills/`"} {
+		if !strings.Contains(paths["AGENTS.md"], want) {
+			t.Fatalf("expected AGENTS.md to include %q", want)
 		}
 	}
 

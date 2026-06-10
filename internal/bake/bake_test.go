@@ -10,6 +10,15 @@ import (
 	"github.com/domehahn/skcr/internal/models"
 )
 
+func stringSliceContains(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
 func TestLoadDumpAndResolveTarget(t *testing.T) {
 	dir := t.TempDir()
 	cfg := &models.BakeConfig{
@@ -147,8 +156,12 @@ func TestBuildInitialConfigVariants(t *testing.T) {
 		t.Fatal("expected local-ai target")
 	}
 
-	if _, err := BuildInitialConfig([]string{"generic"}, "Demo", "team", "de", "standard", ""); err == nil {
-		t.Fatal("expected no targets generated error for generic-only")
+	genericOnly, err := BuildInitialConfig([]string{"generic"}, "Demo", "team", "de", "standard", "")
+	if err != nil {
+		t.Fatalf("expected generic-only config to work: %v", err)
+	}
+	if _, ok := genericOnly.Targets["skills-only"]; !ok {
+		t.Fatal("expected skills-only target for generic-only")
 	}
 
 	for _, preset := range []string{"gitlab", "enterprise", "all"} {
@@ -293,5 +306,26 @@ func TestBuildInitialConfigHasSkillSources(t *testing.T) {
 	}
 	if cfg.SkillSources.Defaults.Owner != "team-x" {
 		t.Fatalf("expected owner 'team-x', got %q", cfg.SkillSources.Defaults.Owner)
+	}
+}
+
+func TestBuildInitialConfigDefaultPlatformsIncludeSkillOnlyTargets(t *testing.T) {
+	cfg, err := BuildInitialConfig(nil, "Demo", "team-x", "en", "standard", "")
+	if err != nil {
+		t.Fatalf("BuildInitialConfig: %v", err)
+	}
+	for _, want := range []string{"cursor", "roo-code", "kiro", "junie", "gemini-cli", "windsurf"} {
+		if !stringSliceContains(cfg.SkillSources.Defaults.CompatibleWith, want) {
+			t.Fatalf("expected compatible_with to include %q, got %#v", want, cfg.SkillSources.Defaults.CompatibleWith)
+		}
+	}
+	resolved, err := ResolveTarget(cfg, "default")
+	if err != nil {
+		t.Fatalf("ResolveTarget: %v", err)
+	}
+	for _, want := range []string{"kiro", "junie"} {
+		if !stringSliceContains(resolved.Platforms, want) {
+			t.Fatalf("expected resolved default platforms to include %q, got %#v", want, resolved.Platforms)
+		}
 	}
 }

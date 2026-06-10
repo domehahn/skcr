@@ -1,4 +1,4 @@
 package spec
 
 // LibVersion is the version of sklib itself.
-const LibVersion = "0.1.0"
+const LibVersion = "0.3.0"

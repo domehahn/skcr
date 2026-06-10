@@ -224,6 +224,21 @@ func BuildInitialConfig(
 	governanceLevel string,
 	preset string,
 ) (*models.BakeConfig, error) {
+	defaultRuntimePlatforms := []string{
+		"codex",
+		"github-copilot",
+		"claude-code",
+		"gitlab-duo",
+		"opencode",
+		"openhands",
+		"ollama",
+		"cursor",
+		"roo-code",
+		"kiro",
+		"junie",
+		"gemini-cli",
+		"windsurf",
+	}
 	var err error
 	platforms, err = models.NormalizePlatforms(platforms)
 	if err != nil {
@@ -240,7 +255,7 @@ func BuildInitialConfig(
 		case "local-ai":
 			platforms = []string{"opencode", "openhands", "ollama"}
 		case "all":
-			platforms = []string{"codex", "github-copilot", "claude-code", "gitlab-duo", "opencode", "openhands", "ollama"}
+			platforms = slices.Clone(defaultRuntimePlatforms)
 		default:
 			return nil, fmt.Errorf("unsupported preset: %s", preset)
 		}
@@ -251,7 +266,7 @@ func BuildInitialConfig(
 	}
 
 	if len(platforms) == 0 {
-		platforms = []string{"codex", "github-copilot", "claude-code", "gitlab-duo", "opencode", "openhands", "ollama"}
+		platforms = slices.Clone(defaultRuntimePlatforms)
 	}
 
 	variables := map[string]any{
@@ -325,6 +340,31 @@ func BuildInitialConfig(
 				"default_model": "qwen2.5-coder:7b",
 				"base_url":      "http://localhost:11434",
 			},
+		}
+	}
+
+	skillsOnlyPlatforms := []string{}
+	renderedTargets := map[string]struct{}{
+		"codex":          {},
+		"github-copilot": {},
+		"claude-code":    {},
+		"gitlab-duo":     {},
+		"opencode":       {},
+		"openhands":      {},
+		"ollama":         {},
+	}
+	for _, p := range platforms {
+		if _, rendered := renderedTargets[p]; !rendered {
+			skillsOnlyPlatforms = append(skillsOnlyPlatforms, p)
+		}
+	}
+	if len(skillsOnlyPlatforms) > 0 {
+		targets["skills-only"] = &models.TargetConfig{
+			Description: "Skill directory scaffolds for platforms without dedicated instruction templates",
+			Platforms:   skillsOnlyPlatforms,
+			Profiles:    []string{"base", "devsecops"},
+			Skills:      slices.Clone(catalog.CoreSkills),
+			Rules:       deepMerge(map[string]any{}, catalog.BaseRules),
 		}
 	}
 

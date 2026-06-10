@@ -411,7 +411,7 @@ Checks performed:
 | `toolchain` | `skpm` is available in `PATH` |
 | `bakefile` | `agentic.bake.yaml` parses without errors |
 | `targets` | At least one target defined; no duplicate skill names per target |
-| `skills` | Each skill has `SKILL.md`, `skill.yaml`, `VERSION`; `VERSION` is valid semver; frontmatter has `name` and `description` |
+| `skills` | Each skill has `SKILL.md`, `skill.yaml`, `VERSION`; `VERSION` is valid semver; `SKILL.md` has complete versioning frontmatter and a body `## Changelog` |
 | `sync` | All platform `SKILL.md` files match the canonical `.agents/skills/` source |
 | `lockfile` | `.agentic-template.lock` is present |
 

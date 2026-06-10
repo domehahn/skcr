@@ -195,22 +195,26 @@ See `.agents/skills/universal-skill-creator/SKILL.md` for the full mandatory sch
 
 ## Validation
 
-`skpm validate --strict` enforces all required frontmatter fields.  
-`skpm validate --publish` additionally promotes warnings to errors.
+Run repository validation after editing skills:
 
-Validation codes related to versioning:
+```bash
+skcr validate
+```
 
-| Code | Description |
+The validator scans every configured platform skill directory and enforces:
+
+| Rule | Description |
 |---|---|
-| `skill_md_no_frontmatter` | SKILL.md has no YAML frontmatter block. |
-| `skill_md_missing_version` | `version` field is missing or empty. |
-| `skill_md_missing_since` | `since` field is missing or empty. |
-| `skill_md_missing_last_modified` | `last_modified` field is missing or empty. |
-| `skill_md_missing_authors` | `authors` list is missing or empty. |
-| `skill_md_missing_stability` | `stability` field is missing. |
-| `skill_md_invalid_stability` | `stability` is not `experimental`, `stable`, or `deprecated`. |
-| `skill_md_missing_min_platform_version` | `min_platform_version` map is missing or empty. |
-| `skill_md_missing_changelog` | `changelog` list is missing or empty. |
-| `skill_md_missing_changelog_section` | Body has no `## Changelog` section. |
-| `skill_md_stability` | `stability: deprecated` without `deprecated_since`. |
-| `skill_md_version` | Frontmatter `version` does not match newest changelog entry. |
+| Frontmatter present | `SKILL.md` starts with a YAML frontmatter block. |
+| `name` | Present, non-empty, and matching the skill directory name. |
+| `version` | Present and valid SemVer without a leading `v`. |
+| `since` | Present and formatted as `YYYY-MM-DD`. |
+| `last_modified` | Present, formatted as `YYYY-MM-DD`, and not older than the newest changelog entry. |
+| `authors` | Present with at least one entry. |
+| `stability` | Present and one of `experimental`, `stable`, or `deprecated`. |
+| `deprecated_since` | Present and formatted as `YYYY-MM-DD` when `stability: deprecated`. |
+| `min_platform_version` | Present with at least one platform entry. |
+| `replaces` | Present, even when empty. |
+| `supersedes` | Present, using `[]` when empty. |
+| Frontmatter `changelog` | Present with at least one entry; newest entry must match `version`. |
+| Body `## Changelog` | Present with at least one version entry; newest entry must match `version`. |
