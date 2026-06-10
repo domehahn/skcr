@@ -52,10 +52,12 @@ func NewRootCommand() *cobra.Command {
 	root.AddCommand(newAddCommand())
 	root.AddCommand(newRemoveCommand())
 	root.AddCommand(newRenameCommand())
-	root.AddCommand(newListTargetsCommand())
+	root.AddCommand(newListCommand())
+	root.AddCommand(newListTargetsCommand()) // kept for backward compatibility
 	root.AddCommand(newBakeCommand())
 	root.AddCommand(newSyncCommand())
 	root.AddCommand(newStatusCommand())
+	root.AddCommand(newDoctorCommand())
 	root.AddCommand(newValidateCommand())
 	root.AddCommand(newCleanCommand())
 	root.AddCommand(newScaffoldCommand())

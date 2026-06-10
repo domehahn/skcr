@@ -3,7 +3,7 @@
 `skcr` is a Go CLI for creating versioned AI agent skill structures and rendering agentic project and platform files across multiple agent platforms.
 
 ```text
-skcr  = init / add / remove / rename / bake / sync / status / validate / clean
+skcr  = init / add / remove / rename / list / bake / sync / status / doctor / validate / clean
 skpm  = validate / version / package / publish / install / update / lock / verify
 ```
 
@@ -27,11 +27,17 @@ skcr rename skill <old> <new>
 skcr bake [target] --write
   → scaffolds skill directories in all platform dirs + renders platform files
 
+skcr list skills [--with-targets] [--in-target <name>]
+  → lists all skills defined across bakefile targets (one per line, pipeable)
+
 skcr sync
   → propagates SKILL.md edits from .agents/skills/ to all platform directories
 
 skcr status
   → shows which skills are scaffolded and in sync across platform directories
+
+skcr doctor
+  → checks bakefile, skill files, platform sync, and toolchain without modifying anything
 ```
 
 ### Conceptual model
@@ -131,9 +137,12 @@ skcr validate
 | `skcr add skill <name>` | Add a skill to all bakefile targets and scaffold its directories |
 | `skcr remove skill <name>` | Remove a skill from bakefile targets, optionally deleting directories |
 | `skcr rename skill <old> <new>` | Rename a skill across bakefile targets and all platform directories |
+| `skcr list skills` | List all skills defined across bakefile targets |
+| `skcr list targets` | List available bake targets |
 | `skcr bake [target]` | Scaffold skill directories and render platform-specific output |
 | `skcr sync` | Propagate `SKILL.md` edits from `.agents/skills/` to all platform dirs |
 | `skcr status` | Show skill scaffold status across all platform directories |
+| `skcr doctor` | Check project health: bakefile, skills, platform sync, and toolchain |
 | `skcr validate` | Validate configuration and generated state |
 | `skcr clean` | Remove skcr-managed files listed in `.agentic-template.lock` |
 | `skcr list-targets` | List available bake targets |
@@ -356,6 +365,64 @@ threat-modeler                  ✓                 ✗                 ✗
 - `✓` — directory exists and `SKILL.md` matches canonical source
 - `~` — directory exists but `SKILL.md` differs from `.agents/skills/` (run `skcr sync`)
 - `✗` — directory not yet scaffolded (run `skcr bake --write`)
+
+## `skcr list skills`
+
+Lists all unique skills defined across bakefile targets. One skill per line — designed for piping.
+
+```bash
+skcr list skills [flags]
+```
+
+| Flag | Default | Description |
+| --- | --- | --- |
+| `--target` | `.` | Repository path |
+| `--in-target` | | Filter to a single bake target |
+| `--with-targets` | | Show which bake targets each skill belongs to |
+
+```bash
+# Plain list (pipeable)
+skcr list skills
+skcr list skills | xargs -I{} skpm validate .agents/skills/{}
+
+# With target annotation
+skcr list skills --with-targets
+
+# Only skills from one target
+skcr list skills --in-target codex
+```
+
+## `skcr doctor`
+
+Checks project health without modifying anything. Useful as a CI pre-flight gate.
+
+```bash
+skcr doctor [--target .]
+```
+
+Checks performed:
+
+| Check | What it verifies |
+| --- | --- |
+| `toolchain` | `skpm` is available in `PATH` |
+| `bakefile` | `agentic.bake.yaml` parses without errors |
+| `targets` | At least one target defined; no duplicate skill names per target |
+| `skills` | Each skill has `SKILL.md`, `skill.yaml`, `VERSION`; `VERSION` is valid semver; frontmatter has `name` and `description` |
+| `sync` | All platform `SKILL.md` files match the canonical `.agents/skills/` source |
+| `lockfile` | `.agentic-template.lock` is present |
+
+Exit code is non-zero when any `error`-level finding is present.
+
+```text
+  ✓  [toolchain ]  skpm found
+  ✓  [bakefile  ]  agentic.bake.yaml is valid
+  ✓  [targets   ]  3 target(s) defined
+  ✓  [skills    ]  .agents/skills/requirements-analyst/SKILL.md valid
+  !  [sync      ]  .claude/skills/architecture-reviewer/SKILL.md differs from canonical — run: skcr sync
+  ✓  [lockfile  ]  .agentic-template.lock present
+
+1 warning(s) found.
+```
 
 ## `skcr scaffold skill`
 
