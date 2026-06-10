@@ -316,6 +316,14 @@ func canonicalPlatformSkillBaseDir(platform string) string {
 		return ".kiro/skills"
 	case "opencode":
 		return ".opencode/skills"
+	case "openhands":
+		return ".openhands/skills"
+	case "windsurf":
+		return ".windsurf/skills"
+	case "gitlab-duo":
+		return ".gitlab/skills"
+	case "ollama":
+		return ".ollama/skills"
 	default:
 		return ".agents/skills"
 	}

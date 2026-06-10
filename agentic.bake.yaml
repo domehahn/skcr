@@ -1,0 +1,78 @@
+version: '1'
+variables:
+  project_name: agentic-template-kit
+  owner_team: platform-engineering
+  default_language: de
+  governance_level: strict
+targets:
+  codex:
+    description: Codex AGENTS.md and project skills
+    inherits: []
+    platforms:
+    - codex
+    - claude-code
+    - github-copilot
+    - gitlab-duo
+    - opencode
+    - openhands
+    - ollama
+    - cursor
+    - roo-code
+    - kiro
+    - junie
+    - gemini-cli
+    - windsurf
+    profiles:
+    - base
+    - devsecops
+    skills:
+    - requirements-analyst
+    - cost-based-planner
+    - architecture-reviewer
+    - threat-modeler
+    - safe-implementer
+    - test-strategy-engineer
+    - verification-reviewer
+    - security-reviewer
+    - secrets-reviewer
+    - dependency-supply-chain-reviewer
+    - ci-cd-reviewer
+    - iac-gitops-reviewer
+    - compliance-governance-reviewer
+    - release-readiness-reviewer
+    - observability-reviewer
+    - incident-postmortem-assistant
+    - documentation-maintainer
+    - universal-skill-creator
+    flows: []
+    rules:
+      no_direct_push: true
+      require_merge_request: true
+      require_tests: true
+      require_security_review: true
+      forbid_secret_files: true
+      forbid_env_file_access: true
+      require_diff_summary: true
+      require_validation_summary: true
+      allow_autonomous_changes: false
+    model: {}
+  default:
+    description: Default target for this repository
+    inherits:
+    - codex
+    platforms: []
+    profiles: []
+    skills: []
+    flows: []
+    rules: {}
+    model: {}
+  all:
+    description: Generate all configured platform artifacts
+    inherits:
+    - codex
+    platforms: []
+    profiles: []
+    skills: []
+    flows: []
+    rules: {}
+    model: {}
