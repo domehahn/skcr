@@ -8,19 +8,19 @@ authors:
   - {{ variables.owner_team }}
 stability: stable
 min_platform_version:
-  codex: "unknown"
-  claude-code: "unknown"
-  github-copilot: "unknown"
-  gitlab-duo: "unknown"
-  opencode: "unknown"
-  openhands: "unknown"
-  cursor: "unknown"
-  roo-code: "unknown"
-  kiro: "unknown"
-  junie: "unknown"
-  gemini-cli: "unknown"
-  windsurf: "unknown"
-  ollama: "unknown"
+  codex: "0.51.0"
+  claude-code: "1.0.44"
+  github-copilot: "1.300.0"
+  gitlab-duo: "18.0"
+  opencode: "0.6.0"
+  openhands: "0.39.0"
+  cursor: "1.0.0"
+  roo-code: "3.20.0"
+  kiro: "0.2.0"
+  junie: "2025.2"
+  gemini-cli: "0.1.12"
+  windsurf: "1.9.0"
+  ollama: "0.7.0"
 deprecated_since:
 replaces:
 supersedes: []
@@ -59,17 +59,83 @@ Use this skill when the task matches the description above or when the central a
 - Do not push, deploy, publish, merge, or create releases unless explicitly asked.
 - Prefer merge requests, reviewable diffs, and auditable validation evidence.
 - Prefer least privilege, minimal changes, and explicit rollback notes.
-- Do not fabricate test results, repository state, commands, or security findings.
+- Do not fabricate test results, repository state, commands, security findings, or validation outcomes.
+- Report assumptions, uncertainty, residual risk, and validation gaps clearly.
 
-## Output
+## Skill-Specific Operating Model
 
-Provide:
+- Focus the work on `{{ skill.name }}` and the stated purpose: {{ skill.description }}
+- Translate the request into domain-specific checks before producing recommendations or file changes.
+- Preserve repository governance, platform routing, and DevSecOps guardrails while applying this skill.
 
-- Actions taken
-- Files changed or reviewed
-- Validation performed
-- Findings or risks
-- Recommended next step
+## Skill-Specific Review Scope
+
+- The stated purpose and domain boundaries of `{{ skill.name }}`.
+- Repository files, generated outputs, workflows, or controls directly affected by the request.
+- Security, governance, platform compatibility, validation, and rollback implications.
+- Assumptions, dependencies, owners, and open decisions that affect safe completion.
+- Evidence needed to support findings, recommendations, or implementation changes.
+
+## Skill-Specific Checklist
+
+- Confirm the request actually matches `{{ skill.name }}` and identify the affected files, systems, or workflows.
+- Check the concrete risks, edge cases, and validation needs implied by: {{ skill.description }}
+- Verify that outputs are actionable for the target platform and do not rely on generic copy-paste guidance.
+- Confirm platform compatibility metadata is present and does not invent versions.
+- Check security and governance guardrails before claiming completion.
+- Identify required validation commands or explain why validation cannot run.
+- Check whether generated or synchronized files need updating.
+- Verify changelog and version metadata when instructions change materially.
+- Identify residual risks and follow-up owners.
+- Confirm output is specific to this skill's purpose.
+
+## Decision Rules
+
+- Use this skill only when its purpose directly applies or central routing selects it.
+- Escalate to a more specific reviewer skill when the dominant risk is security, secrets, CI/CD, dependencies, IaC, observability, release readiness, or compliance.
+- Do not claim production readiness unless the checklist, acceptance criteria, validation, and output requirements are satisfied.
+- If evidence is missing, report the gap instead of assuming success.
+- If a recommendation changes security, release, governance, or platform behavior, require explicit review.
+
+## Finding Categories
+
+- Missing or weak domain-specific evidence.
+- Incorrect or unsafe control, implementation, or recommendation.
+- Missing validation, test, sync, or generated-output consistency.
+- Security, compliance, privacy, release, or operational risk.
+- Unclear ownership, assumption, decision, or residual risk.
+
+## Severity Guidance
+
+- Critical: immediate risk to secrets, regulated data, production safety, release integrity, or destructive behavior.
+- High: credible security, compliance, compatibility, rollback, or operational risk requiring owner action before merge or release.
+- Medium: meaningful maintainability, validation, documentation, or process gap that should be tracked.
+- Low: advisory improvement or clarity issue with limited immediate impact.
+
+## Acceptance Criteria
+
+- The result addresses the specific purpose of `{{ skill.name }}` rather than only restating the request.
+- Findings or changes are backed by repository evidence, validation, or clearly stated assumptions.
+- Security, governance, and platform compatibility constraints remain intact.
+- Required sections, version metadata, and changelog are present.
+- Residual risks and validation gaps are explicit.
+- Output can be acted on without generic filler.
+
+## Output Requirements
+
+- State the actions taken or analysis performed.
+- List files, systems, workflows, controls, or artifacts reviewed or changed.
+- Report validation performed, findings or risks, and the recommended next step.
+- Include severity, evidence, and remediation for each significant finding.
+- Separate confirmed facts from assumptions and open questions.
+
+## Anti-Patterns
+
+- Creating a skill that only differs by name and description.
+- Using generic checklist language that does not mention the skill domain.
+- Claiming validation passed without running or naming validation.
+- Hiding residual risk, assumptions, or missing evidence.
+- Weakening governance or DevSecOps guardrails to simplify the output.
 
 ## Changelog
 

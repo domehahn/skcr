@@ -1,48 +1,107 @@
-version: "1"
-
+version: '1'
 variables:
-  project_name: CoachIQ
+  project_name: agentic-template-kit
   owner_team: platform-engineering
   default_language: de
   governance_level: strict
-
-skills:
-  source: agent-skills.lock
-  mode: reference
-  platforms:
+skill_sources:
+  output_dir: .agents/skills
+  defaults:
+    version: "1.0.0"
+    owner: platform-engineering
+    license: MIT
+    compatible_with:
+      - codex
+      - claude-code
+      - github-copilot
+      - gitlab-duo
+      - opencode
+      - openhands
+      - ollama
+      - cursor
+      - roo-code
+      - kiro
+      - junie
+      - gemini-cli
+      - windsurf
+  skills:
+    - name: requirements-analyst
+      description: "Analyze requirements, user stories, acceptance criteria, constraints, risks, and open questions before implementation."
+    - name: cost-based-planner
+      description: "Plan coding work with minimal context, relevant file selection, risk awareness, rollback, and validation strategy."
+    - name: architecture-reviewer
+      description: "Review architecture, module boundaries, interfaces, coupling, scalability, data flows, and technical risks."
+    - name: threat-modeler
+      description: "Identify assets, trust boundaries, abuse cases, attack paths, threats, and required security controls."
+    - name: safe-implementer
+      description: "Create or modify code, tests, configuration, and project files safely with real file changes."
+    - name: test-strategy-engineer
+      description: "Design and generate unit, integration, regression, security, and end-to-end test strategies."
+    - name: verification-reviewer
+      description: "Review diffs, validate acceptance criteria, inspect test results, and find missed requirements."
+    - name: security-reviewer
+      description: "Review code, CI/CD, configuration, permissions, dependencies, input validation, and DevSecOps risks."
+    - name: secrets-reviewer
+      description: "Detect and prevent exposure of secrets, tokens, credentials, private keys, CI variables, and sensitive logs."
+    - name: dependency-supply-chain-reviewer
+      description: "Review dependencies, lockfiles, package managers, container images, actions, and supply-chain risks."
+    - name: ci-cd-reviewer
+      description: "Review CI/CD pipelines, runners, permissions, artifacts, caches, deployment gates, and token exposure."
+    - name: iac-gitops-reviewer
+      description: "Review Terraform, Kubernetes, Helm, Kustomize, GitOps reconciliation, promotion, and environment safety."
+    - name: compliance-governance-reviewer
+      description: "Review governance controls such as CODEOWNERS, branch protection, approvals, auditability, and policy compliance."
+    - name: release-readiness-reviewer
+      description: "Assess release readiness, rollback, migrations, feature flags, monitoring, documentation, and breaking changes."
+    - name: observability-reviewer
+      description: "Review logging, metrics, tracing, health checks, alerts, dashboards, runbooks, and operational readiness."
+    - name: incident-postmortem-assistant
+      description: "Support incident analysis, timeline creation, root cause analysis, impact assessment, corrective actions, and follow-up issues."
+    - name: documentation-maintainer
+      description: "Create and update README files, ADRs, setup guides, API docs, runbooks, and operational documentation."
+    - name: universal-skill-creator
+      description: "Create, adapt, validate, and optimize reusable agent skills across agentic platforms."
+targets:
+  codex:
+    description: Codex AGENTS.md and project skills
+    inherits: []
+    platforms:
     - codex
     - claude-code
+    - github-copilot
     - gitlab-duo
-
-targets:
-  gitlab:
-    description: GitLab Duo Agent Platform with full DevSecOps SDLC skills
-    platforms:
-      - gitlab-duo
+    - opencode
+    - openhands
+    - ollama
+    - cursor
+    - roo-code
+    - kiro
+    - junie
+    - gemini-cli
+    - windsurf
     profiles:
-      - base
-      - gitlab-governance
-      - devsecops
-      - documentation
+    - base
+    - devsecops
     skills:
-      - requirements-analyst
-      - cost-based-planner
-      - architecture-reviewer
-      - threat-modeler
-      - safe-implementer
-      - test-strategy-engineer
-      - verification-reviewer
-      - security-reviewer
-      - secrets-reviewer
-      - dependency-supply-chain-reviewer
-      - ci-cd-reviewer
-      - iac-gitops-reviewer
-      - compliance-governance-reviewer
-      - release-readiness-reviewer
-      - observability-reviewer
-      - incident-postmortem-assistant
-      - documentation-maintainer
-      - universal-skill-creator
+    - requirements-analyst
+    - cost-based-planner
+    - architecture-reviewer
+    - threat-modeler
+    - safe-implementer
+    - test-strategy-engineer
+    - verification-reviewer
+    - security-reviewer
+    - secrets-reviewer
+    - dependency-supply-chain-reviewer
+    - ci-cd-reviewer
+    - iac-gitops-reviewer
+    - compliance-governance-reviewer
+    - release-readiness-reviewer
+    - observability-reviewer
+    - incident-postmortem-assistant
+    - documentation-maintainer
+    - universal-skill-creator
+    flows: []
     rules:
       no_direct_push: true
       require_merge_request: true
@@ -53,17 +112,24 @@ targets:
       require_diff_summary: true
       require_validation_summary: true
       allow_autonomous_changes: false
-    flows:
-      - secure-code-change
-      - documentation-review
-      - ci-cd-review
-      - dependency-review
-      - security-policy-review
-      - iac-gitops-review
-      - release-readiness-review
-      - incident-postmortem
-
+    model: {}
   default:
-    description: Default target
+    description: Default target for this repository
     inherits:
-      - gitlab
+    - codex
+    platforms: []
+    profiles: []
+    skills: []
+    flows: []
+    rules: {}
+    model: {}
+  all:
+    description: Generate all configured platform artifacts
+    inherits:
+    - codex
+    platforms: []
+    profiles: []
+    skills: []
+    flows: []
+    rules: {}
+    model: {}

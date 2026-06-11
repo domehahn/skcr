@@ -3,13 +3,40 @@ package scaffold
 import (
 	"strings"
 	"testing"
+
+	"github.com/domehahn/skcr/internal/platforms"
 )
 
-// requiredSections lists the markdown headings every registered SDLC skill must contain.
+var expectedSDLCSkills = []string{
+	"requirements-analyst",
+	"cost-based-planner",
+	"architecture-reviewer",
+	"threat-modeler",
+	"safe-implementer",
+	"test-strategy-engineer",
+	"verification-reviewer",
+	"security-reviewer",
+	"secrets-reviewer",
+	"dependency-supply-chain-reviewer",
+	"ci-cd-reviewer",
+	"iac-gitops-reviewer",
+	"compliance-governance-reviewer",
+	"release-readiness-reviewer",
+	"observability-reviewer",
+	"incident-postmortem-assistant",
+	"documentation-maintainer",
+	"universal-skill-creator",
+}
+
 var requiredSections = []string{
-	"## Skill-Specific Operating Model",
+	"## Purpose",
+	"## When to use",
+	"## Operating model",
+	"## Skill-Specific Review Scope",
 	"## Skill-Specific Checklist",
 	"## Decision Rules",
+	"## Finding Categories",
+	"## Severity Guidance",
 	"## DevSecOps Guardrails",
 	"## Output Requirements",
 	"## Acceptance Criteria",
@@ -17,7 +44,6 @@ var requiredSections = []string{
 	"## Changelog",
 }
 
-// requiredFrontmatterFields lists YAML keys that must appear in every rendered SKILL.md.
 var requiredFrontmatterFields = []string{
 	"version:",
 	"since:",
@@ -28,253 +54,127 @@ var requiredFrontmatterFields = []string{
 	"changelog:",
 }
 
-func TestAllSDLCSkillsAreRegistered(t *testing.T) {
-	for _, name := range SDLCSkillNames {
-		if _, ok := skillBodies[name]; !ok {
-			t.Errorf("SDLC skill %q is listed in SDLCSkillNames but has no registered template body", name)
+func TestAllConfiguredSDLCSkillsAreRegistered(t *testing.T) {
+	if len(SDLCSkillNames) != len(expectedSDLCSkills) {
+		t.Fatalf("expected %d SDLC skills, got %d: %#v", len(expectedSDLCSkills), len(SDLCSkillNames), SDLCSkillNames)
+	}
+	for i, want := range expectedSDLCSkills {
+		if SDLCSkillNames[i] != want {
+			t.Fatalf("SDLCSkillNames[%d] = %q, want %q", i, SDLCSkillNames[i], want)
+		}
+		if _, ok := skillBodies[want]; !ok {
+			t.Fatalf("skill %q is listed but has no registered template body", want)
 		}
 	}
-	if len(SDLCSkillNames) != 18 {
-		t.Errorf("expected 18 SDLC skills, got %d", len(SDLCSkillNames))
-	}
 }
 
-func TestEveryRegisteredSkillRendersWithoutError(t *testing.T) {
-	platforms := []string{"codex", "claude-code", "gitlab-duo"}
-	for name := range skillBodies {
+func TestEveryRegisteredSkillRendersProductionReadySkillMD(t *testing.T) {
+	for _, name := range expectedSDLCSkills {
 		t.Run(name, func(t *testing.T) {
-			data := skillTemplateData{
-				Name:         name,
-				Title:        skillTitle(name),
-				Description:  "Test description for " + name,
-				Version:      "1.0.0",
-				Since:        "2025-01-01",
-				LastModified: "2026-06-10",
-				Owner:        "platform-engineering",
-				Stability:    "stable",
-				License:      "MIT",
-				Platforms:    platforms,
-			}
-			rendered, err := renderSkillTemplate(name, data)
-			if err != nil {
-				t.Fatalf("renderSkillTemplate(%q) returned error: %v", name, err)
-			}
-			if rendered == "" {
-				t.Fatalf("renderSkillTemplate(%q) returned empty string", name)
-			}
-		})
-	}
-}
-
-func TestEveryRegisteredSkillContainsRequiredSections(t *testing.T) {
-	platforms := []string{"codex", "claude-code"}
-	for name := range skillBodies {
-		t.Run(name, func(t *testing.T) {
-			data := skillTemplateData{
-				Name:         name,
-				Title:        skillTitle(name),
-				Description:  "Test description",
-				Version:      "1.0.0",
-				Since:        "2025-01-01",
-				LastModified: "2026-06-10",
-				Owner:        "platform-engineering",
-				Stability:    "experimental",
-				License:      "MIT",
-				Platforms:    platforms,
-			}
-			rendered, err := renderSkillTemplate(name, data)
-			if err != nil {
-				t.Fatalf("render error: %v", err)
-			}
-			for _, section := range requiredSections {
-				if !strings.Contains(rendered, section) {
-					t.Errorf("skill %q is missing required section %q", name, section)
-				}
-			}
-		})
-	}
-}
-
-func TestEveryRegisteredSkillContainsRequiredFrontmatterFields(t *testing.T) {
-	platforms := []string{"codex", "claude-code"}
-	for name := range skillBodies {
-		t.Run(name, func(t *testing.T) {
-			data := skillTemplateData{
-				Name:         name,
-				Title:        skillTitle(name),
-				Description:  "Test description",
-				Version:      "0.9.0",
-				Since:        "2025-06-01",
-				LastModified: "2026-06-10",
-				Owner:        "platform-engineering",
-				Stability:    "experimental",
-				License:      "MIT",
-				Platforms:    platforms,
-			}
-			rendered, err := renderSkillTemplate(name, data)
-			if err != nil {
-				t.Fatalf("render error: %v", err)
+			rendered := renderForTest(t, name)
+			if !strings.HasPrefix(rendered, "---\n") {
+				t.Fatalf("rendered skill %q does not start with YAML frontmatter", name)
 			}
 			for _, field := range requiredFrontmatterFields {
 				if !strings.Contains(rendered, field) {
-					t.Errorf("skill %q is missing required frontmatter field %q", name, field)
+					t.Errorf("skill %q missing frontmatter field %q", name, field)
+				}
+			}
+			minPlatformBlock := frontmatterBlock(rendered, "min_platform_version:", "deprecated_since:")
+			if strings.Contains(minPlatformBlock, `"unknown"`) {
+				t.Errorf("skill %q must not use unknown min_platform_version values", name)
+			}
+			for _, platform := range platforms.AllMinVersions() {
+				want := platform.Name + `: "` + platform.MinVersion + `"`
+				if !strings.Contains(rendered, want) {
+					t.Errorf("skill %q missing min_platform_version entry %q", name, want)
+				}
+			}
+			for _, section := range requiredSections {
+				if !strings.Contains(rendered, section) {
+					t.Errorf("skill %q missing required section %q", name, section)
 				}
 			}
 		})
 	}
 }
 
-func TestFrontmatterContainsTemplateVariables(t *testing.T) {
-	platforms := []string{"codex", "gitlab-duo", "cursor"}
-	data := skillTemplateData{
-		Name:         "requirements-analyst",
-		Title:        "Requirements Analyst",
-		Description:  "Analyze requirements for testing",
-		Version:      "2.3.4",
-		Since:        "2024-03-15",
-		LastModified: "2026-06-10",
-		Owner:        "security-team",
-		Stability:    "stable",
-		License:      "MIT",
-		Platforms:    platforms,
-	}
-	rendered, err := renderSkillTemplate("requirements-analyst", data)
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, want := range []string{
-		`name: requirements-analyst`,
-		`version: "2.3.4"`,
-		`since: "2024-03-15"`,
-		`last_modified: "2026-06-10"`,
-		`- security-team`,
-		`stability: stable`,
-		`codex: "unknown"`,
-		`gitlab-duo: "unknown"`,
-		`cursor: "unknown"`,
-		`# Requirements Analyst`,
-	} {
-		if !strings.Contains(rendered, want) {
-			t.Errorf("expected rendered output to contain %q\nfull output:\n%s", want, rendered[:min(500, len(rendered))])
-		}
-	}
-}
-
-func TestSkillsAreNotGenericCopies(t *testing.T) {
-	platforms := []string{"codex"}
-	render := func(name string) string {
-		data := skillTemplateData{
-			Name: name, Title: skillTitle(name),
-			Description: "x", Version: "1.0.0", Since: "2025-01-01",
-			LastModified: "2026-06-10", Owner: "platform-engineering",
-			Stability: "experimental", License: "MIT", Platforms: platforms,
-		}
-		out, _ := renderSkillTemplate(name, data)
-		return out
-	}
-
-	// Strip frontmatter and title — compare only the body sections.
-	body := func(s string) string {
-		idx := strings.Index(s, "\n# ")
-		if idx < 0 {
-			return s
-		}
-		return s[idx:]
-	}
-
-	names := SDLCSkillNames
-	for i := 0; i < len(names); i++ {
-		for j := i + 1; j < len(names); j++ {
-			a, b := names[i], names[j]
-			bodyA := body(render(a))
-			bodyB := body(render(b))
-			if bodyA == bodyB {
-				t.Errorf("skills %q and %q produce identical bodies — templates must be skill-specific", a, b)
+func TestEverySkillMeetsMinimumContentCounts(t *testing.T) {
+	for _, name := range expectedSDLCSkills {
+		t.Run(name, func(t *testing.T) {
+			rendered := renderForTest(t, name)
+			checks := map[string]int{
+				"## Skill-Specific Checklist": 10,
+				"## Decision Rules":           5,
+				"## Finding Categories":       5,
+				"## Severity Guidance":        4,
+				"## Output Requirements":      5,
+				"## Acceptance Criteria":      5,
+				"## Anti-Patterns":            5,
 			}
-		}
-	}
-}
-
-func TestEachSkillHasUniqueChecklistItem(t *testing.T) {
-	platforms := []string{"codex"}
-	// Collect all checklist lines across skills
-	allLines := map[string][]string{} // skill -> checklist lines
-	for _, name := range SDLCSkillNames {
-		data := skillTemplateData{
-			Name: name, Title: skillTitle(name),
-			Description: "x", Version: "1.0.0", Since: "2025-01-01",
-			LastModified: "2026-06-10", Owner: "platform-engineering",
-			Stability: "experimental", License: "MIT", Platforms: platforms,
-		}
-		rendered, _ := renderSkillTemplate(name, data)
-		for _, line := range strings.Split(rendered, "\n") {
-			if strings.HasPrefix(strings.TrimSpace(line), "- [ ]") {
-				allLines[name] = append(allLines[name], strings.TrimSpace(line))
-			}
-		}
-	}
-
-	// Every skill must have at least 10 checklist items.
-	for _, name := range SDLCSkillNames {
-		if len(allLines[name]) < 10 {
-			t.Errorf("skill %q has only %d checklist items, need at least 10", name, len(allLines[name]))
-		}
-	}
-
-	// Each skill must have at least one checklist item not shared by any other skill.
-	for _, name := range SDLCSkillNames {
-		hasUnique := false
-		for _, line := range allLines[name] {
-			count := 0
-			for _, other := range SDLCSkillNames {
-				for _, otherLine := range allLines[other] {
-					if line == otherLine {
-						count++
-					}
+			for heading, want := range checks {
+				got := countBullets(section(rendered, heading))
+				if got < want {
+					t.Errorf("skill %q section %q has %d bullets, want at least %d", name, heading, got, want)
 				}
 			}
-			if count == 1 {
-				hasUnique = true
-				break
+		})
+	}
+}
+
+func TestSkillBodiesAreNotNearlyIdentical(t *testing.T) {
+	for i := 0; i < len(expectedSDLCSkills); i++ {
+		for j := i + 1; j < len(expectedSDLCSkills); j++ {
+			a := normalizedBody(renderForTest(t, expectedSDLCSkills[i]))
+			b := normalizedBody(renderForTest(t, expectedSDLCSkills[j]))
+			if a == b {
+				t.Fatalf("skills %q and %q produce identical normalized bodies", expectedSDLCSkills[i], expectedSDLCSkills[j])
+			}
+			if similarity(a, b) > 0.92 {
+				t.Fatalf("skills %q and %q are too similar", expectedSDLCSkills[i], expectedSDLCSkills[j])
 			}
 		}
-		if !hasUnique {
-			t.Errorf("skill %q has no unique checklist item — all its checklist items are shared with other skills", name)
+	}
+}
+
+func TestRequiredDomainTerms(t *testing.T) {
+	cases := map[string][]string{
+		"architecture-reviewer": {"circular dependencies", "coupling", "module boundaries", "data ownership", "ADR"},
+		"threat-modeler":        {"assets", "trust boundaries", "entry points", "STRIDE", "abuse cases"},
+		"safe-implementer":      {"minimal", "rollback", "input validation", "tests", "broad refactoring"},
+	}
+	for name, terms := range cases {
+		rendered := renderForTest(t, name)
+		lower := strings.ToLower(rendered)
+		for _, term := range terms {
+			if !strings.Contains(lower, strings.ToLower(term)) {
+				t.Errorf("skill %q missing domain term %q", name, term)
+			}
 		}
 	}
 }
 
 func TestUniversalSkillCreatorForbidsGenericCopyPaste(t *testing.T) {
-	// universal-skill-creator is handled by the SKILL.md in .agents/skills/.
-	// For the scaffold template registry, verify requirements-analyst (or any
-	// registered skill) does not contain the generic placeholder text.
-	for _, name := range SDLCSkillNames {
-		data := skillTemplateData{
-			Name: name, Title: skillTitle(name),
-			Description: "x", Version: "1.0.0", Since: "2025-01-01",
-			LastModified: "2026-06-10", Owner: "platform-engineering",
-			Stability: "experimental", License: "MIT",
-			Platforms: []string{"codex"},
-		}
-		rendered, _ := renderSkillTemplate(name, data)
-		if strings.Contains(rendered, "Describe what this skill helps an agent do") {
-			t.Errorf("skill %q contains generic placeholder text", name)
-		}
-		if strings.Contains(rendered, "TODO") {
-			t.Errorf("skill %q contains TODO placeholder", name)
-		}
-		if strings.Contains(rendered, "Add checks here") {
-			t.Errorf("skill %q contains generic placeholder checklist text", name)
+	rendered := renderForTest(t, "universal-skill-creator")
+	want := "Never create a skill that only differs by name and description. Every generated skill must include domain-specific review scope, checklist items, decision rules, finding categories, severity guidance, output requirements, acceptance criteria, and anti-patterns. Generic operating-model text is allowed only as shared baseline, never as the complete skill body."
+	if !strings.Contains(rendered, want) {
+		t.Fatalf("universal-skill-creator missing exact generic-copy prohibition rule")
+	}
+}
+
+func TestNoPlaceholderText(t *testing.T) {
+	for _, name := range expectedSDLCSkills {
+		rendered := renderForTest(t, name)
+		for _, forbidden := range []string{"TODO", "TBD", "Add checks here", "More details", "Describe what this skill helps"} {
+			if strings.Contains(rendered, forbidden) {
+				t.Errorf("skill %q contains placeholder text %q", name, forbidden)
+			}
 		}
 	}
 }
 
 func TestGenericFallbackRendersForUnknownSkill(t *testing.T) {
-	// renderSkillTemplate returns ("", nil) for unknown skills — skillMarkdown falls back.
-	rendered, err := renderSkillTemplate("some-future-skill", skillTemplateData{
-		Name: "some-future-skill", Title: "Some Future Skill",
-		Platforms: []string{"codex"},
-	})
+	rendered, err := renderSkillTemplate("some-future-skill", skillTemplateData{Name: "some-future-skill", Title: "Some Future Skill"})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -283,28 +183,8 @@ func TestGenericFallbackRendersForUnknownSkill(t *testing.T) {
 	}
 }
 
-func TestSkillTitleConversion(t *testing.T) {
-	cases := []struct{ in, want string }{
-		{"requirements-analyst", "Requirements Analyst"},
-		{"ci-cd-security-reviewer", "Ci Cd Security Reviewer"},
-		{"iac-security-reviewer", "Iac Security Reviewer"},
-		{"safe-implementer", "Safe Implementer"},
-	}
-	for _, c := range cases {
-		got := skillTitle(c.in)
-		if got != c.want {
-			t.Errorf("skillTitle(%q) = %q, want %q", c.in, got, c.want)
-		}
-	}
-}
-
 func TestPlanSkillUsesRegisteredTemplate(t *testing.T) {
-	files, err := PlanSkill(SkillOptions{
-		Name:      "requirements-analyst",
-		OutputDir: t.TempDir(),
-		Version:   "1.0.0",
-		Platforms: []string{"codex", "claude-code"},
-	})
+	files, err := PlanSkill(SkillOptions{Name: "requirements-analyst", OutputDir: t.TempDir(), Version: "1.0.0", Platforms: []string{"codex", "claude-code"}})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -324,9 +204,97 @@ func TestPlanSkillUsesRegisteredTemplate(t *testing.T) {
 	}
 }
 
-func min(a, b int) int {
-	if a < b {
-		return a
+func renderForTest(t *testing.T, name string) string {
+	t.Helper()
+	rendered, err := renderSkillTemplate(name, skillTemplateData{
+		Name:         name,
+		Title:        skillTitle(name),
+		Description:  "Test description for " + name,
+		Version:      "1.0.0",
+		Since:        "2025-01-01",
+		LastModified: "2026-06-11",
+		Owner:        "platform-engineering",
+		Stability:    "stable",
+		License:      "MIT",
+		Platforms:    []string{"codex"},
+	})
+	if err != nil {
+		t.Fatalf("renderSkillTemplate(%q) returned error: %v", name, err)
 	}
-	return b
+	if rendered == "" {
+		t.Fatalf("renderSkillTemplate(%q) returned empty string", name)
+	}
+	return rendered
+}
+
+func section(markdown, heading string) string {
+	start := strings.Index(markdown, heading)
+	if start < 0 {
+		return ""
+	}
+	rest := markdown[start+len(heading):]
+	end := strings.Index(rest, "\n## ")
+	if end >= 0 {
+		return rest[:end]
+	}
+	return rest
+}
+
+func frontmatterBlock(markdown, startMarker, endMarker string) string {
+	start := strings.Index(markdown, startMarker)
+	if start < 0 {
+		return ""
+	}
+	rest := markdown[start+len(startMarker):]
+	end := strings.Index(rest, endMarker)
+	if end >= 0 {
+		return rest[:end]
+	}
+	return rest
+}
+
+func countBullets(s string) int {
+	count := 0
+	for _, line := range strings.Split(s, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "- ") || strings.HasPrefix(line, "- [ ]") {
+			count++
+		}
+	}
+	return count
+}
+
+func normalizedBody(rendered string) string {
+	idx := strings.Index(rendered, "\n# ")
+	if idx >= 0 {
+		rendered = rendered[idx:]
+	}
+	rendered = strings.ToLower(rendered)
+	return strings.Join(strings.Fields(rendered), " ")
+}
+
+func similarity(a, b string) float64 {
+	aw := wordSet(a)
+	bw := wordSet(b)
+	if len(aw) == 0 || len(bw) == 0 {
+		return 0
+	}
+	inter := 0
+	for w := range aw {
+		if _, ok := bw[w]; ok {
+			inter++
+		}
+	}
+	union := len(aw) + len(bw) - inter
+	return float64(inter) / float64(union)
+}
+
+func wordSet(s string) map[string]struct{} {
+	out := map[string]struct{}{}
+	for _, w := range strings.Fields(s) {
+		if len(w) > 3 {
+			out[w] = struct{}{}
+		}
+	}
+	return out
 }

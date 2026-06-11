@@ -105,6 +105,9 @@ func newDoctorCommand() *cobra.Command {
 					} else {
 						add("ok", "skills", fmt.Sprintf("%s/%s/SKILL.md valid", agentsBase, name))
 					}
+					for _, warning := range validator.ValidateSkillWarnings(string(data)) {
+						add("warn", "compat", fmt.Sprintf("%s/%s/SKILL.md: %s", agentsBase, name, warning))
+					}
 				}
 
 				if _, err := os.ReadFile(filepath.Join(skillDir, "skill.yaml")); err != nil {

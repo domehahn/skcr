@@ -27,8 +27,10 @@ func TestValidateHelpers(t *testing.T) {
 	for name, tc := range map[string]string{
 		"leading v":                 strings.Replace(validSkill, `version: "1.0.0"`, `version: "v1.0.0"`, 1),
 		"missing changelog section": strings.Replace(validSkill, "## Changelog", "## History", 1),
+		"missing specific section":  strings.Replace(validSkill, "## Decision Rules", "## Choices", 1),
 		"deprecated missing date":   strings.Replace(validSkill, "stability: stable", "stability: deprecated", 1),
 		"old last modified":         strings.Replace(validSkill, `last_modified: "2026-06-10"`, `last_modified: "2026-06-09"`, 1),
+		"stable unknown platform":   strings.Replace(validSkill, `codex: "0.51.0"`, `codex: "unknown"`, 1),
 	} {
 		if msg := validateSkillMetadata(tc); msg == "" {
 			t.Fatalf("expected metadata error for %s", name)
@@ -50,7 +52,7 @@ authors:
   - platform-engineering
 stability: stable
 min_platform_version:
-  codex: "unknown"
+  codex: "0.51.0"
 deprecated_since:
 replaces:
 supersedes: []
@@ -61,6 +63,54 @@ changelog:
 ---
 
 # Test Skill
+
+## Purpose
+
+Validate a test skill fixture.
+
+## When to use
+
+- Use when validator tests need a valid skill.
+
+## Operating model
+
+- Inspect the concrete domain before making recommendations.
+
+## Skill-Specific Review Scope
+
+- Review domain-specific scope and affected controls.
+
+## Skill-Specific Checklist
+
+- Verify the domain-specific checks are complete.
+
+## Decision Rules
+
+- Prefer evidence-backed decisions.
+
+## Finding Categories
+
+- Missing evidence.
+
+## Severity Guidance
+
+- High: material risk.
+
+## DevSecOps Guardrails
+
+- Do not fabricate validation results.
+
+## Acceptance Criteria
+
+- The skill produces a domain-specific result.
+
+## Output Requirements
+
+- Report evidence and validation.
+
+## Anti-Patterns
+
+- Generic copy-paste output.
 
 ## Changelog
 
@@ -276,6 +326,39 @@ skill_sources:
 	}
 	if !strings.Contains(strings.Join(errs, "\n"), "unsupported platform") {
 		t.Fatalf("expected unsupported platform error, got: %v", errs)
+	}
+}
+
+func TestValidateProjectRejectsDuplicateSkillSpecificBlocks(t *testing.T) {
+	dir := t.TempDir()
+	bakePath := filepath.Join(dir, "agentic.bake.yaml")
+	bakeContent := `version: "1"
+skill_sources:
+  output_dir: .agents/skills
+  skills:
+    - name: alpha-skill
+    - name: beta-skill
+`
+	if err := os.WriteFile(bakePath, []byte(bakeContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"alpha-skill", "beta-skill"} {
+		skillDir := filepath.Join(dir, ".agents", "skills", name)
+		if err := os.MkdirAll(skillDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		content := strings.Replace(validSkillFixture(), "name: test-skill", "name: "+name, 1)
+		content = strings.Replace(content, "# Test Skill", "# "+name, 1)
+		if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	errs, err := ValidateProject(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(strings.Join(errs, "\n"), "identical skill-specific content blocks") {
+		t.Fatalf("expected duplicate skill-specific block error, got: %v", errs)
 	}
 }
 

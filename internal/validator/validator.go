@@ -95,6 +95,7 @@ func ValidateProjectWithOptions(target string, opts Options) ([]string, error) {
 			}
 		}
 	}
+	errors = append(errors, validateCanonicalSkillSpecificBlocks(target, cfg)...)
 
 	gitlabDuo := filepath.Join(target, ".gitlab", "duo")
 	if stat, err := os.Stat(gitlabDuo); err == nil && stat.IsDir() {
@@ -195,6 +196,44 @@ func ValidateProjectWithOptions(target string, opts Options) ([]string, error) {
 	}
 
 	return errors, nil
+}
+
+func validateCanonicalSkillSpecificBlocks(target string, cfg *models.BakeConfig) []string {
+	sourceDir := ".agents/skills"
+	if cfg != nil && cfg.SkillSources != nil && cfg.SkillSources.OutputDir != "" {
+		sourceDir = cfg.SkillSources.OutputDir
+	}
+	skillsDir := filepath.Join(target, sourceDir)
+	entries, err := os.ReadDir(skillsDir)
+	if err != nil {
+		return nil
+	}
+	seen := map[string]string{}
+	errors := []string{}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		path := filepath.Join(skillsDir, entry.Name(), "SKILL.md")
+		payload, err := os.ReadFile(path)
+		if err != nil {
+			continue
+		}
+		_, body, ok := splitSkillFrontmatter(string(payload))
+		if !ok {
+			continue
+		}
+		block := normalizedSkillSpecificBlock(body)
+		if block == "" {
+			continue
+		}
+		if previous, ok := seen[block]; ok {
+			errors = append(errors, fmt.Sprintf("Skills %s and %s have identical skill-specific content blocks", previous, entry.Name()))
+			continue
+		}
+		seen[block] = entry.Name()
+	}
+	return errors
 }
 
 func validateSkillSources(target string, ss *models.SkillSourceConfig) []string {
@@ -377,6 +416,22 @@ func containsAll(s string, terms []string) bool {
 var (
 	bodyChangelogHeadingRE = regexp.MustCompile(`(?m)^## Changelog\s*$`)
 	bodyChangelogEntryRE   = regexp.MustCompile(`(?m)^###\s+([0-9A-Za-z.+-]+)\s+-\s+(\d{4}-\d{2}-\d{2})\s*$`)
+	skillReadinessHeadings = []string{
+		"## Purpose",
+		"## When to use",
+		"## Operating model",
+		"## Skill-Specific Review Scope",
+		"## Skill-Specific Checklist",
+		"## Decision Rules",
+		"## Finding Categories",
+		"## Severity Guidance",
+		"## DevSecOps Guardrails",
+		"## Acceptance Criteria",
+		"## Output Requirements",
+		"## Anti-Patterns",
+		"## Changelog",
+	}
+	skillSpecificBlockRE = regexp.MustCompile(`(?s)## Skill-Specific Review Scope\s*(.*?)\n## Changelog\s*`)
 )
 
 func validateSkillMetadata(content string) string {
@@ -429,6 +484,13 @@ func validateSkillMetadataForName(content, expectedName string) string {
 		errs = append(errs, "name does not match skill directory: "+fm.Name+" != "+expectedName)
 	}
 	errs = append(errs, spec.ValidateSkillMDFrontmatter(fm)...)
+	if fm.Stability == spec.StabilityStable {
+		for platform, version := range fm.MinPlatformVer {
+			if strings.EqualFold(strings.TrimSpace(version), "unknown") {
+				errs = append(errs, "stable skill has unverified min_platform_version for "+platform)
+			}
+		}
+	}
 	if !bodyChangelogHeadingRE.MatchString(body) {
 		errs = append(errs, "missing required body section: ## Changelog")
 	} else {
@@ -439,10 +501,47 @@ func validateSkillMetadataForName(content, expectedName string) string {
 			errs = append(errs, "version mismatch: frontmatter version "+fm.Version+" does not match newest body changelog entry "+bodyEntries[0][1])
 		}
 	}
+	for _, heading := range skillReadinessHeadings {
+		if !hasMarkdownHeading(body, heading) {
+			errs = append(errs, "missing required body section: "+heading)
+		}
+	}
 	if len(errs) == 0 {
 		return ""
 	}
 	return "Skill metadata invalid: " + strings.Join(dedupeStrings(errs), "; ")
+}
+
+func ValidateSkillWarnings(content string) []string {
+	frontmatter, _, ok := splitSkillFrontmatter(content)
+	if !ok {
+		return nil
+	}
+	fm := spec.SkillMDFrontmatter{}
+	if err := yaml.Unmarshal([]byte(frontmatter), &fm); err != nil {
+		return nil
+	}
+	warnings := []string{}
+	for platform, version := range fm.MinPlatformVer {
+		if strings.EqualFold(strings.TrimSpace(version), "unknown") {
+			warnings = append(warnings, "min_platform_version for "+platform+" is unknown; production routing must treat this as unverified compatibility")
+		}
+	}
+	return dedupeStrings(warnings)
+}
+
+func hasMarkdownHeading(body, heading string) bool {
+	re := regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(heading) + `\s*$`)
+	return re.MatchString(body)
+}
+
+func normalizedSkillSpecificBlock(body string) string {
+	match := skillSpecificBlockRE.FindStringSubmatch(body)
+	if len(match) < 2 {
+		return ""
+	}
+	fields := strings.Fields(strings.ToLower(match[1]))
+	return strings.Join(fields, " ")
 }
 
 func isEmptyMetadataValue(value string) bool {

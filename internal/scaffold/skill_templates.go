@@ -2,99 +2,1703 @@ package scaffold
 
 import (
 	"bytes"
+	"fmt"
 	"strings"
 	"text/template"
+
+	platformcompat "github.com/domehahn/skcr/internal/platforms"
 )
 
-// skillTemplateData holds all variables available inside skill-specific SKILL.md templates.
 type skillTemplateData struct {
-	Name         string   // kebab-case, e.g. "requirements-analyst"
-	Title        string   // human-readable, e.g. "Requirements Analyst"
-	Description  string   // one-line purpose
-	Version      string   // semver
-	Since        string   // YYYY-MM-DD first release
-	LastModified string   // YYYY-MM-DD last change
-	Owner        string   // responsible team or author
-	Stability    string   // experimental | stable | deprecated
-	License      string   // SPDX identifier
-	Platforms    []string // target platforms
+	Name         string
+	Title        string
+	Description  string
+	Version      string
+	Since        string
+	LastModified string
+	Owner        string
+	Stability    string
+	License      string
+	Platforms    []string
+	MinPlatforms []platformcompat.CompatibilityEntry
 }
 
-// skillFrontmatter is the common YAML frontmatter prepended to every registered skill template.
+// RenderRegisteredSkillMarkdown renders a built-in SDLC / DevSecOps skill.
+// The second return value is false when name is not registered.
+func RenderRegisteredSkillMarkdown(name, title, description, version, since, lastModified, owner, stability, license string, platforms []string) (string, bool, error) {
+	if _, ok := skillBodies[name]; !ok {
+		return "", false, nil
+	}
+	if title == "" {
+		title = skillTitle(name)
+	}
+	data := skillTemplateData{
+		Name:         name,
+		Title:        title,
+		Description:  description,
+		Version:      version,
+		Since:        since,
+		LastModified: lastModified,
+		Owner:        owner,
+		Stability:    stability,
+		License:      license,
+		Platforms:    platforms,
+		MinPlatforms: platformcompat.AllMinVersions(),
+	}
+	rendered, err := renderSkillTemplate(name, data)
+	if err != nil {
+		return "", true, err
+	}
+	return rendered, true, nil
+}
+
 const skillFrontmatter = `---
-name: {{.Name}}
-description: {{.Description}}
+name: "{{.Name}}"
+description: "{{.Description}}"
 version: "{{.Version}}"
 since: "{{.Since}}"
 last_modified: "{{.LastModified}}"
 authors:
-  - {{.Owner}}
-stability: {{.Stability}}
+  - "{{.Owner}}"
+stability: "{{.Stability}}"
 min_platform_version:
-{{- range .Platforms}}
-  {{.}}: "unknown"
-{{- end}}
+{{- range .MinPlatforms }}
+  {{.Name}}: "{{.MinVersion}}"
+{{- end }}
 deprecated_since:
 replaces:
 supersedes: []
 changelog:
   - version: "{{.Version}}"
-    date: "{{.LastModified}}"
-    change: "Initial generated DevSecOps SDLC skill"
+    date: "{{.Since}}"
+    change: "Initial release"
 ---
 `
 
-// skillBodies maps each registered skill name to its body content (appended after the frontmatter).
-// Skills not listed here receive the generic fallback template from skillMarkdown.
-var skillBodies = map[string]string{
-	"requirements-analyst":             requirementsAnalystBody,
-	"threat-modeler":                   threatModelerBody,
-	"architecture-reviewer":            architectureReviewerBody,
-	"secure-design-reviewer":           secureDesignReviewerBody,
-	"safe-implementer":                 safeImplementerBody,
-	"secure-code-reviewer":             secureCodeReviewerBody,
-	"test-strategist":                  testStrategistBody,
-	"dependency-risk-reviewer":         dependencyRiskReviewerBody,
-	"ci-cd-security-reviewer":          ciCdSecurityReviewerBody,
-	"container-security-reviewer":      containerSecurityReviewerBody,
-	"iac-security-reviewer":            iacSecurityReviewerBody,
-	"secrets-auditor":                  secretsAuditorBody,
-	"privacy-reviewer":                 privacyReviewerBody,
-	"release-readiness-reviewer":       releaseReadinessReviewerBody,
-	"incident-response-helper":         incidentResponseHelperBody,
-	"compliance-evidence-collector":    complianceEvidenceCollectorBody,
-	"policy-as-code-reviewer":          policyAsCodeReviewerBody,
-	"observability-readiness-reviewer": observabilityReadinessReviewerBody,
+type skillContent struct {
+	Purpose             string
+	When                []string
+	Operating           []string
+	ReviewScope         []string
+	Checklist           []string
+	DecisionRules       []string
+	FindingCategories   []string
+	SeverityGuidance    []string
+	DevSecOpsGuardrails []string
+	OutputRequirements  []string
+	AcceptanceCriteria  []string
+	AntiPatterns        []string
 }
 
-// SDLCSkillNames is the canonical ordered list of DevSecOps SDLC skills this package ships.
 var SDLCSkillNames = []string{
 	"requirements-analyst",
-	"threat-modeler",
+	"cost-based-planner",
 	"architecture-reviewer",
-	"secure-design-reviewer",
+	"threat-modeler",
 	"safe-implementer",
-	"secure-code-reviewer",
-	"test-strategist",
-	"dependency-risk-reviewer",
-	"ci-cd-security-reviewer",
-	"container-security-reviewer",
-	"iac-security-reviewer",
-	"secrets-auditor",
-	"privacy-reviewer",
+	"test-strategy-engineer",
+	"verification-reviewer",
+	"security-reviewer",
+	"secrets-reviewer",
+	"dependency-supply-chain-reviewer",
+	"ci-cd-reviewer",
+	"iac-gitops-reviewer",
+	"compliance-governance-reviewer",
 	"release-readiness-reviewer",
-	"incident-response-helper",
-	"compliance-evidence-collector",
-	"policy-as-code-reviewer",
-	"observability-readiness-reviewer",
+	"observability-reviewer",
+	"incident-postmortem-assistant",
+	"documentation-maintainer",
+	"universal-skill-creator",
+}
+var sharedDevSecOpsGuardrails = []string{
+	"Do not read secrets, `.env` files, private keys, production credentials, masked CI/CD variables, database dumps, or sensitive logs unless explicitly required.",
+	"Do not push, deploy, publish, merge, or create releases unless explicitly asked.",
+	"Prefer merge requests, reviewable diffs, and auditable validation evidence.",
+	"Prefer least privilege, minimal changes, and explicit rollback notes.",
+	"Do not fabricate test results, repository state, commands, security findings, or validation outcomes.",
+	"Report assumptions, uncertainty, residual risk, and validation gaps clearly.",
+}
+var sdlcSkillContent = map[string]skillContent{
+	"requirements-analyst": {
+		Purpose: "Analyze, clarify, and make requirements testable before design or implementation begins. Separate stated requirements from assumptions, identify ambiguity and contradictions, and turn vague intent into acceptance criteria that can be verified.",
+		When: []string{
+			"A feature, epic, user story, or change request needs refinement.",
+			"Acceptance criteria are missing, vague, contradictory, or not testable.",
+			"Security, compliance, privacy, NFR, stakeholder, or dependency requirements are implied but unstated.",
+			"Scope boundaries, priorities, ownership, or external-system dependencies are unclear.",
+			"Implementation should not begin until open questions and acceptance criteria are explicit.",
+		},
+		Operating: []string{
+			"Classify each requirement as functional, non-functional, security, compliance, privacy, operational, or out-of-scope.",
+			"Extract assumptions, constraints, dependencies, owners, stakeholders, and open questions into separate lists.",
+			"Rewrite ambiguous statements into measurable acceptance criteria without inventing stakeholder intent.",
+			"Identify contradictions and missing ownership before recommending implementation.",
+			"Prioritize requirements using must-have, should-have, could-have, and out-of-scope categories when evidence supports it.",
+		},
+		ReviewScope: []string{
+			"Functional behavior and externally observable outcomes.",
+			"Non-functional requirements such as performance, availability, scalability, usability, and reliability.",
+			"Security, compliance, privacy, retention, audit, and data-processing requirements.",
+			"Stakeholders, ownership, approvals, dependencies, constraints, and external systems.",
+			"Ambiguity, contradictions, assumptions, open questions, prioritization, and scope boundaries.",
+		},
+		Checklist: []string{
+			"Separate requirements from assumptions and open questions.",
+			"Identify ambiguous terms and untestable statements.",
+			"Convert vague requirements into testable acceptance criteria.",
+			"Identify missing non-functional requirements.",
+			"Identify security, compliance, and privacy requirements explicitly.",
+			"Identify dependencies, constraints, and external systems.",
+			"Distinguish must-have, should-have, could-have, and out-of-scope items.",
+			"Identify contradictory requirements and unresolved decisions.",
+			"Identify missing stakeholders, ownership, and approvers.",
+			"Produce actionable clarification questions with owners.",
+			"Map each acceptance criterion to observable behavior.",
+			"Call out requirements that are not ready for implementation.",
+		},
+		DecisionRules: []string{
+			"If a requirement cannot be tested, mark it not ready and ask for a measurable criterion.",
+			"If a requirement touches personal data, add explicit privacy and retention questions.",
+			"If security or compliance is implied but not stated, record it as a missing requirement instead of assuming it away.",
+			"If two requirements conflict, do not choose silently; document the contradiction and required decision owner.",
+			"If scope is unclear, separate in-scope, out-of-scope, and unknown items before implementation planning.",
+			"If priority is not evidenced, mark it unknown rather than assigning must-have status.",
+		},
+		FindingCategories: []string{
+			"Ambiguous or untestable requirement.",
+			"Missing non-functional requirement.",
+			"Missing security, compliance, or privacy requirement.",
+			"Contradictory stakeholder expectation.",
+			"Missing owner, dependency, or external-system constraint.",
+			"Incomplete or unverifiable acceptance criteria.",
+		},
+		SeverityGuidance: []string{
+			"Critical: a must-have requirement is contradictory, legally unsafe, or impossible to verify.",
+			"High: security, privacy, compliance, or external dependency requirements are missing.",
+			"Medium: NFR thresholds, ownership, or prioritization are unclear but implementation can be scoped cautiously.",
+			"Low: wording, examples, or documentation can be improved without changing scope.",
+		},
+		OutputRequirements: []string{
+			"Requirements register with type, priority, owner, status, and acceptance criteria.",
+			"Assumptions log separated from confirmed requirements.",
+			"Open-questions list with owner, blocking status, and suggested wording.",
+			"Scope summary with in-scope, out-of-scope, and unresolved items.",
+			"Security, compliance, privacy, NFR, and dependency notes.",
+			"Implementation-readiness recommendation: ready, ready with caveats, or not ready.",
+		},
+		AcceptanceCriteria: []string{
+			"Every must-have requirement has at least one testable acceptance criterion.",
+			"Assumptions and open questions are separated from requirements.",
+			"Security, compliance, privacy, and NFR gaps are explicitly called out.",
+			"Contradictions and ownership gaps are documented with decision owners.",
+			"Scope boundaries and out-of-scope items are visible to implementers.",
+			"The output gives a clear readiness recommendation.",
+		},
+		AntiPatterns: []string{
+			"Treating assumptions as confirmed requirements.",
+			"Using vague phrases such as fast, secure, intuitive, or reasonable without thresholds.",
+			"Skipping privacy or compliance because the request sounds functional.",
+			"Resolving stakeholder contradictions silently.",
+			"Producing acceptance criteria that depend on implementation details instead of observable behavior.",
+			"Marking everything must-have without evidence.",
+		},
+	},
+	"cost-based-planner": {
+		Purpose: "Plan work by balancing implementation cost, operational cost, maintenance cost, uncertainty, risk, and delivered value. Recommend the smallest useful implementation path and expose trade-offs before coding begins.",
+		When: []string{
+			"A request needs sizing, sequencing, or phased delivery.",
+			"The implementation path has meaningful uncertainty, migration, infrastructure, or maintenance cost.",
+			"Build-versus-buy, MVP scope, or cost-of-delay decisions are open.",
+			"A broad change should be decomposed into lower-risk increments.",
+			"The user needs a plan before implementation starts.",
+		},
+		Operating: []string{
+			"Identify cost drivers across implementation, operation, maintenance, migration, licensing, infrastructure, and opportunity cost.",
+			"Use repository evidence to estimate effort, blast radius, and validation cost.",
+			"Separate MVP, incremental rollout, and full-scope options.",
+			"Make uncertainty visible and reduce it with targeted file reads or experiments.",
+			"Recommend the smallest useful path that preserves rollback and validation.",
+		},
+		ReviewScope: []string{
+			"Implementation effort and complexity drivers.",
+			"Operational, maintenance, migration, license, infrastructure, and support cost.",
+			"Uncertainty, assumptions, dependencies, and cost-of-delay.",
+			"MVP, phased delivery, rollout, rollback, and validation cost.",
+			"Build-versus-buy and reuse-versus-new-code trade-offs.",
+		},
+		Checklist: []string{
+			"Separate one-time implementation cost from recurring operational cost.",
+			"Identify the main cost drivers and complexity drivers.",
+			"Identify uncertainty factors and assumptions.",
+			"Compare MVP, incremental rollout, and full-scope implementation.",
+			"Identify build-versus-buy and reuse trade-offs.",
+			"Identify hidden maintenance, migration, and support costs.",
+			"Estimate effort using repository-specific evidence when possible.",
+			"Identify high-cost dependencies, integrations, and platform changes.",
+			"Recommend the smallest useful implementation path.",
+			"Call out cost risks that affect prioritization.",
+			"Include rollback and validation cost in the plan.",
+			"Name decisions that require stakeholder input.",
+		},
+		DecisionRules: []string{
+			"If a low-cost MVP can validate the goal, recommend it before full-scope work.",
+			"If uncertainty dominates cost, plan a discovery step before implementation.",
+			"If a dependency adds recurring operational burden, include it in prioritization.",
+			"If migration cost is high, separate migration from feature delivery.",
+			"If build-versus-buy is unresolved, compare license, integration, maintenance, and lock-in costs.",
+			"If validation cost is high, include it as part of delivery cost rather than a footnote.",
+		},
+		FindingCategories: []string{
+			"High implementation complexity.",
+			"Hidden operational or maintenance cost.",
+			"Migration or rollback cost risk.",
+			"License, infrastructure, or vendor cost exposure.",
+			"Unclear value, priority, or cost-of-delay.",
+			"Uncertainty requiring discovery before build.",
+		},
+		SeverityGuidance: []string{
+			"Critical: cost or migration risk makes the proposed path unsafe without a different plan.",
+			"High: major recurring cost, irreversible migration, or expensive dependency is unaccounted for.",
+			"Medium: cost estimates rely on assumptions but can be reduced with discovery.",
+			"Low: minor sequencing or documentation issue affects planning clarity.",
+		},
+		OutputRequirements: []string{
+			"Costed plan with MVP, incremental, and full-scope options.",
+			"List of cost drivers with evidence and assumptions.",
+			"Risk and uncertainty register with reduction steps.",
+			"Recommended implementation sequence and rollback points.",
+			"Validation plan with expected command or review cost.",
+			"Build-versus-buy or reuse rationale where applicable.",
+		},
+		AcceptanceCriteria: []string{
+			"Costs are split into implementation, operation, maintenance, migration, license, and infrastructure where relevant.",
+			"The recommended plan names the smallest useful implementation path.",
+			"Uncertainty and assumptions are visible with next steps to reduce them.",
+			"High-cost dependencies and rollback constraints are identified.",
+			"Validation and release costs are included in the plan.",
+			"The plan can be executed incrementally.",
+		},
+		AntiPatterns: []string{
+			"Ignoring recurring operational cost.",
+			"Treating the full solution as the only option.",
+			"Estimating effort without reading relevant repository evidence.",
+			"Hiding migration or rollback cost until implementation.",
+			"Adding dependencies without considering maintenance and license cost.",
+			"Optimizing for low upfront effort while increasing long-term support burden.",
+		},
+	},
+	"architecture-reviewer": {
+		Purpose: "Review architecture for module boundaries, service boundaries, coupling, cohesion, dependency direction, data ownership, resilience, security boundaries, and ADR-worthy decisions.",
+		When: []string{
+			"A design, PR, or refactor changes architecture, module boundaries, or service boundaries.",
+			"API contracts, shared libraries, data ownership, or deployment topology change.",
+			"Scalability, resilience, runtime coupling, or security boundaries need review.",
+			"Circular dependencies, layering violations, or unclear ownership are suspected.",
+			"An ADR should be created or updated.",
+		},
+		Operating: []string{
+			"Map components, modules, services, APIs, data stores, queues, and deployment units.",
+			"Verify dependency direction, layering, cohesion, and ownership boundaries.",
+			"Trace data flows and ownership across tables, topics, buckets, and integrations.",
+			"Review runtime coupling, fan-out, retry behavior, scalability, and cascading failure risk.",
+			"Identify decisions that deserve ADRs and distinguish architecture risk from style preference.",
+		},
+		ReviewScope: []string{
+			"Module boundaries, service boundaries, layering, coupling, cohesion, and circular dependencies.",
+			"API contracts, interface stability, compatibility, and versioning.",
+			"Data ownership, data flows, cross-boundary writes, and direct database access.",
+			"Runtime and deployment coupling, scalability, resilience, retry storms, and fan-out.",
+			"Security boundaries, trust boundaries, ownership, and ADR candidates.",
+		},
+		Checklist: []string{
+			"Identify architectural layers and verify dependency direction.",
+			"Detect circular dependencies between modules, packages, services, or libraries.",
+			"Check whether module boundaries align with business capabilities or clear technical responsibilities.",
+			"Review coupling between services, APIs, databases, queues, shared libraries, and deployment units.",
+			"Identify shared mutable state, shared database writes, hidden dependencies, and temporal coupling.",
+			"Check public interfaces for ownership, versioning, compatibility expectations, and tests.",
+			"Verify explicit data ownership for domain objects, tables, topics, buckets, and integrations.",
+			"Identify cross-boundary writes or direct database access across service boundaries.",
+			"Review synchronous call chains for fan-out, latency amplification, retry storms, and cascading failures.",
+			"Identify ADR-worthy decisions and missing architecture documentation.",
+			"Check security and trust boundaries between components.",
+			"Assess deployment coupling and independent rollback ability.",
+		},
+		DecisionRules: []string{
+			"If a dependency violates the intended layer direction, classify it as architecture risk.",
+			"If circular dependencies exist, recommend interface inversion or boundary redesign.",
+			"If data ownership is unclear, block cross-boundary writes until an owner is named.",
+			"If synchronous fan-out can cascade failures, recommend async, timeout, circuit breaker, or fallback design.",
+			"If a public contract lacks versioning or compatibility tests, flag interface stability risk.",
+			"If a decision changes long-term structure, recommend an ADR.",
+		},
+		FindingCategories: []string{
+			"Circular dependencies and dependency direction violations.",
+			"Excessive coupling or weak cohesion.",
+			"Unclear module, service, or data ownership.",
+			"Unstable API contracts and compatibility risk.",
+			"Runtime coupling, fan-out, retry storm, and cascading failure risk.",
+			"Missing ADR or architecture documentation.",
+		},
+		SeverityGuidance: []string{
+			"Critical: architecture enables unsafe deployment, data corruption, or unavoidable cascading failure.",
+			"High: coupling, ownership, or boundary issue blocks safe evolution or security isolation.",
+			"Medium: maintainability, scalability, or compatibility risk is likely but controllable.",
+			"Low: documentation or ADR gap that does not currently block delivery.",
+		},
+		OutputRequirements: []string{
+			"Architecture summary with components, boundaries, and data flows.",
+			"Findings table with severity, component, evidence, impact, and recommendation.",
+			"Dependency and coupling analysis with circular dependencies called out.",
+			"API contract and data ownership review.",
+			"Runtime resilience, scalability, and deployment coupling notes.",
+			"ADR recommendations with decision question and rationale.",
+		},
+		AcceptanceCriteria: []string{
+			"Module and service boundaries are identified or marked unknown.",
+			"Circular dependencies and layering violations are explicitly assessed.",
+			"Data ownership and cross-boundary access are reviewed.",
+			"Critical and High findings include concrete mitigation.",
+			"ADR candidates are listed for broad decisions.",
+			"Findings distinguish structural risk from style preference.",
+		},
+		AntiPatterns: []string{
+			"Reporting style preferences as architecture risk.",
+			"Recommending service extraction without ownership and operational cost analysis.",
+			"Ignoring data ownership while reviewing module boundaries.",
+			"Approving circular dependencies because they compile today.",
+			"Treating ADRs as optional for precedent-setting decisions.",
+			"Suggesting broad rewrites for localized coupling issues.",
+		},
+	},
+	"threat-modeler": {
+		Purpose: "Identify and prioritize threats for features, services, APIs, and architecture changes using assets, trust boundaries, entry points, data flows, STRIDE, abuse cases, mitigations, controls, and residual risk.",
+		When: []string{
+			"A feature or service crosses trust boundaries or handles sensitive assets.",
+			"An API, integration, data flow, or architecture change needs security analysis.",
+			"Abuse cases, attack paths, mitigations, or residual risk need to be documented.",
+			"Threat modeling is required for compliance, review, or release readiness.",
+			"Existing controls are unclear or unverified.",
+		},
+		Operating: []string{
+			"Define assets, actors, entry points, trust boundaries, and data flows.",
+			"Apply STRIDE to components, data flows, storage, identities, and integrations.",
+			"Write realistic abuse cases and attack paths.",
+			"Map each threat to existing controls, missing controls, tests, and residual risk.",
+			"Prioritize threats by impact, likelihood, exploitability, and control strength.",
+		},
+		ReviewScope: []string{
+			"Assets and sensitivity classification.",
+			"Trust boundaries, privilege transitions, entry points, and attacker-controlled inputs.",
+			"STRIDE threats, abuse cases, and attack paths.",
+			"Mitigations, security controls, assumptions, unresolved threats, and residual risk.",
+			"Security tests and validation for high-risk paths.",
+		},
+		Checklist: []string{
+			"Identify assets and classify their sensitivity.",
+			"Identify trust boundaries and privilege transitions.",
+			"Identify entry points and attacker-controlled inputs.",
+			"Map data flows across components and storage.",
+			"Identify spoofing risks.",
+			"Identify tampering risks.",
+			"Identify repudiation and auditability risks.",
+			"Identify information disclosure risks.",
+			"Identify denial-of-service risks.",
+			"Identify elevation-of-privilege risks.",
+			"Define realistic abuse cases.",
+			"Map threats to concrete mitigations.",
+			"Distinguish existing controls from missing controls.",
+			"Identify residual risk after mitigation.",
+			"Recommend security tests for high-risk paths.",
+		},
+		DecisionRules: []string{
+			"If a trust boundary is crossed, require at least one threat and one control for that boundary.",
+			"If a high-impact threat lacks a mitigation, mark it unresolved rather than accepted.",
+			"If an abuse case is unrealistic, document the assumption and adjust likelihood, not impact.",
+			"If a control is only planned, residual risk remains open.",
+			"If entry points are unknown, treat the model as incomplete.",
+			"If STRIDE categories are skipped, state why they are not applicable.",
+		},
+		FindingCategories: []string{
+			"Spoofing and identity confusion.",
+			"Tampering and integrity failure.",
+			"Repudiation and missing audit evidence.",
+			"Information disclosure and privacy exposure.",
+			"Denial of service and resource exhaustion.",
+			"Elevation of privilege and authorization bypass.",
+		},
+		SeverityGuidance: []string{
+			"Critical: likely attack path compromises sensitive assets or admin control without effective mitigation.",
+			"High: plausible attacker can bypass authorization, exfiltrate sensitive data, or disrupt critical service.",
+			"Medium: abuse requires constraints but exposes meaningful control weakness.",
+			"Low: defense-in-depth or documentation gap with limited direct exploitability.",
+		},
+		OutputRequirements: []string{
+			"Scope statement with assets, actors, trust boundaries, and entry points.",
+			"Data-flow and attack-surface summary.",
+			"Threat register with STRIDE category, abuse case, impact, likelihood, controls, and status.",
+			"Mitigation and residual-risk register with owners.",
+			"Recommended security tests for high-risk threats.",
+			"Assumptions and unresolved-threats list.",
+		},
+		AcceptanceCriteria: []string{
+			"Assets, entry points, trust boundaries, and data flows are named.",
+			"STRIDE is applied or explicitly scoped out with rationale.",
+			"Each high-risk threat has a mitigation or named residual risk owner.",
+			"Abuse cases are concrete and realistic.",
+			"Security tests are recommended for high-risk paths.",
+			"Assumptions and unresolved threats are explicit.",
+		},
+		AntiPatterns: []string{
+			"Listing STRIDE labels without abuse cases.",
+			"Assuming internal networks are trusted.",
+			"Marking planned controls as implemented mitigations.",
+			"Omitting residual risk owners.",
+			"Ignoring denial-of-service because confidentiality dominates discussion.",
+			"Removing threats because they are uncomfortable to address.",
+		},
+	},
+	"safe-implementer": {
+		Purpose: "Implement changes safely, minimally, and auditable while preserving public APIs, tests, rollback, input validation, error handling, safe defaults, and validation evidence.",
+		When: []string{
+			"The user asks for code, configuration, tests, documentation, or generated file changes.",
+			"A requirement is ready for implementation.",
+			"A bug fix needs a minimal, testable change.",
+			"A migration or feature flag needs safe rollout treatment.",
+			"Validation evidence must accompany the change.",
+		},
+		Operating: []string{
+			"Inspect existing patterns, tests, ownership boundaries, and generated-file flows before editing.",
+			"Implement only requested behavior and avoid broad refactoring.",
+			"Add or update tests for changed behavior and relevant failure paths.",
+			"Validate inputs at trust boundaries and handle errors safely.",
+			"Report changed files, validation evidence, rollback notes, and residual risk.",
+		},
+		ReviewScope: []string{
+			"Minimal change principle and no broad refactoring.",
+			"Input validation, error handling, safe defaults, and API compatibility.",
+			"Tests, validation evidence, rollback, and feature flags when appropriate.",
+			"Secrets avoidance, no global side effects, and concurrency safety.",
+			"Generated-file synchronization and reviewable diffs.",
+		},
+		Checklist: []string{
+			"Implement only the requested behavior.",
+			"Avoid broad refactoring unless explicitly required.",
+			"Preserve public APIs unless a breaking change is explicitly requested.",
+			"Add or update tests for changed behavior.",
+			"Validate inputs at trust boundaries.",
+			"Handle errors explicitly and safely.",
+			"Avoid hardcoded secrets or credentials.",
+			"Avoid global side effects and hidden state changes.",
+			"Include rollback or mitigation notes for risky changes.",
+			"Summarize changed files and validation performed.",
+			"Keep generated outputs synchronized with canonical sources.",
+			"Separate formatting-only churn from functional changes.",
+		},
+		DecisionRules: []string{
+			"If required behavior implies unrelated refactoring, ask before expanding scope.",
+			"If a breaking API change is needed, require explicit approval and versioning.",
+			"If input crosses a trust boundary, validate before use.",
+			"If a migration is required, make rollout and rollback explicit.",
+			"If tests cannot run, report the reason and residual risk.",
+			"If generated files exist, update canonical sources and sync consistently.",
+		},
+		FindingCategories: []string{
+			"Scope creep or unrelated change.",
+			"Missing tests or validation evidence.",
+			"Unsafe input validation or error handling.",
+			"API compatibility or migration risk.",
+			"Secret exposure or unsafe configuration.",
+			"Global side effect or hidden state change.",
+		},
+		SeverityGuidance: []string{
+			"Critical: change introduces data loss, secret exposure, or unsafe production behavior.",
+			"High: missing validation, rollback, or tests for risky behavior.",
+			"Medium: maintainability or compatibility risk needs follow-up.",
+			"Low: small cleanup, docs, or validation gap with limited blast radius.",
+		},
+		OutputRequirements: []string{
+			"Changed files and purpose of each change.",
+			"Acceptance criteria satisfied by the implementation.",
+			"Tests and validation commands run with results.",
+			"Rollback or mitigation notes for risky changes.",
+			"Known gaps, skipped checks, and residual risks.",
+			"Generated files or sync actions performed.",
+		},
+		AcceptanceCriteria: []string{
+			"Requested behavior is implemented without unrelated scope.",
+			"Relevant tests or validation pass or failures are explained.",
+			"Inputs and errors are handled safely.",
+			"Public API compatibility is preserved or approved.",
+			"No secrets or unsafe globals are introduced.",
+			"Rollback and generated-file consistency are addressed.",
+		},
+		AntiPatterns: []string{
+			"Broad refactoring in a narrow fix.",
+			"Changing public APIs without approval.",
+			"Skipping tests because the change is small.",
+			"Swallowing errors or leaking internal errors externally.",
+			"Hardcoding environment-specific secrets or URLs.",
+			"Editing generated copies without updating canonical source.",
+		},
+	},
+	"test-strategy-engineer": {
+		Purpose: "Design test strategy for features, fixes, migrations, and releases across unit, integration, contract, E2E, regression, negative, security, performance, test data, mocking, CI gates, and coverage risk.",
+		When: []string{
+			"Test Strategy Engineer work needs structured analysis or review.",
+			"The request touches production, security, compliance, release, or operational risk.",
+			"Repository evidence must be turned into actionable findings.",
+			"A reviewer needs a clear pass, conditional pass, or block recommendation.",
+			"The central agent routes to this skill.",
+		},
+		Operating: []string{
+			"Define the test strategy engineer scope and gather minimum relevant repository evidence.",
+			"Apply test strategy engineer specific checks before using generic DevSecOps guidance.",
+			"Classify findings by severity and impact.",
+			"Map each recommendation to a concrete owner action or validation step.",
+			"Report assumptions, gaps, and residual risk clearly.",
+		},
+		ReviewScope: []string{
+			"Unit, integration, contract, E2E, regression, negative, security, and performance coverage.",
+			"Test data, fixtures, mocking strategy, determinism, isolation, and cleanup.",
+			"CI gates, coverage risks, flaky tests, and validation sequencing.",
+			"Boundary cases, abuse cases, migrations, and external dependencies.",
+			"Must-have versus optional test scope.",
+		},
+		Checklist: []string{
+			"Identify critical behavior that requires unit tests.",
+			"Identify integration boundaries that require integration tests.",
+			"Identify APIs or contracts that require contract tests.",
+			"Add negative tests for invalid input and abuse cases.",
+			"Add regression tests for bug fixes.",
+			"Identify missing test data or fixtures.",
+			"Check whether tests are deterministic.",
+			"Identify flaky-test risks.",
+			"Propose CI gates for critical paths.",
+			"Separate must-have tests from optional tests.",
+			"Map acceptance criteria to test types.",
+			"Define test data cleanup and isolation.",
+		},
+		DecisionRules: []string{
+			"If test strategy engineer evidence is missing, report the gap instead of assuming success.",
+			"If a finding affects production safety, security, compliance, or user impact, raise severity and require owner action.",
+			"If repository evidence contradicts the request, document the conflict and ask for a decision owner.",
+			"If validation cannot be run, state why and identify residual risk.",
+			"If a recommendation changes governance, release, or security posture, require explicit review.",
+			"If scope is unclear, separate confirmed scope from assumptions before giving a recommendation.",
+		},
+		FindingCategories: []string{
+			"Missing or weak test strategy engineer evidence.",
+			"Incorrect or unsafe test strategy engineer control.",
+			"Unclear ownership, approval, or decision record.",
+			"Validation, test, or monitoring gap.",
+			"Security, compliance, privacy, or operational risk.",
+			"Documentation or traceability gap.",
+		},
+		SeverityGuidance: []string{
+			"Critical: immediate risk to production safety, secrets, regulated data, or release integrity.",
+			"High: credible security, compliance, reliability, or rollback risk needs owner action before merge or release.",
+			"Medium: meaningful quality, maintainability, observability, or process gap should be planned and tracked.",
+			"Low: advisory improvement, documentation gap, or cleanup with limited immediate impact.",
+		},
+		OutputRequirements: []string{
+			"Lead with findings ordered by severity and tied to repository evidence.",
+			"List files, systems, workflows, controls, or artifacts reviewed.",
+			"State validation performed, missing validation, and residual risk.",
+			"Provide concrete remediation or next action for each significant finding.",
+			"Separate confirmed facts, assumptions, and open questions.",
+			"End with a clear recommendation: pass, conditional pass, or block where applicable.",
+		},
+		AcceptanceCriteria: []string{
+			"The test strategy engineer review scope is explicit and skill-specific.",
+			"At least one concrete evidence source or explicit evidence gap is recorded.",
+			"Critical and High findings include owner-oriented remediation guidance.",
+			"Validation evidence or validation gaps are reported honestly.",
+			"Security, governance, and DevSecOps guardrails remain intact.",
+			"The final recommendation is actionable without generic filler.",
+		},
+		AntiPatterns: []string{
+			"Using generic checklist language that does not mention the skill domain.",
+			"Claiming success without repository evidence or validation.",
+			"Mixing assumptions with verified facts.",
+			"Downgrading security, compliance, or release risk for convenience.",
+			"Producing findings without concrete remediation guidance.",
+			"Ignoring ownership, follow-up, or residual risk.",
+		},
+	},
+	"verification-reviewer": {
+		Purpose: "Verify implementation results against requirements, changed files, validation commands, test evidence, edge cases, security validation, documentation consistency, and residual risk.",
+		When: []string{
+			"Verification Reviewer work needs structured analysis or review.",
+			"The request touches production, security, compliance, release, or operational risk.",
+			"Repository evidence must be turned into actionable findings.",
+			"A reviewer needs a clear pass, conditional pass, or block recommendation.",
+			"The central agent routes to this skill.",
+		},
+		Operating: []string{
+			"Define the verification reviewer scope and gather minimum relevant repository evidence.",
+			"Apply verification reviewer specific checks before using generic DevSecOps guidance.",
+			"Classify findings by severity and impact.",
+			"Map each recommendation to a concrete owner action or validation step.",
+			"Report assumptions, gaps, and residual risk clearly.",
+		},
+		ReviewScope: []string{
+			"Requirement-to-implementation traceability.",
+			"Acceptance criteria and test evidence credibility.",
+			"Changed files, edge cases, scope expansion, and regression risk.",
+			"Security validation, documentation consistency, and generated outputs.",
+			"Residual risk and pass/fail recommendation.",
+		},
+		Checklist: []string{
+			"Map each requirement to changed behavior.",
+			"Verify acceptance criteria against implementation evidence.",
+			"Check whether validation commands were actually run or are missing.",
+			"Identify untested edge cases.",
+			"Check changed files for unintended scope expansion.",
+			"Identify documentation or changelog gaps.",
+			"Verify security-relevant behavior where applicable.",
+			"Distinguish verified facts from assumptions.",
+			"Identify residual risks.",
+			"Produce a clear pass/fail or conditional recommendation.",
+			"Check generated files and synchronized outputs.",
+			"Confirm test evidence is credible and current.",
+		},
+		DecisionRules: []string{
+			"If verification reviewer evidence is missing, report the gap instead of assuming success.",
+			"If a finding affects production safety, security, compliance, or user impact, raise severity and require owner action.",
+			"If repository evidence contradicts the request, document the conflict and ask for a decision owner.",
+			"If validation cannot be run, state why and identify residual risk.",
+			"If a recommendation changes governance, release, or security posture, require explicit review.",
+			"If scope is unclear, separate confirmed scope from assumptions before giving a recommendation.",
+		},
+		FindingCategories: []string{
+			"Missing or weak verification reviewer evidence.",
+			"Incorrect or unsafe verification reviewer control.",
+			"Unclear ownership, approval, or decision record.",
+			"Validation, test, or monitoring gap.",
+			"Security, compliance, privacy, or operational risk.",
+			"Documentation or traceability gap.",
+		},
+		SeverityGuidance: []string{
+			"Critical: immediate risk to production safety, secrets, regulated data, or release integrity.",
+			"High: credible security, compliance, reliability, or rollback risk needs owner action before merge or release.",
+			"Medium: meaningful quality, maintainability, observability, or process gap should be planned and tracked.",
+			"Low: advisory improvement, documentation gap, or cleanup with limited immediate impact.",
+		},
+		OutputRequirements: []string{
+			"Lead with findings ordered by severity and tied to repository evidence.",
+			"List files, systems, workflows, controls, or artifacts reviewed.",
+			"State validation performed, missing validation, and residual risk.",
+			"Provide concrete remediation or next action for each significant finding.",
+			"Separate confirmed facts, assumptions, and open questions.",
+			"End with a clear recommendation: pass, conditional pass, or block where applicable.",
+		},
+		AcceptanceCriteria: []string{
+			"The verification reviewer review scope is explicit and skill-specific.",
+			"At least one concrete evidence source or explicit evidence gap is recorded.",
+			"Critical and High findings include owner-oriented remediation guidance.",
+			"Validation evidence or validation gaps are reported honestly.",
+			"Security, governance, and DevSecOps guardrails remain intact.",
+			"The final recommendation is actionable without generic filler.",
+		},
+		AntiPatterns: []string{
+			"Using generic checklist language that does not mention the skill domain.",
+			"Claiming success without repository evidence or validation.",
+			"Mixing assumptions with verified facts.",
+			"Downgrading security, compliance, or release risk for convenience.",
+			"Producing findings without concrete remediation guidance.",
+			"Ignoring ownership, follow-up, or residual risk.",
+		},
+	},
+	"security-reviewer": {
+		Purpose: "Review code, design, configuration, and changes for authentication, authorization, input validation, output encoding, injection, SSRF, path traversal, deserialization, XSS, CSRF, secrets, logging, cryptography, errors, dependencies, and least privilege.",
+		When: []string{
+			"Security Reviewer work needs structured analysis or review.",
+			"The request touches production, security, compliance, release, or operational risk.",
+			"Repository evidence must be turned into actionable findings.",
+			"A reviewer needs a clear pass, conditional pass, or block recommendation.",
+			"The central agent routes to this skill.",
+		},
+		Operating: []string{
+			"Define the security reviewer scope and gather minimum relevant repository evidence.",
+			"Apply security reviewer specific checks before using generic DevSecOps guidance.",
+			"Classify findings by severity and impact.",
+			"Map each recommendation to a concrete owner action or validation step.",
+			"Report assumptions, gaps, and residual risk clearly.",
+		},
+		ReviewScope: []string{
+			"Authentication, authorization, and tenant isolation.",
+			"Input validation, injection, SSRF, path traversal, deserialization, XSS, and CSRF.",
+			"Secrets, logging, cryptography, errors, dependencies, and permissions.",
+			"Configuration, CI/CD, runtime, and least-privilege boundaries.",
+			"Exploitability, impact, and remediation quality.",
+		},
+		Checklist: []string{
+			"Check authentication and authorization boundaries.",
+			"Identify attacker-controlled inputs.",
+			"Check validation and sanitization at trust boundaries.",
+			"Identify injection risks.",
+			"Identify path traversal or unsafe file access.",
+			"Identify SSRF or unsafe outbound requests.",
+			"Check secrets handling and logging.",
+			"Review cryptographic usage and key handling.",
+			"Identify unsafe error disclosure.",
+			"Prioritize findings by exploitability and impact.",
+			"Check dependency and configuration security exposure.",
+			"Verify least-privilege and permission boundaries.",
+		},
+		DecisionRules: []string{
+			"If security reviewer evidence is missing, report the gap instead of assuming success.",
+			"If a finding affects production safety, security, compliance, or user impact, raise severity and require owner action.",
+			"If repository evidence contradicts the request, document the conflict and ask for a decision owner.",
+			"If validation cannot be run, state why and identify residual risk.",
+			"If a recommendation changes governance, release, or security posture, require explicit review.",
+			"If scope is unclear, separate confirmed scope from assumptions before giving a recommendation.",
+		},
+		FindingCategories: []string{
+			"Missing or weak security reviewer evidence.",
+			"Incorrect or unsafe security reviewer control.",
+			"Unclear ownership, approval, or decision record.",
+			"Validation, test, or monitoring gap.",
+			"Security, compliance, privacy, or operational risk.",
+			"Documentation or traceability gap.",
+		},
+		SeverityGuidance: []string{
+			"Critical: immediate risk to production safety, secrets, regulated data, or release integrity.",
+			"High: credible security, compliance, reliability, or rollback risk needs owner action before merge or release.",
+			"Medium: meaningful quality, maintainability, observability, or process gap should be planned and tracked.",
+			"Low: advisory improvement, documentation gap, or cleanup with limited immediate impact.",
+		},
+		OutputRequirements: []string{
+			"Lead with findings ordered by severity and tied to repository evidence.",
+			"List files, systems, workflows, controls, or artifacts reviewed.",
+			"State validation performed, missing validation, and residual risk.",
+			"Provide concrete remediation or next action for each significant finding.",
+			"Separate confirmed facts, assumptions, and open questions.",
+			"End with a clear recommendation: pass, conditional pass, or block where applicable.",
+		},
+		AcceptanceCriteria: []string{
+			"The security reviewer review scope is explicit and skill-specific.",
+			"At least one concrete evidence source or explicit evidence gap is recorded.",
+			"Critical and High findings include owner-oriented remediation guidance.",
+			"Validation evidence or validation gaps are reported honestly.",
+			"Security, governance, and DevSecOps guardrails remain intact.",
+			"The final recommendation is actionable without generic filler.",
+		},
+		AntiPatterns: []string{
+			"Using generic checklist language that does not mention the skill domain.",
+			"Claiming success without repository evidence or validation.",
+			"Mixing assumptions with verified facts.",
+			"Downgrading security, compliance, or release risk for convenience.",
+			"Producing findings without concrete remediation guidance.",
+			"Ignoring ownership, follow-up, or residual risk.",
+		},
+	},
+	"secrets-reviewer": {
+		Purpose: "Identify and handle secrets, credentials, tokens, private keys, passwords, `.env` files, CI variables, config files, logs, fixtures, database dumps, rotation, revocation, scanning, and false positives.",
+		When: []string{
+			"Secrets Reviewer work needs structured analysis or review.",
+			"The request touches production, security, compliance, release, or operational risk.",
+			"Repository evidence must be turned into actionable findings.",
+			"A reviewer needs a clear pass, conditional pass, or block recommendation.",
+			"The central agent routes to this skill.",
+		},
+		Operating: []string{
+			"Define the secrets reviewer scope and gather minimum relevant repository evidence.",
+			"Apply secrets reviewer specific checks before using generic DevSecOps guidance.",
+			"Classify findings by severity and impact.",
+			"Map each recommendation to a concrete owner action or validation step.",
+			"Report assumptions, gaps, and residual risk clearly.",
+		},
+		ReviewScope: []string{
+			"API keys, tokens, private keys, passwords, `.env` files, and CI variables.",
+			"Config files, logs, fixtures, artifacts, database dumps, and history exposure.",
+			"Secret storage, rotation, revocation, scope, and owners.",
+			"Secret scanning, false positives, prevention controls, and follow-up actions.",
+			"Output redaction and safe handling of suspected values.",
+		},
+		Checklist: []string{
+			"Search for potential secrets without unnecessarily exposing their values.",
+			"Identify hardcoded credentials or tokens.",
+			"Check whether secrets are stored in config or code.",
+			"Check logs for accidental sensitive data disclosure.",
+			"Distinguish test fixtures from real credentials where possible.",
+			"Recommend rotation and revocation when a real secret is exposed.",
+			"Avoid printing full secret values in output.",
+			"Check CI/CD secret handling.",
+			"Verify that secret references use secure mechanisms.",
+			"Identify follow-up actions and owners.",
+			"Check history or artifacts when exposure is suspected.",
+			"Classify false positives with evidence.",
+		},
+		DecisionRules: []string{
+			"If secrets reviewer evidence is missing, report the gap instead of assuming success.",
+			"If a finding affects production safety, security, compliance, or user impact, raise severity and require owner action.",
+			"If repository evidence contradicts the request, document the conflict and ask for a decision owner.",
+			"If validation cannot be run, state why and identify residual risk.",
+			"If a recommendation changes governance, release, or security posture, require explicit review.",
+			"If scope is unclear, separate confirmed scope from assumptions before giving a recommendation.",
+		},
+		FindingCategories: []string{
+			"Missing or weak secrets reviewer evidence.",
+			"Incorrect or unsafe secrets reviewer control.",
+			"Unclear ownership, approval, or decision record.",
+			"Validation, test, or monitoring gap.",
+			"Security, compliance, privacy, or operational risk.",
+			"Documentation or traceability gap.",
+		},
+		SeverityGuidance: []string{
+			"Critical: immediate risk to production safety, secrets, regulated data, or release integrity.",
+			"High: credible security, compliance, reliability, or rollback risk needs owner action before merge or release.",
+			"Medium: meaningful quality, maintainability, observability, or process gap should be planned and tracked.",
+			"Low: advisory improvement, documentation gap, or cleanup with limited immediate impact.",
+		},
+		OutputRequirements: []string{
+			"Lead with findings ordered by severity and tied to repository evidence.",
+			"List files, systems, workflows, controls, or artifacts reviewed.",
+			"State validation performed, missing validation, and residual risk.",
+			"Provide concrete remediation or next action for each significant finding.",
+			"Separate confirmed facts, assumptions, and open questions.",
+			"End with a clear recommendation: pass, conditional pass, or block where applicable.",
+		},
+		AcceptanceCriteria: []string{
+			"The secrets reviewer review scope is explicit and skill-specific.",
+			"At least one concrete evidence source or explicit evidence gap is recorded.",
+			"Critical and High findings include owner-oriented remediation guidance.",
+			"Validation evidence or validation gaps are reported honestly.",
+			"Security, governance, and DevSecOps guardrails remain intact.",
+			"The final recommendation is actionable without generic filler.",
+		},
+		AntiPatterns: []string{
+			"Using generic checklist language that does not mention the skill domain.",
+			"Claiming success without repository evidence or validation.",
+			"Mixing assumptions with verified facts.",
+			"Downgrading security, compliance, or release risk for convenience.",
+			"Producing findings without concrete remediation guidance.",
+			"Ignoring ownership, follow-up, or residual risk.",
+		},
+	},
+	"dependency-supply-chain-reviewer": {
+		Purpose: "Review dependencies, packages, lockfiles, container images, direct and transitive CVEs, license risk, maintainer health, pinning, SBOM, provenance, dependency confusion, typosquatting, package scripts, and base images.",
+		When: []string{
+			"Dependency Supply Chain Reviewer work needs structured analysis or review.",
+			"The request touches production, security, compliance, release, or operational risk.",
+			"Repository evidence must be turned into actionable findings.",
+			"A reviewer needs a clear pass, conditional pass, or block recommendation.",
+			"The central agent routes to this skill.",
+		},
+		Operating: []string{
+			"Define the dependency supply chain reviewer scope and gather minimum relevant repository evidence.",
+			"Apply dependency supply chain reviewer specific checks before using generic DevSecOps guidance.",
+			"Classify findings by severity and impact.",
+			"Map each recommendation to a concrete owner action or validation step.",
+			"Report assumptions, gaps, and residual risk clearly.",
+		},
+		ReviewScope: []string{
+			"Direct and transitive dependencies, manifests, and lockfiles.",
+			"CVEs, licenses, maintainer health, version pinning, and SBOM.",
+			"Provenance, dependency confusion, typosquatting, package scripts, and registries.",
+			"Container base images, third-party actions, and generated artifacts.",
+			"Blocking versus advisory supply-chain risk.",
+		},
+		Checklist: []string{
+			"Identify newly added or upgraded dependencies.",
+			"Check whether dependencies are pinned or locked.",
+			"Identify known vulnerability or license risks where data is available.",
+			"Identify suspicious packages or typosquatting risks.",
+			"Check package install scripts and build hooks.",
+			"Review transitive dependency risk.",
+			"Check whether SBOM or provenance exists.",
+			"Recommend safer alternatives or updates.",
+			"Identify unnecessary dependencies.",
+			"Separate blocking risks from advisory risks.",
+			"Review container base images and third-party actions.",
+			"Check dependency confusion and registry source controls.",
+		},
+		DecisionRules: []string{
+			"If dependency supply chain reviewer evidence is missing, report the gap instead of assuming success.",
+			"If a finding affects production safety, security, compliance, or user impact, raise severity and require owner action.",
+			"If repository evidence contradicts the request, document the conflict and ask for a decision owner.",
+			"If validation cannot be run, state why and identify residual risk.",
+			"If a recommendation changes governance, release, or security posture, require explicit review.",
+			"If scope is unclear, separate confirmed scope from assumptions before giving a recommendation.",
+		},
+		FindingCategories: []string{
+			"Missing or weak dependency supply chain reviewer evidence.",
+			"Incorrect or unsafe dependency supply chain reviewer control.",
+			"Unclear ownership, approval, or decision record.",
+			"Validation, test, or monitoring gap.",
+			"Security, compliance, privacy, or operational risk.",
+			"Documentation or traceability gap.",
+		},
+		SeverityGuidance: []string{
+			"Critical: immediate risk to production safety, secrets, regulated data, or release integrity.",
+			"High: credible security, compliance, reliability, or rollback risk needs owner action before merge or release.",
+			"Medium: meaningful quality, maintainability, observability, or process gap should be planned and tracked.",
+			"Low: advisory improvement, documentation gap, or cleanup with limited immediate impact.",
+		},
+		OutputRequirements: []string{
+			"Lead with findings ordered by severity and tied to repository evidence.",
+			"List files, systems, workflows, controls, or artifacts reviewed.",
+			"State validation performed, missing validation, and residual risk.",
+			"Provide concrete remediation or next action for each significant finding.",
+			"Separate confirmed facts, assumptions, and open questions.",
+			"End with a clear recommendation: pass, conditional pass, or block where applicable.",
+		},
+		AcceptanceCriteria: []string{
+			"The dependency supply chain reviewer review scope is explicit and skill-specific.",
+			"At least one concrete evidence source or explicit evidence gap is recorded.",
+			"Critical and High findings include owner-oriented remediation guidance.",
+			"Validation evidence or validation gaps are reported honestly.",
+			"Security, governance, and DevSecOps guardrails remain intact.",
+			"The final recommendation is actionable without generic filler.",
+		},
+		AntiPatterns: []string{
+			"Using generic checklist language that does not mention the skill domain.",
+			"Claiming success without repository evidence or validation.",
+			"Mixing assumptions with verified facts.",
+			"Downgrading security, compliance, or release risk for convenience.",
+			"Producing findings without concrete remediation guidance.",
+			"Ignoring ownership, follow-up, or residual risk.",
+		},
+	},
+	"ci-cd-reviewer": {
+		Purpose: "Review CI/CD pipelines, build definitions, release workflows, token permissions, secrets, protected branches, merge gates, approvals, reproducibility, artifact integrity, cache poisoning, dependency installation, runner trust, deployment gates, and environment protection.",
+		When: []string{
+			"Ci Cd Reviewer work needs structured analysis or review.",
+			"The request touches production, security, compliance, release, or operational risk.",
+			"Repository evidence must be turned into actionable findings.",
+			"A reviewer needs a clear pass, conditional pass, or block recommendation.",
+			"The central agent routes to this skill.",
+		},
+		Operating: []string{
+			"Define the ci cd reviewer scope and gather minimum relevant repository evidence.",
+			"Apply ci cd reviewer specific checks before using generic DevSecOps guidance.",
+			"Classify findings by severity and impact.",
+			"Map each recommendation to a concrete owner action or validation step.",
+			"Report assumptions, gaps, and residual risk clearly.",
+		},
+		ReviewScope: []string{
+			"Token permissions, secrets, protected branches, merge gates, and approvals.",
+			"Build reproducibility, dependency installation, artifact integrity, and caches.",
+			"Runner trust, fork-trigger safety, OIDC, cloud credentials, and shell execution.",
+			"Deployment gates, environment protection, and release workflow controls.",
+			"Pipeline logs, artifacts, caches, and privilege boundaries.",
+		},
+		Checklist: []string{
+			"Check workflow token permissions.",
+			"Verify least-privilege for CI jobs.",
+			"Identify unsafe shell execution.",
+			"Check secrets exposure in logs and steps.",
+			"Review dependency installation and caching.",
+			"Identify cache poisoning risks.",
+			"Check artifact signing or checksum generation.",
+			"Verify branch protection and merge gates.",
+			"Check deployment approval controls.",
+			"Identify untrusted runner risks.",
+			"Review OIDC and cloud credential scoping.",
+			"Check fork and pull-request trigger safety.",
+		},
+		DecisionRules: []string{
+			"If ci cd reviewer evidence is missing, report the gap instead of assuming success.",
+			"If a finding affects production safety, security, compliance, or user impact, raise severity and require owner action.",
+			"If repository evidence contradicts the request, document the conflict and ask for a decision owner.",
+			"If validation cannot be run, state why and identify residual risk.",
+			"If a recommendation changes governance, release, or security posture, require explicit review.",
+			"If scope is unclear, separate confirmed scope from assumptions before giving a recommendation.",
+		},
+		FindingCategories: []string{
+			"Missing or weak ci cd reviewer evidence.",
+			"Incorrect or unsafe ci cd reviewer control.",
+			"Unclear ownership, approval, or decision record.",
+			"Validation, test, or monitoring gap.",
+			"Security, compliance, privacy, or operational risk.",
+			"Documentation or traceability gap.",
+		},
+		SeverityGuidance: []string{
+			"Critical: immediate risk to production safety, secrets, regulated data, or release integrity.",
+			"High: credible security, compliance, reliability, or rollback risk needs owner action before merge or release.",
+			"Medium: meaningful quality, maintainability, observability, or process gap should be planned and tracked.",
+			"Low: advisory improvement, documentation gap, or cleanup with limited immediate impact.",
+		},
+		OutputRequirements: []string{
+			"Lead with findings ordered by severity and tied to repository evidence.",
+			"List files, systems, workflows, controls, or artifacts reviewed.",
+			"State validation performed, missing validation, and residual risk.",
+			"Provide concrete remediation or next action for each significant finding.",
+			"Separate confirmed facts, assumptions, and open questions.",
+			"End with a clear recommendation: pass, conditional pass, or block where applicable.",
+		},
+		AcceptanceCriteria: []string{
+			"The ci cd reviewer review scope is explicit and skill-specific.",
+			"At least one concrete evidence source or explicit evidence gap is recorded.",
+			"Critical and High findings include owner-oriented remediation guidance.",
+			"Validation evidence or validation gaps are reported honestly.",
+			"Security, governance, and DevSecOps guardrails remain intact.",
+			"The final recommendation is actionable without generic filler.",
+		},
+		AntiPatterns: []string{
+			"Using generic checklist language that does not mention the skill domain.",
+			"Claiming success without repository evidence or validation.",
+			"Mixing assumptions with verified facts.",
+			"Downgrading security, compliance, or release risk for convenience.",
+			"Producing findings without concrete remediation guidance.",
+			"Ignoring ownership, follow-up, or residual risk.",
+		},
+	},
+	"iac-gitops-reviewer": {
+		Purpose: "Review infrastructure-as-code and GitOps changes across Terraform, Helm, Kubernetes, GitOps manifests, IAM, network exposure, public access, secrets, encryption, logging, backups, least privilege, security contexts, resource limits, drift, and policy enforcement.",
+		When: []string{
+			"Iac Gitops Reviewer work needs structured analysis or review.",
+			"The request touches production, security, compliance, release, or operational risk.",
+			"Repository evidence must be turned into actionable findings.",
+			"A reviewer needs a clear pass, conditional pass, or block recommendation.",
+			"The central agent routes to this skill.",
+		},
+		Operating: []string{
+			"Define the iac gitops reviewer scope and gather minimum relevant repository evidence.",
+			"Apply iac gitops reviewer specific checks before using generic DevSecOps guidance.",
+			"Classify findings by severity and impact.",
+			"Map each recommendation to a concrete owner action or validation step.",
+			"Report assumptions, gaps, and residual risk clearly.",
+		},
+		ReviewScope: []string{
+			"Terraform, Helm, Kubernetes, Kustomize, and GitOps manifests.",
+			"IAM, network exposure, public access, secrets, encryption, logging, and backups.",
+			"Least privilege, security contexts, resource limits, and network policies.",
+			"Drift, reconciliation, promotion gates, rollback, and policy enforcement.",
+			"Environment separation and production-safety controls.",
+		},
+		Checklist: []string{
+			"Identify public exposure of services, buckets, databases, or ingress.",
+			"Review IAM privileges for least privilege.",
+			"Check encryption settings for storage and transport.",
+			"Identify secrets in manifests or Terraform variables.",
+			"Check Kubernetes security contexts.",
+			"Check resource requests and limits.",
+			"Check network policies or segmentation.",
+			"Check logging, monitoring, and backup configuration.",
+			"Identify drift or manual-change risks.",
+			"Recommend safe rollout and rollback steps.",
+			"Review GitOps reconciliation and promotion gates.",
+			"Check policy enforcement with OPA, Kyverno, or equivalent.",
+		},
+		DecisionRules: []string{
+			"If iac gitops reviewer evidence is missing, report the gap instead of assuming success.",
+			"If a finding affects production safety, security, compliance, or user impact, raise severity and require owner action.",
+			"If repository evidence contradicts the request, document the conflict and ask for a decision owner.",
+			"If validation cannot be run, state why and identify residual risk.",
+			"If a recommendation changes governance, release, or security posture, require explicit review.",
+			"If scope is unclear, separate confirmed scope from assumptions before giving a recommendation.",
+		},
+		FindingCategories: []string{
+			"Missing or weak iac gitops reviewer evidence.",
+			"Incorrect or unsafe iac gitops reviewer control.",
+			"Unclear ownership, approval, or decision record.",
+			"Validation, test, or monitoring gap.",
+			"Security, compliance, privacy, or operational risk.",
+			"Documentation or traceability gap.",
+		},
+		SeverityGuidance: []string{
+			"Critical: immediate risk to production safety, secrets, regulated data, or release integrity.",
+			"High: credible security, compliance, reliability, or rollback risk needs owner action before merge or release.",
+			"Medium: meaningful quality, maintainability, observability, or process gap should be planned and tracked.",
+			"Low: advisory improvement, documentation gap, or cleanup with limited immediate impact.",
+		},
+		OutputRequirements: []string{
+			"Lead with findings ordered by severity and tied to repository evidence.",
+			"List files, systems, workflows, controls, or artifacts reviewed.",
+			"State validation performed, missing validation, and residual risk.",
+			"Provide concrete remediation or next action for each significant finding.",
+			"Separate confirmed facts, assumptions, and open questions.",
+			"End with a clear recommendation: pass, conditional pass, or block where applicable.",
+		},
+		AcceptanceCriteria: []string{
+			"The iac gitops reviewer review scope is explicit and skill-specific.",
+			"At least one concrete evidence source or explicit evidence gap is recorded.",
+			"Critical and High findings include owner-oriented remediation guidance.",
+			"Validation evidence or validation gaps are reported honestly.",
+			"Security, governance, and DevSecOps guardrails remain intact.",
+			"The final recommendation is actionable without generic filler.",
+		},
+		AntiPatterns: []string{
+			"Using generic checklist language that does not mention the skill domain.",
+			"Claiming success without repository evidence or validation.",
+			"Mixing assumptions with verified facts.",
+			"Downgrading security, compliance, or release risk for convenience.",
+			"Producing findings without concrete remediation guidance.",
+			"Ignoring ownership, follow-up, or residual risk.",
+		},
+	},
+	"compliance-governance-reviewer": {
+		Purpose: "Review governance, policy, auditability, compliance evidence, control mapping, approvals, audit trails, ownership, segregation of duties, policy exceptions, retention, access reviews, change management, and risk acceptance.",
+		When: []string{
+			"Compliance Governance Reviewer work needs structured analysis or review.",
+			"The request touches production, security, compliance, release, or operational risk.",
+			"Repository evidence must be turned into actionable findings.",
+			"A reviewer needs a clear pass, conditional pass, or block recommendation.",
+			"The central agent routes to this skill.",
+		},
+		Operating: []string{
+			"Define the compliance governance reviewer scope and gather minimum relevant repository evidence.",
+			"Apply compliance governance reviewer specific checks before using generic DevSecOps guidance.",
+			"Classify findings by severity and impact.",
+			"Map each recommendation to a concrete owner action or validation step.",
+			"Report assumptions, gaps, and residual risk clearly.",
+		},
+		ReviewScope: []string{
+			"Control mapping, approvals, audit trails, evidence, and ownership.",
+			"Segregation of duties, access reviews, policy exceptions, and expiry.",
+			"Retention, change management, risk acceptance, and accountability.",
+			"Branch protection, CODEOWNERS, review gates, and governance settings.",
+			"Audit-ready evidence and compliance gaps.",
+		},
+		Checklist: []string{
+			"Map changes to relevant controls or policies.",
+			"Verify approval and review evidence.",
+			"Check whether risk acceptance is documented.",
+			"Identify missing audit trails.",
+			"Check ownership and accountability.",
+			"Identify segregation-of-duties issues.",
+			"Check policy exceptions and expiry.",
+			"Verify evidence is timestamped and attributable.",
+			"Identify compliance gaps.",
+			"Produce audit-ready recommendations.",
+			"Check retention and access-review evidence.",
+			"Review change-management evidence.",
+		},
+		DecisionRules: []string{
+			"If compliance governance reviewer evidence is missing, report the gap instead of assuming success.",
+			"If a finding affects production safety, security, compliance, or user impact, raise severity and require owner action.",
+			"If repository evidence contradicts the request, document the conflict and ask for a decision owner.",
+			"If validation cannot be run, state why and identify residual risk.",
+			"If a recommendation changes governance, release, or security posture, require explicit review.",
+			"If scope is unclear, separate confirmed scope from assumptions before giving a recommendation.",
+		},
+		FindingCategories: []string{
+			"Missing or weak compliance governance reviewer evidence.",
+			"Incorrect or unsafe compliance governance reviewer control.",
+			"Unclear ownership, approval, or decision record.",
+			"Validation, test, or monitoring gap.",
+			"Security, compliance, privacy, or operational risk.",
+			"Documentation or traceability gap.",
+		},
+		SeverityGuidance: []string{
+			"Critical: immediate risk to production safety, secrets, regulated data, or release integrity.",
+			"High: credible security, compliance, reliability, or rollback risk needs owner action before merge or release.",
+			"Medium: meaningful quality, maintainability, observability, or process gap should be planned and tracked.",
+			"Low: advisory improvement, documentation gap, or cleanup with limited immediate impact.",
+		},
+		OutputRequirements: []string{
+			"Lead with findings ordered by severity and tied to repository evidence.",
+			"List files, systems, workflows, controls, or artifacts reviewed.",
+			"State validation performed, missing validation, and residual risk.",
+			"Provide concrete remediation or next action for each significant finding.",
+			"Separate confirmed facts, assumptions, and open questions.",
+			"End with a clear recommendation: pass, conditional pass, or block where applicable.",
+		},
+		AcceptanceCriteria: []string{
+			"The compliance governance reviewer review scope is explicit and skill-specific.",
+			"At least one concrete evidence source or explicit evidence gap is recorded.",
+			"Critical and High findings include owner-oriented remediation guidance.",
+			"Validation evidence or validation gaps are reported honestly.",
+			"Security, governance, and DevSecOps guardrails remain intact.",
+			"The final recommendation is actionable without generic filler.",
+		},
+		AntiPatterns: []string{
+			"Using generic checklist language that does not mention the skill domain.",
+			"Claiming success without repository evidence or validation.",
+			"Mixing assumptions with verified facts.",
+			"Downgrading security, compliance, or release risk for convenience.",
+			"Producing findings without concrete remediation guidance.",
+			"Ignoring ownership, follow-up, or residual risk.",
+		},
+	},
+	"release-readiness-reviewer": {
+		Purpose: "Determine whether a change or system is ready for release by reviewing test status, security findings, known issues, rollback, migrations, monitoring, alerts, runbooks, feature flags, approvals, release notes, support readiness, and go/no-go recommendation.",
+		When: []string{
+			"Release Readiness Reviewer work needs structured analysis or review.",
+			"The request touches production, security, compliance, release, or operational risk.",
+			"Repository evidence must be turned into actionable findings.",
+			"A reviewer needs a clear pass, conditional pass, or block recommendation.",
+			"The central agent routes to this skill.",
+		},
+		Operating: []string{
+			"Define the release readiness reviewer scope and gather minimum relevant repository evidence.",
+			"Apply release readiness reviewer specific checks before using generic DevSecOps guidance.",
+			"Classify findings by severity and impact.",
+			"Map each recommendation to a concrete owner action or validation step.",
+			"Report assumptions, gaps, and residual risk clearly.",
+		},
+		ReviewScope: []string{
+			"Test status, validation evidence, security findings, and known issues.",
+			"Rollback, migrations, compatibility, feature flags, and staged rollout.",
+			"Monitoring, alerts, runbooks, support readiness, and ownership.",
+			"Approvals, release notes, communication, and go/no-go decision.",
+			"Blockers, exceptions, residual risk, and follow-up actions.",
+		},
+		Checklist: []string{
+			"Verify required tests and validations.",
+			"Identify unresolved blockers.",
+			"Check security findings and exceptions.",
+			"Verify rollback plan.",
+			"Check migration and compatibility risks.",
+			"Verify monitoring and alerting readiness.",
+			"Check runbooks and operational ownership.",
+			"Check release notes and support communication.",
+			"Identify feature flag or staged rollout options.",
+			"Provide clear go/no-go recommendation.",
+			"Confirm approvals and release owner.",
+			"Check known issues and residual risks.",
+		},
+		DecisionRules: []string{
+			"If release readiness reviewer evidence is missing, report the gap instead of assuming success.",
+			"If a finding affects production safety, security, compliance, or user impact, raise severity and require owner action.",
+			"If repository evidence contradicts the request, document the conflict and ask for a decision owner.",
+			"If validation cannot be run, state why and identify residual risk.",
+			"If a recommendation changes governance, release, or security posture, require explicit review.",
+			"If scope is unclear, separate confirmed scope from assumptions before giving a recommendation.",
+		},
+		FindingCategories: []string{
+			"Missing or weak release readiness reviewer evidence.",
+			"Incorrect or unsafe release readiness reviewer control.",
+			"Unclear ownership, approval, or decision record.",
+			"Validation, test, or monitoring gap.",
+			"Security, compliance, privacy, or operational risk.",
+			"Documentation or traceability gap.",
+		},
+		SeverityGuidance: []string{
+			"Critical: immediate risk to production safety, secrets, regulated data, or release integrity.",
+			"High: credible security, compliance, reliability, or rollback risk needs owner action before merge or release.",
+			"Medium: meaningful quality, maintainability, observability, or process gap should be planned and tracked.",
+			"Low: advisory improvement, documentation gap, or cleanup with limited immediate impact.",
+		},
+		OutputRequirements: []string{
+			"Lead with findings ordered by severity and tied to repository evidence.",
+			"List files, systems, workflows, controls, or artifacts reviewed.",
+			"State validation performed, missing validation, and residual risk.",
+			"Provide concrete remediation or next action for each significant finding.",
+			"Separate confirmed facts, assumptions, and open questions.",
+			"End with a clear recommendation: pass, conditional pass, or block where applicable.",
+		},
+		AcceptanceCriteria: []string{
+			"The release readiness reviewer review scope is explicit and skill-specific.",
+			"At least one concrete evidence source or explicit evidence gap is recorded.",
+			"Critical and High findings include owner-oriented remediation guidance.",
+			"Validation evidence or validation gaps are reported honestly.",
+			"Security, governance, and DevSecOps guardrails remain intact.",
+			"The final recommendation is actionable without generic filler.",
+		},
+		AntiPatterns: []string{
+			"Using generic checklist language that does not mention the skill domain.",
+			"Claiming success without repository evidence or validation.",
+			"Mixing assumptions with verified facts.",
+			"Downgrading security, compliance, or release risk for convenience.",
+			"Producing findings without concrete remediation guidance.",
+			"Ignoring ownership, follow-up, or residual risk.",
+		},
+	},
+	"observability-reviewer": {
+		Purpose: "Review logging, metrics, tracing, alerting, dashboards, operational visibility, SLOs, SLIs, runbooks, audit logs, sensitive data in logs, on-call usability, and incident detection.",
+		When: []string{
+			"Observability Reviewer work needs structured analysis or review.",
+			"The request touches production, security, compliance, release, or operational risk.",
+			"Repository evidence must be turned into actionable findings.",
+			"A reviewer needs a clear pass, conditional pass, or block recommendation.",
+			"The central agent routes to this skill.",
+		},
+		Operating: []string{
+			"Define the observability reviewer scope and gather minimum relevant repository evidence.",
+			"Apply observability reviewer specific checks before using generic DevSecOps guidance.",
+			"Classify findings by severity and impact.",
+			"Map each recommendation to a concrete owner action or validation step.",
+			"Report assumptions, gaps, and residual risk clearly.",
+		},
+		ReviewScope: []string{
+			"Logs, metrics, traces, alerts, dashboards, and runbooks.",
+			"SLOs, SLIs, critical journeys, audit logs, and incident detection.",
+			"Sensitive data in logs, correlation IDs, retention, and cardinality.",
+			"On-call usability, alert routing, alert fatigue, and ownership.",
+			"Operational decision support and recovery verification.",
+		},
+		Checklist: []string{
+			"Identify critical user journeys and required signals.",
+			"Check whether errors are observable.",
+			"Check whether latency and saturation metrics exist.",
+			"Check whether logs include useful correlation IDs.",
+			"Check whether sensitive data is excluded from logs.",
+			"Verify alert quality and ownership.",
+			"Check dashboards for operational decisions.",
+			"Review runbook coverage.",
+			"Identify missing audit logs.",
+			"Recommend concrete metrics and alerts.",
+			"Check SLO and SLI coverage.",
+			"Assess on-call usability and alert fatigue.",
+		},
+		DecisionRules: []string{
+			"If observability reviewer evidence is missing, report the gap instead of assuming success.",
+			"If a finding affects production safety, security, compliance, or user impact, raise severity and require owner action.",
+			"If repository evidence contradicts the request, document the conflict and ask for a decision owner.",
+			"If validation cannot be run, state why and identify residual risk.",
+			"If a recommendation changes governance, release, or security posture, require explicit review.",
+			"If scope is unclear, separate confirmed scope from assumptions before giving a recommendation.",
+		},
+		FindingCategories: []string{
+			"Missing or weak observability reviewer evidence.",
+			"Incorrect or unsafe observability reviewer control.",
+			"Unclear ownership, approval, or decision record.",
+			"Validation, test, or monitoring gap.",
+			"Security, compliance, privacy, or operational risk.",
+			"Documentation or traceability gap.",
+		},
+		SeverityGuidance: []string{
+			"Critical: immediate risk to production safety, secrets, regulated data, or release integrity.",
+			"High: credible security, compliance, reliability, or rollback risk needs owner action before merge or release.",
+			"Medium: meaningful quality, maintainability, observability, or process gap should be planned and tracked.",
+			"Low: advisory improvement, documentation gap, or cleanup with limited immediate impact.",
+		},
+		OutputRequirements: []string{
+			"Lead with findings ordered by severity and tied to repository evidence.",
+			"List files, systems, workflows, controls, or artifacts reviewed.",
+			"State validation performed, missing validation, and residual risk.",
+			"Provide concrete remediation or next action for each significant finding.",
+			"Separate confirmed facts, assumptions, and open questions.",
+			"End with a clear recommendation: pass, conditional pass, or block where applicable.",
+		},
+		AcceptanceCriteria: []string{
+			"The observability reviewer review scope is explicit and skill-specific.",
+			"At least one concrete evidence source or explicit evidence gap is recorded.",
+			"Critical and High findings include owner-oriented remediation guidance.",
+			"Validation evidence or validation gaps are reported honestly.",
+			"Security, governance, and DevSecOps guardrails remain intact.",
+			"The final recommendation is actionable without generic filler.",
+		},
+		AntiPatterns: []string{
+			"Using generic checklist language that does not mention the skill domain.",
+			"Claiming success without repository evidence or validation.",
+			"Mixing assumptions with verified facts.",
+			"Downgrading security, compliance, or release risk for convenience.",
+			"Producing findings without concrete remediation guidance.",
+			"Ignoring ownership, follow-up, or residual risk.",
+		},
+	},
+	"incident-postmortem-assistant": {
+		Purpose: "Support incident response, postmortems, and corrective actions across triage, severity, impact, timeline, containment, eradication, recovery, communication, evidence preservation, root cause, contributing factors, corrective actions, and prevention.",
+		When: []string{
+			"Incident Postmortem Assistant work needs structured analysis or review.",
+			"The request touches production, security, compliance, release, or operational risk.",
+			"Repository evidence must be turned into actionable findings.",
+			"A reviewer needs a clear pass, conditional pass, or block recommendation.",
+			"The central agent routes to this skill.",
+		},
+		Operating: []string{
+			"Define the incident postmortem assistant scope and gather minimum relevant repository evidence.",
+			"Apply incident postmortem assistant specific checks before using generic DevSecOps guidance.",
+			"Classify findings by severity and impact.",
+			"Map each recommendation to a concrete owner action or validation step.",
+			"Report assumptions, gaps, and residual risk clearly.",
+		},
+		ReviewScope: []string{
+			"Triage, severity, impact, timeline, containment, eradication, and recovery.",
+			"Communication, evidence preservation, facts, assumptions, and unknowns.",
+			"Root cause, contributing factors, corrective actions, prevention, and owners.",
+			"Security, customer, business, compliance, and operational impact.",
+			"Postmortem readiness and follow-up issue quality.",
+		},
+		Checklist: []string{
+			"Separate facts, assumptions, and unknowns.",
+			"Establish incident timeline.",
+			"Identify customer, business, security, and operational impact.",
+			"Recommend safe containment steps.",
+			"Preserve evidence and avoid destructive actions.",
+			"Identify root cause and contributing factors.",
+			"Distinguish immediate mitigations from long-term fixes.",
+			"Identify owners and deadlines for corrective actions.",
+			"Prepare stakeholder communication.",
+			"Produce postmortem-ready structure.",
+			"Classify severity and escalation needs.",
+			"Verify recovery and prevention actions.",
+		},
+		DecisionRules: []string{
+			"If incident postmortem assistant evidence is missing, report the gap instead of assuming success.",
+			"If a finding affects production safety, security, compliance, or user impact, raise severity and require owner action.",
+			"If repository evidence contradicts the request, document the conflict and ask for a decision owner.",
+			"If validation cannot be run, state why and identify residual risk.",
+			"If a recommendation changes governance, release, or security posture, require explicit review.",
+			"If scope is unclear, separate confirmed scope from assumptions before giving a recommendation.",
+		},
+		FindingCategories: []string{
+			"Missing or weak incident postmortem assistant evidence.",
+			"Incorrect or unsafe incident postmortem assistant control.",
+			"Unclear ownership, approval, or decision record.",
+			"Validation, test, or monitoring gap.",
+			"Security, compliance, privacy, or operational risk.",
+			"Documentation or traceability gap.",
+		},
+		SeverityGuidance: []string{
+			"Critical: immediate risk to production safety, secrets, regulated data, or release integrity.",
+			"High: credible security, compliance, reliability, or rollback risk needs owner action before merge or release.",
+			"Medium: meaningful quality, maintainability, observability, or process gap should be planned and tracked.",
+			"Low: advisory improvement, documentation gap, or cleanup with limited immediate impact.",
+		},
+		OutputRequirements: []string{
+			"Lead with findings ordered by severity and tied to repository evidence.",
+			"List files, systems, workflows, controls, or artifacts reviewed.",
+			"State validation performed, missing validation, and residual risk.",
+			"Provide concrete remediation or next action for each significant finding.",
+			"Separate confirmed facts, assumptions, and open questions.",
+			"End with a clear recommendation: pass, conditional pass, or block where applicable.",
+		},
+		AcceptanceCriteria: []string{
+			"The incident postmortem assistant review scope is explicit and skill-specific.",
+			"At least one concrete evidence source or explicit evidence gap is recorded.",
+			"Critical and High findings include owner-oriented remediation guidance.",
+			"Validation evidence or validation gaps are reported honestly.",
+			"Security, governance, and DevSecOps guardrails remain intact.",
+			"The final recommendation is actionable without generic filler.",
+		},
+		AntiPatterns: []string{
+			"Using generic checklist language that does not mention the skill domain.",
+			"Claiming success without repository evidence or validation.",
+			"Mixing assumptions with verified facts.",
+			"Downgrading security, compliance, or release risk for convenience.",
+			"Producing findings without concrete remediation guidance.",
+			"Ignoring ownership, follow-up, or residual risk.",
+		},
+	},
+	"documentation-maintainer": {
+		Purpose: "Keep technical and operational documentation accurate and useful across README, architecture docs, runbooks, API docs, changelogs, setup instructions, configuration docs, examples, troubleshooting, ownership, freshness, and consistency.",
+		When: []string{
+			"Documentation Maintainer work needs structured analysis or review.",
+			"The request touches production, security, compliance, release, or operational risk.",
+			"Repository evidence must be turned into actionable findings.",
+			"A reviewer needs a clear pass, conditional pass, or block recommendation.",
+			"The central agent routes to this skill.",
+		},
+		Operating: []string{
+			"Define the documentation maintainer scope and gather minimum relevant repository evidence.",
+			"Apply documentation maintainer specific checks before using generic DevSecOps guidance.",
+			"Classify findings by severity and impact.",
+			"Map each recommendation to a concrete owner action or validation step.",
+			"Report assumptions, gaps, and residual risk clearly.",
+		},
+		ReviewScope: []string{
+			"README, architecture docs, ADRs, API docs, setup guides, and examples.",
+			"Runbooks, troubleshooting, ownership, support contacts, and operational docs.",
+			"Changelogs, release notes, freshness, consistency, and source-of-truth rules.",
+			"Configuration docs, CLI docs, platform docs, and generated outputs.",
+			"Secret-safe documentation and actionable task orientation.",
+		},
+		Checklist: []string{
+			"Identify docs affected by code or config changes.",
+			"Check whether setup instructions still work.",
+			"Check API or CLI documentation consistency.",
+			"Update changelog or release notes where needed.",
+			"Verify examples are current.",
+			"Check ownership and support contacts.",
+			"Identify missing troubleshooting guidance.",
+			"Ensure docs avoid leaking secrets.",
+			"Prefer concise, task-oriented documentation.",
+			"Mark assumptions and outdated sections.",
+			"Verify source-of-truth and generated-file guidance.",
+			"Check runbooks for validation and rollback steps.",
+		},
+		DecisionRules: []string{
+			"If documentation maintainer evidence is missing, report the gap instead of assuming success.",
+			"If a finding affects production safety, security, compliance, or user impact, raise severity and require owner action.",
+			"If repository evidence contradicts the request, document the conflict and ask for a decision owner.",
+			"If validation cannot be run, state why and identify residual risk.",
+			"If a recommendation changes governance, release, or security posture, require explicit review.",
+			"If scope is unclear, separate confirmed scope from assumptions before giving a recommendation.",
+		},
+		FindingCategories: []string{
+			"Missing or weak documentation maintainer evidence.",
+			"Incorrect or unsafe documentation maintainer control.",
+			"Unclear ownership, approval, or decision record.",
+			"Validation, test, or monitoring gap.",
+			"Security, compliance, privacy, or operational risk.",
+			"Documentation or traceability gap.",
+		},
+		SeverityGuidance: []string{
+			"Critical: immediate risk to production safety, secrets, regulated data, or release integrity.",
+			"High: credible security, compliance, reliability, or rollback risk needs owner action before merge or release.",
+			"Medium: meaningful quality, maintainability, observability, or process gap should be planned and tracked.",
+			"Low: advisory improvement, documentation gap, or cleanup with limited immediate impact.",
+		},
+		OutputRequirements: []string{
+			"Lead with findings ordered by severity and tied to repository evidence.",
+			"List files, systems, workflows, controls, or artifacts reviewed.",
+			"State validation performed, missing validation, and residual risk.",
+			"Provide concrete remediation or next action for each significant finding.",
+			"Separate confirmed facts, assumptions, and open questions.",
+			"End with a clear recommendation: pass, conditional pass, or block where applicable.",
+		},
+		AcceptanceCriteria: []string{
+			"The documentation maintainer review scope is explicit and skill-specific.",
+			"At least one concrete evidence source or explicit evidence gap is recorded.",
+			"Critical and High findings include owner-oriented remediation guidance.",
+			"Validation evidence or validation gaps are reported honestly.",
+			"Security, governance, and DevSecOps guardrails remain intact.",
+			"The final recommendation is actionable without generic filler.",
+		},
+		AntiPatterns: []string{
+			"Using generic checklist language that does not mention the skill domain.",
+			"Claiming success without repository evidence or validation.",
+			"Mixing assumptions with verified facts.",
+			"Downgrading security, compliance, or release risk for convenience.",
+			"Producing findings without concrete remediation guidance.",
+			"Ignoring ownership, follow-up, or residual risk.",
+		},
+	},
+	"universal-skill-creator": {
+		Purpose: "Create new production-ready skills and prevent generic copy-paste skills by enforcing full frontmatter, SemVer, dates, authors, stability, min_platform_version, changelog, domain-specific scope, checklist, decision rules, finding categories, severity guidance, outputs, acceptance criteria, anti-patterns, and no generic body reuse.",
+		When: []string{
+			"Universal Skill Creator work needs structured analysis or review.",
+			"The request touches production, security, compliance, release, or operational risk.",
+			"Repository evidence must be turned into actionable findings.",
+			"A reviewer needs a clear pass, conditional pass, or block recommendation.",
+			"The central agent routes to this skill.",
+		},
+		Operating: []string{
+			"Define the universal skill creator scope and gather minimum relevant repository evidence.",
+			"Apply universal skill creator specific checks before using generic DevSecOps guidance.",
+			"Classify findings by severity and impact.",
+			"Map each recommendation to a concrete owner action or validation step.",
+			"Report assumptions, gaps, and residual risk clearly.",
+		},
+		ReviewScope: []string{
+			"YAML frontmatter, SemVer, since, last_modified, authors, stability, and min_platform_version.",
+			"Body changelog, purpose, review scope, checklist, decision rules, and finding categories.",
+			"Severity guidance, output requirements, acceptance criteria, and anti-patterns.",
+			"Generic body reuse detection and platform compatibility honesty.",
+			"Skill routing, generated copies, validation, and governance preservation.",
+		},
+		Checklist: []string{
+			"Validate full YAML frontmatter before body approval.",
+			"Check SemVer, since, last_modified, authors, stability, and changelog.",
+			"Require min_platform_version entries from the central compatibility matrix for all supported platforms.",
+			"Require body-level changelog.",
+			"Write skill-specific purpose and review scope.",
+			"Write at least 10 domain-specific checklist items.",
+			"Write at least 5 domain-specific decision rules.",
+			"Write finding categories and severity guidance.",
+			"Write output requirements and acceptance criteria.",
+			"Write anti-patterns that prevent misuse.",
+			"Reject skills that only differ by name and description.",
+			"Verify generated copies or platform outputs stay synchronized.",
+		},
+		DecisionRules: []string{
+			"Never create a skill that only differs by name and description. Every generated skill must include domain-specific review scope, checklist items, decision rules, finding categories, severity guidance, output requirements, acceptance criteria, and anti-patterns. Generic operating-model text is allowed only as shared baseline, never as the complete skill body.",
+			"If universal skill creator evidence is missing, report the gap instead of assuming success.",
+			"If a finding affects production safety, security, compliance, or user impact, raise severity and require owner action.",
+			"If repository evidence contradicts the request, document the conflict and ask for a decision owner.",
+			"If validation cannot be run, state why and identify residual risk.",
+			"If a recommendation changes governance, release, or security posture, require explicit review.",
+			"If scope is unclear, separate confirmed scope from assumptions before giving a recommendation.",
+		},
+		FindingCategories: []string{
+			"Missing or weak universal skill creator evidence.",
+			"Incorrect or unsafe universal skill creator control.",
+			"Unclear ownership, approval, or decision record.",
+			"Validation, test, or monitoring gap.",
+			"Security, compliance, privacy, or operational risk.",
+			"Documentation or traceability gap.",
+		},
+		SeverityGuidance: []string{
+			"Critical: immediate risk to production safety, secrets, regulated data, or release integrity.",
+			"High: credible security, compliance, reliability, or rollback risk needs owner action before merge or release.",
+			"Medium: meaningful quality, maintainability, observability, or process gap should be planned and tracked.",
+			"Low: advisory improvement, documentation gap, or cleanup with limited immediate impact.",
+		},
+		OutputRequirements: []string{
+			"Lead with findings ordered by severity and tied to repository evidence.",
+			"List files, systems, workflows, controls, or artifacts reviewed.",
+			"State validation performed, missing validation, and residual risk.",
+			"Provide concrete remediation or next action for each significant finding.",
+			"Separate confirmed facts, assumptions, and open questions.",
+			"End with a clear recommendation: pass, conditional pass, or block where applicable.",
+		},
+		AcceptanceCriteria: []string{
+			"The universal skill creator review scope is explicit and skill-specific.",
+			"At least one concrete evidence source or explicit evidence gap is recorded.",
+			"Critical and High findings include owner-oriented remediation guidance.",
+			"Validation evidence or validation gaps are reported honestly.",
+			"Security, governance, and DevSecOps guardrails remain intact.",
+			"The final recommendation is actionable without generic filler.",
+		},
+		AntiPatterns: []string{
+			"Creating a skill that only changes name and description while reusing generic body content.",
+			"Using generic checklist language that does not mention the skill domain.",
+			"Claiming success without repository evidence or validation.",
+			"Mixing assumptions with verified facts.",
+			"Downgrading security, compliance, or release risk for convenience.",
+			"Producing findings without concrete remediation guidance.",
+			"Ignoring ownership, follow-up, or residual risk.",
+		},
+	},
+}
+var skillBodies = buildSkillBodies()
+
+func buildSkillBodies() map[string]string {
+	bodies := map[string]string{}
+	for _, name := range SDLCSkillNames {
+		bodies[name] = buildSkillBody(name, sdlcSkillContent[name])
+	}
+	return bodies
 }
 
-// renderSkillTemplate renders the full SKILL.md for the named skill using its registered body.
-// Returns ("", nil) when no specific template is registered so callers can fall back gracefully.
+func buildSkillBody(name string, content skillContent) string {
+	var b strings.Builder
+	b.WriteString("# {{.Title}}\n\n")
+	writeParagraph(&b, "Purpose", content.Purpose)
+	writeBullets(&b, "When to use", content.When, false)
+	writeNumbered(&b, "Operating model", content.Operating)
+	writeBullets(&b, "Skill-Specific Review Scope", content.ReviewScope, false)
+	writeBullets(&b, "Skill-Specific Checklist", content.Checklist, true)
+	writeBullets(&b, "Decision Rules", content.DecisionRules, false)
+	writeBullets(&b, "Finding Categories", content.FindingCategories, false)
+	writeBullets(&b, "Severity Guidance", content.SeverityGuidance, false)
+	writeBullets(&b, "DevSecOps Guardrails", sharedDevSecOpsGuardrails, false)
+	writeBullets(&b, "Output Requirements", content.OutputRequirements, false)
+	writeBullets(&b, "Acceptance Criteria", content.AcceptanceCriteria, false)
+	writeBullets(&b, "Anti-Patterns", content.AntiPatterns, false)
+	b.WriteString("## Changelog\n\n")
+	b.WriteString("### {{.Version}} - {{.LastModified}}\n\n")
+	b.WriteString("- Initial generated production-ready SDLC / DevSecOps skill.\n")
+	return b.String()
+}
+
+func writeParagraph(b *strings.Builder, heading, text string) {
+	fmt.Fprintf(b, "## %s\n\n%s\n\n", heading, text)
+}
+
+func writeNumbered(b *strings.Builder, heading string, items []string) {
+	fmt.Fprintf(b, "## %s\n\n", heading)
+	for i, item := range items {
+		fmt.Fprintf(b, "%d. %s\n", i+1, item)
+	}
+	b.WriteString("\n")
+}
+
+func writeBullets(b *strings.Builder, heading string, items []string, checklist bool) {
+	fmt.Fprintf(b, "## %s\n\n", heading)
+	for _, item := range items {
+		if checklist {
+			fmt.Fprintf(b, "- [ ] %s\n", item)
+		} else {
+			fmt.Fprintf(b, "- %s\n", item)
+		}
+	}
+	b.WriteString("\n")
+}
+
 func renderSkillTemplate(name string, data skillTemplateData) (string, error) {
 	body, ok := skillBodies[name]
 	if !ok {
 		return "", nil
+	}
+	if len(data.MinPlatforms) == 0 {
+		data.MinPlatforms = platformcompat.AllMinVersions()
 	}
 	full := skillFrontmatter + body
 	tmpl, err := template.New(name).Parse(full)
@@ -108,7 +1712,6 @@ func renderSkillTemplate(name string, data skillTemplateData) (string, error) {
 	return buf.String(), nil
 }
 
-// skillTitle converts a kebab-case skill name into a human-readable title.
 func skillTitle(name string) string {
 	parts := strings.Split(name, "-")
 	for i, p := range parts {
@@ -118,792 +1721,3 @@ func skillTitle(name string) string {
 	}
 	return strings.Join(parts, " ")
 }
-
-// ─── Skill body templates ─────────────────────────────────────────────────────
-
-const requirementsAnalystBody = `
-# {{.Title}}
-
-## Purpose
-
-Decompose raw requirements, epics, and change requests into unambiguous, independently testable acceptance criteria before any design or implementation begins. Identify functional requirements, non-functional requirements, security obligations, compliance controls, data-privacy constraints, and operational readiness requirements. Surface ambiguity, conflicts, and missing stakeholder input as explicit open questions rather than silent assumptions carried into design.
-
-## When to Use This Skill
-
-- A new feature, epic, user story, or change request is submitted for refinement.
-- Requirements contain language that cannot be directly tested: "should", "as appropriate", "reasonable", "fast", "secure", or "user-friendly".
-- Security, compliance, or data-privacy obligations are unstated, implied, or contradictory.
-- Stakeholders disagree on scope, priority, or acceptance conditions.
-- A change request has no documented acceptance criteria.
-- You are routed here by the central agent via $requirements-analyst.
-
-## Inputs
-
-- Tickets, epics, user stories, PRDs, change requests, or RFC documents.
-- Existing system documentation, ADRs, API specifications, and data dictionaries.
-- Compliance frameworks and regulatory references cited by the project (GDPR, SOC 2, ISO 27001, PCI DSS, HIPAA).
-- Stakeholder communications: email threads, meeting notes, interview transcripts.
-- Constraints: timeline, budget, platform, technology choices, team capacity.
-- Existing acceptance criteria or test suites that define the current behavioral boundary.
-
-## Skill-Specific Operating Model
-
-1. **Categorize every stated requirement.** Assign each item a type: FR (functional), NFR (non-functional), SEC (security), COMP (compliance), PRIV (privacy). Requirements spanning multiple types receive multiple tags.
-2. **Flag non-testable language.** Mark every requirement that uses undefined thresholds, vague qualifiers, or aspirational language. Each flagged item becomes a blocking open question.
-3. **Decompose epics into atomic stories.** Split each large requirement into the smallest unit that can be independently accepted or rejected by a tester who was not involved in elicitation.
-4. **Write Given/When/Then acceptance criteria.** For every Must-have atomic requirement, write at least one criterion: Given [precondition], When [action], Then [observable, measurable outcome].
-5. **Surface security requirements explicitly.** For each user interaction, API surface, data asset, and integration point: What authentication is required? What authorization controls apply? What input validation is needed? What must and must not be logged?
-6. **Surface compliance requirements with control references.** Map each compliance obligation to a specific control clause (e.g., SOC 2 CC6.1, GDPR Art. 5(1)(b)). Obligations without a clause reference are marked "unverified compliance requirement".
-7. **Identify personal data flows.** For every requirement touching user data, behavioral data, location data, or authentication data: document the data element, legal basis, retention period, and applicable data-subject rights.
-8. **Document assumptions explicitly.** Record every fact assumed true but unconfirmed. Assign each an Owner and a Risk statement (what breaks if the assumption is wrong).
-9. **Build the open-questions log.** For each ambiguity, conflict, or missing information item, create an entry with Owner, Blocking status (design / implementation / testing), and Due Date.
-10. **Define and confirm scope boundaries.** State explicitly what is in scope and out of scope. Every scope boundary without a named stakeholder confirmation is marked TBD.
-11. **Assign MoSCoW priority.** Must / Should / Could / Won't for each requirement. Mark TBD where stakeholder input is missing—never assign priority by assumption.
-
-## Skill-Specific Checklist
-
-- [ ] Every stated requirement is tagged with at least one type: FR, NFR, SEC, COMP, PRIV.
-- [ ] Every requirement is written in testable, observable language without unmeasured adjectives.
-- [ ] Given/When/Then acceptance criteria exist for every Must-have requirement.
-- [ ] Security requirements explicitly cover: authentication, authorization, input validation, output encoding, encryption in transit, encryption at rest, and audit logging.
-- [ ] Each compliance requirement is linked to a specific framework control clause, not just a framework name.
-- [ ] All personal data flows are documented with data element, legal basis, retention period, and data-subject rights.
-- [ ] Role and permission requirements are listed for every new or modified access path.
-- [ ] Rate-limiting, throttling, and abuse-prevention requirements are addressed for every external-facing endpoint.
-- [ ] Logging requirements specify both what to log and what must never appear in logs (e.g., passwords, tokens, PII).
-- [ ] All assumptions are documented with Owner, Risk if wrong, and Review Date.
-- [ ] All open questions are in the open-questions log with Owner, Blocking status, and Due Date.
-- [ ] Scope boundaries are stated with at least one named stakeholder confirmation or flagged TBD.
-- [ ] Conflicting requirements are identified and listed as blocking open questions, not silently resolved.
-- [ ] MoSCoW priority is assigned or explicitly marked TBD for every requirement.
-- [ ] Non-functional requirements include measurable thresholds for at least: response time, availability, scalability, and error rate.
-
-## Decision Rules
-
-- If a requirement uses non-testable language and no threshold can be derived from existing SLOs, mark it "not ready" and create a blocking open question requesting a measurable threshold before proceeding.
-- If a requirement implies reading, storing, or transmitting personal data, create a PRIV-tagged requirement and flag it for $privacy-reviewer analysis before design begins.
-- If a requirement changes authentication, authorization, or session-management behavior, flag it for $secure-design-reviewer review and block design until that review is complete.
-- If two requirements conflict and the conflict cannot be resolved from available documentation, do not resolve it yourself—log it as a blocking open question with both stakeholders named as Owners.
-- If a compliance obligation is cited without a specific framework clause, mark it "unverified" and create an open question for the compliance team.
-- If a Must-have requirement cannot be expressed as a testable criterion, return it as "not ready for design" with a specific question to the requester.
-- Do not assign or infer priority without stakeholder input; mark all unconfirmed priorities as TBD.
-
-## DevSecOps Guardrails
-
-- Do not advance a feature to design until all Must-have requirements have at least one testable acceptance criterion confirmed by a named stakeholder.
-- Do not infer security or compliance requirements from the implementation context; surface them as explicit requirements before design begins.
-- Do not include credentials, connection strings, API keys, or sensitive configuration values in requirements artifacts.
-- Do not mark a compliance requirement as satisfied unless a specific control clause and an accountable owner are named.
-- Do not finalize scope without at least one named stakeholder confirmation of the scope boundary.
-- Do not skip privacy analysis for any feature that processes personal data, behavioral data, location data, or authentication credentials.
-- Do not produce acceptance criteria that reference internal implementation details; all criteria must be observable from the outside.
-
-## Output Requirements
-
-- **Requirements register**: columns Name, Type (FR/NFR/SEC/COMP/PRIV), Description, Priority (MoSCoW), Acceptance Criteria, Owner, Status.
-- **Assumptions log**: each assumption with Owner, Risk if wrong, and Review Date.
-- **Open-questions log**: each question with Owner, Blocking status, and Due Date.
-- **Scope statement**: in-scope and out-of-scope items, each with a named stakeholder confirmation or TBD.
-- **Security and compliance cross-reference**: table mapping each SEC/COMP requirement to framework clause, control owner, and verification method.
-- **Privacy data map**: data flows with element name, legal basis, retention period, data-subject rights, and DPIA indicator.
-- **Ambiguity summary**: list of non-testable requirements with the specific clarifying question raised for each.
-
-## Acceptance Criteria
-
-- Every Must-have functional requirement has at least one Given/When/Then acceptance criterion.
-- All security requirements are explicitly stated and linked to a design or test obligation.
-- All compliance requirements are linked to specific framework control clauses.
-- All personal data flows are documented with legal basis and retention period.
-- Assumptions and open questions are in separate logs, not embedded in the requirements body.
-- No conflicting requirements are left unresolved without a documented decision or escalation.
-- The scope boundary is unambiguous and carries at least one named stakeholder confirmation.
-- No requirement uses language that a tester cannot evaluate without additional stakeholder input.
-
-## Anti-Patterns
-
-- **Implicit security**: Writing "the feature must be secure" instead of decomposing into specific, testable security controls with measurable outcomes.
-- **Assumption laundering**: Embedding an unconfirmed business rule into acceptance criteria without flagging it as an assumption with an owner.
-- **Priority theater**: Assigning Must-have to every requirement to avoid difficult prioritization conversations with stakeholders.
-- **Fake measurability**: Writing "response time must be acceptable" instead of "p95 latency must be under 300ms at 1,000 concurrent users under normal load".
-- **Compliance name-dropping**: Citing GDPR or SOC 2 without mapping to a specific article or control clause.
-- **Functional-only output**: Producing only functional acceptance criteria and omitting NFRs, security controls, and observability targets.
-- **Skipping conflict resolution**: Moving to design without resolving a known conflict between two stakeholder requirements.
-
-## Changelog
-
-### {{.Version}} - {{.LastModified}}
-
-- Initial generated DevSecOps SDLC skill.
-`
-
-const threatModelerBody = `
-# {{.Title}}
-
-## Purpose
-
-Identify and prioritize threats against features, services, APIs, and architectural changes using structured STRIDE analysis before implementation begins. Produce a threat register, attack-surface map, and control recommendations where every threat is linked to a concrete mitigation or an accepted residual risk with a named decision owner. The output must be actionable by an implementer, not just informational.
-
-## When to Use This Skill
-
-- A new feature, service, or API is in design and touches authentication, authorization, data storage, external integrations, or network communication.
-- An architectural change modifies trust boundaries, data flows, or existing security controls.
-- A security review or compliance audit has requested a threat model.
-- A previous threat model is being refreshed after significant scope changes.
-- You are routed here by the central agent via $threat-modeler.
-
-## Inputs
-
-- Architecture diagrams, sequence diagrams, or data flow descriptions.
-- API specifications (OpenAPI, gRPC protobuf, GraphQL schema).
-- Requirements or accepted-risks register from $requirements-analyst.
-- Existing access-control model, roles, and permission boundaries.
-- Infrastructure description: cloud provider, network topology, deployment model.
-- Previous threat models or security assessment reports for context and delta analysis.
-
-## Skill-Specific Operating Model
-
-1. **Define scope and trust model.** State which system, service, feature, or change is being modeled. Define what is in scope, what is out of scope, and what is explicitly trusted.
-2. **Enumerate assets.** List every asset: data assets (PII, credentials, session tokens, API keys, business-critical data), system assets (servers, containers, databases, message queues), and process assets (cryptographic operations, business logic).
-3. **Map trust boundaries and entry points.** Identify every trust boundary the system crosses. List every entry point where untrusted input enters: API endpoints, UI inputs, file uploads, message queues, webhooks, OAuth callbacks, SSO assertions, admin interfaces.
-4. **Describe data flows.** For each significant operation, trace the data flow from entry point through processing to storage and exit. Annotate which flows cross trust boundaries.
-5. **Apply STRIDE per element.** For each process, data store, data flow, and external entity, evaluate each STRIDE category systematically.
-6. **Write abuse cases.** For each STRIDE finding, write a realistic abuse case: who is the attacker (insider, external, privileged user), what is their goal, what path do they take, what assumption do they violate.
-7. **Trace attack paths.** For Critical and High threats, trace the multi-step path from entry point to impact. Identify which control breaks the attack chain at each step.
-8. **Assign risk ratings.** For each threat, assign Impact (High/Medium/Low) and Likelihood (High/Medium/Low) with justification. Derive Risk Level: Critical (High×High), High, Medium, Low.
-9. **Specify controls.** For each threat, name the primary control, assign an owner, and link it to a security requirement or implementation task.
-10. **Document residual risk.** For threats where a control is absent or incomplete, document the residual risk, the acceptance decision, and the decision owner. A threat without a mitigation and without an acceptance decision is a gap, not a finding.
-
-## Skill-Specific Checklist
-
-- [ ] Scope is defined: in-scope elements, trust boundary, and explicit exclusions.
-- [ ] Every significant data asset is listed and classified (confidentiality, integrity, availability requirements).
-- [ ] Every trust boundary crossing is identified.
-- [ ] Every external entry point is listed including non-obvious ones: admin interfaces, debug endpoints, message queues, webhooks.
-- [ ] Data flows are described for all significant operations with trust boundary crossings annotated.
-- [ ] Spoofing threats address: token forgery, credential replay, identity confusion, OAuth/SAML bypass.
-- [ ] Tampering threats address: unsigned payloads, injectable parameters, race conditions on shared state, database injection.
-- [ ] Repudiation threats address: audit log completeness, log integrity, non-repudiation for critical operations.
-- [ ] Information Disclosure threats address: data in transit, data at rest, error messages, debug output, logs, API response leakage.
-- [ ] Denial of Service threats address: resource exhaustion, unbounded queries, amplification vectors, unauthenticated expensive operations.
-- [ ] Elevation of Privilege threats address: IDOR, missing authorization checks, privilege escalation, RBAC/ABAC bypass, JWT algorithm confusion.
-- [ ] Each threat has a realistic abuse case with named attacker type, goal, and attack path.
-- [ ] Each threat has an Impact, Likelihood, and Risk Level with written justification.
-- [ ] Each Critical and High threat has a named mitigation control with an owner and an implementation reference.
-- [ ] Residual risks are documented with acceptance decision and decision owner.
-- [ ] The threat register is structured such that each entry is independently actionable.
-
-## Decision Rules
-
-- If the system processes authentication tokens, session state, or OAuth/OIDC flows, include spoofing and session-hijacking threats by default, even when not explicitly requested.
-- If a data flow crosses an external trust boundary without mutual TLS or equivalent encryption, classify it as a Critical Information Disclosure threat regardless of data sensitivity.
-- If a Critical or High threat has no control specified, the threat model is incomplete; do not deliver it without a mitigation or a documented acceptance decision.
-- If an abuse case requires capabilities disproportionate to the stated threat actor profile, document the assumption and reduce the Likelihood rating—but do not remove the threat.
-- If a control is marked "planned" or "future work", the threat status remains Open in the register until the control is implemented and verified.
-- If two threats share the same root cause, group them under a single root-cause entry rather than duplicating mitigations.
-- Do not assess threats for elements outside the declared scope; reference out-of-scope systems with a pointer to the responsible owner.
-
-## DevSecOps Guardrails
-
-- Do not assume existing perimeter controls (firewall, WAF, VPN) fully mitigate a threat; model each threat as if the perimeter is already compromised.
-- Do not mark a threat as mitigated without a specific, implemented, and verifiable control—not a planned or aspirational control.
-- Do not skip AuthN/AuthZ threats for internal microservices; internal network location is not a substitute for explicit authentication and authorization.
-- Do not finalize a threat model without residual-risk documentation for every unmitigated or partially mitigated threat.
-- Do not use "low-value target" as justification to omit threat analysis; threat models assess technical risk, not attacker motivation.
-- Do not include actual credentials, connection strings, or secret values in the threat model artifact.
-
-## Output Requirements
-
-- **Scope statement**: in-scope and out-of-scope elements, trust boundary definition, threat actor profile.
-- **Asset register**: each asset with confidentiality, integrity, and availability classification.
-- **Entry point and trust boundary map**: all entry points and trust boundary crossings with annotation.
-- **Data flow descriptions**: per-operation flows with trust boundary crossings marked.
-- **Threat register**: Threat ID, STRIDE category, Affected Component, Abuse Case, Impact, Likelihood, Risk Level, Control, Control Owner, Status (Open/Mitigated/Accepted).
-- **Residual risk register**: accepted threats with decision owner and scheduled review date.
-- **Control summary**: required security controls derived from this model, each mapped to an implementation task or existing requirement.
-
-## Acceptance Criteria
-
-- Every trust boundary crossing has at least one associated threat in the register.
-- Every external entry point has at least one Information Disclosure or Tampering threat.
-- All authentication mechanisms have at least one Spoofing threat with a corresponding control.
-- All Critical and High threats have a named mitigation control with an owner.
-- Residual risks are explicitly documented with acceptance decisions and review dates.
-- No threat is marked "mitigated" without a reference to a specific, verifiable, implemented control.
-- The threat register is traceable: each entry references the component or data flow that introduced it.
-
-## Anti-Patterns
-
-- **Checkbox STRIDE**: Applying STRIDE labels without writing concrete abuse cases or tracing attack paths.
-- **Perimeter trust**: Assuming internal network traffic is inherently safe and skipping AuthN/AuthZ threats for service-to-service calls.
-- **Generic mitigations**: Assigning "use encryption" without specifying the algorithm, mode, key management approach, and implementation location.
-- **Risk inflation**: Marking every threat Critical to force prioritization without evidence-based Impact and Likelihood justification.
-- **Scope narrowing**: Reducing scope to exclude the riskiest components in order to produce a cleaner model.
-- **Missing residual risk**: Leaving threats without mitigations in the register without a documented acceptance decision.
-- **Static model**: Treating the threat model as finished once written, rather than scheduling a review when the architecture changes materially.
-
-## Changelog
-
-### {{.Version}} - {{.LastModified}}
-
-- Initial generated DevSecOps SDLC skill.
-`
-
-const architectureReviewerBody = `
-# {{.Title}}
-
-## Purpose
-
-Evaluate architecture decisions, module boundaries, coupling, cohesion, dependency direction, and security-by-design properties before and after implementation. Identify structural risks—circular dependencies, layering violations, unclear ownership, runtime coupling, and missing security controls at the design level—and produce prioritized, actionable recommendations. Distinguish critical structural risks from stylistic preferences.
-
-## When to Use This Skill
-
-- A new service, component, or significant module is being designed.
-- A pull request introduces or changes module boundaries, API contracts, or cross-component dependencies.
-- A refactoring changes the ownership, layering, or coupling of existing components.
-- An ADR is being drafted or reviewed.
-- You are routed here by the central agent via $architecture-reviewer.
-
-## Inputs
-
-- Architecture diagrams, C4 model descriptions, or service maps.
-- Module structure, package layout, and import graphs from the repository.
-- API specifications and interface contracts (OpenAPI, protobuf, internal interfaces).
-- ADRs or design documents describing the intended architecture.
-- Infrastructure description: service topology, deployment model, data stores.
-- Pull request diff if reviewing a concrete change.
-
-## Skill-Specific Operating Model
-
-1. **Establish the intended architecture.** Read available ADRs, design documents, and diagrams. If none exist, reconstruct the intended layering from code structure and ask the team to confirm.
-2. **Analyze module and package boundaries.** Identify each logical boundary and its stated responsibility. Check whether each module has a single clear owner.
-3. **Check dependency direction.** Verify that dependencies flow in the intended direction (e.g., domain does not import infrastructure, presentation does not import persistence). List every violation.
-4. **Detect circular dependencies.** Identify any import cycles or runtime circular dependencies. Classify each as blocking (prevents clean build or test) or architectural smell (solvable with interface inversion).
-5. **Assess coupling and cohesion.** Identify modules with high afferent coupling (many dependents) or high efferent coupling (many dependencies). Assess whether cohesion within each module is logical, sequential, or coincidental.
-6. **Review API contracts.** For each public interface, check whether the contract is explicit (typed, versioned), whether breaking changes are guarded by backward-compatibility mechanisms, and whether consumers are isolated from implementation details.
-7. **Identify runtime coupling.** Check for shared mutable state, synchronous cross-service calls in critical paths, and cascading failure risks. Assess whether circuit breakers, retries, and timeouts are appropriate.
-8. **Evaluate security-by-design properties.** Check whether authentication and authorization are enforced at the correct layer, input validation occurs at trust boundaries, and secrets are isolated from application logic.
-9. **Recommend ADR when needed.** If a decision has broad impact or introduces a new pattern, recommend creating or updating an ADR. Propose the decision question, options considered, and decision rationale.
-10. **Prioritize findings.** Classify findings as: Critical (blocks safe deployment), High (introduces structural debt or security risk), Medium (degrades maintainability), Low (stylistic or minor concern). Provide concrete refactoring recommendations for Critical and High findings.
-
-## Skill-Specific Checklist
-
-- [ ] Intended layering or architectural style is identified and explicitly stated (hexagonal, layered, modular monolith, microservices, event-driven).
-- [ ] All circular dependencies are identified and classified.
-- [ ] Dependency direction violations are listed with the specific offending import or call.
-- [ ] Modules with unclear or overlapping responsibilities are flagged.
-- [ ] High-coupling modules are identified with concrete reasons why coupling is problematic.
-- [ ] Public API contracts are checked for explicitness, versioning, and consumer isolation.
-- [ ] Runtime coupling risks (synchronous chains, shared mutable state) are identified.
-- [ ] AuthN/AuthZ enforcement layer is verified: authentication happens before authorization, authorization happens before business logic.
-- [ ] Input validation occurs at trust boundaries, not deep inside business logic.
-- [ ] Secrets (keys, credentials, tokens) are not embedded in business logic, configuration files committed to VCS, or passed through environment variables without a secrets manager.
-- [ ] Each finding is classified as Critical / High / Medium / Low with reasoning.
-- [ ] An ADR is recommended for any decision that sets a precedent or has broad impact.
-- [ ] Proposed changes to fix Critical and High findings are concrete and specific, not "consider refactoring".
-- [ ] Findings distinguish architectural risks from style preferences—style preferences belong in a separate section or are omitted.
-- [ ] If no issues are found in a category, it is explicitly confirmed as "no issues found" rather than omitted.
-
-## Decision Rules
-
-- If a circular dependency cannot be broken without an interface inversion or a new abstraction layer, recommend the specific interface and where it should be defined.
-- If a module has more than one clearly distinct responsibility, flag it for decomposition only when the responsibilities are independently deployable or testable—otherwise mark it as a coupling risk, not a split recommendation.
-- If an API contract has no version and is consumed by more than one caller, flag it as a breaking-change risk regardless of how stable it appears today.
-- If authentication or authorization enforcement is located anywhere other than the outermost application boundary or a dedicated middleware layer, flag it as a High architectural risk.
-- If an ADR already exists for a decision being reviewed, check whether the implementation conforms to the ADR. Deviations are Critical if they undermine the stated rationale.
-- If a runtime coupling risk exists (synchronous chain, no circuit breaker) in a path that cannot be degraded gracefully, classify it as High and recommend an async alternative or fallback.
-
-## DevSecOps Guardrails
-
-- Do not recommend global refactors in the context of a single PR review; scope recommendations to what the PR introduced or changed, with broader concerns noted separately.
-- Do not conflate security architecture findings with implementation-level code review findings; architectural findings are about design decisions, not specific lines of code.
-- Do not propose an architectural change without acknowledging the migration cost and the risk of the migration itself.
-- Do not mark a design as "secure by design" unless authentication, authorization, input validation, and secrets management are each explicitly addressed at the correct layer.
-- Do not use "best practice" as justification without citing the specific risk that the practice mitigates.
-
-## Output Requirements
-
-- **Architecture summary**: stated or inferred architectural style, key components, and their roles.
-- **Dependency analysis**: dependency direction violations, circular dependencies, and high-coupling modules, each with the specific import path or call.
-- **API contract review**: each public interface assessed for versioning, breaking-change risk, and consumer isolation.
-- **Runtime coupling findings**: synchronous chains, shared state risks, and failure propagation paths.
-- **Security-by-design findings**: AuthN/AuthZ layer, input validation placement, secrets handling.
-- **Prioritized findings table**: Severity, Component, Finding, Impact, Recommended Action.
-- **ADR recommendations**: decision question, options, and recommended rationale for each significant decision.
-
-## Acceptance Criteria
-
-- All circular dependencies are identified or explicitly confirmed absent.
-- Dependency direction violations are listed with specific source and target.
-- AuthN/AuthZ enforcement layer is assessed and either confirmed correct or flagged.
-- Each finding has a severity (Critical/High/Medium/Low) with written justification.
-- Critical and High findings include a concrete, scoped recommendation.
-- ADR recommendations are provided for any decision that sets a new architectural precedent.
-- Style preferences are separated from structural risks in the output.
-
-## Anti-Patterns
-
-- **Style-as-risk**: Reporting naming conventions or formatting as architectural risks instead of structural problems.
-- **Rewrite recommendation**: Recommending a full rewrite without scoping to the specific problem introduced by the change under review.
-- **Missing prioritization**: Listing 20 findings at equal severity, making it impossible to triage.
-- **Abstract mitigations**: Recommending "better abstractions" or "cleaner interfaces" without specifying what interface, where, and why.
-- **Ignored ADRs**: Reviewing code against personal preferences while ignoring documented ADRs that explain the design rationale.
-- **Security as afterthought**: Reviewing module boundaries and coupling without addressing whether security controls are architecturally sound.
-- **Finding inflation**: Including low-severity style findings in the same section as Critical structural risks.
-
-## Changelog
-
-### {{.Version}} - {{.LastModified}}
-
-- Initial generated DevSecOps SDLC skill.
-`
-
-const secureDesignReviewerBody = `
-# {{.Title}}
-
-## Purpose
-
-Review the security design of features, services, and APIs before implementation to identify missing or inadequate security controls at the design level. Evaluate authentication, authorization, session management, secrets handling, input/output boundaries, data classification, encryption, audit logging, and defense-in-depth before a single line of implementation code is written. Produce concrete design-change recommendations, not implementation patches.
-
-## When to Use This Skill
-
-- A new feature or service is entering the design phase and touches authentication, authorization, data storage, external integrations, or user-facing functionality.
-- An existing service is adding a new API endpoint, role, or data access pattern.
-- A design document or RFC has been written and needs a security review before sign-off.
-- $threat-modeler identified threats that require design-level controls.
-- You are routed here by the central agent via $secure-design-reviewer.
-
-## Inputs
-
-- Design document, RFC, or architecture description.
-- Data flow diagrams, sequence diagrams, or API specifications.
-- Threat model output from $threat-modeler, if available.
-- Existing authentication and authorization model for the system.
-- Data classification policy or data dictionary.
-- Compliance or regulatory requirements that apply to this feature.
-
-## Skill-Specific Operating Model
-
-1. **Understand the design intent.** Read the design document, API specification, or change description. State the security-relevant properties the design claims to provide.
-2. **Evaluate authentication design.** Check that every entry point has a defined authentication mechanism. Verify that authentication is enforced before any business logic executes.
-3. **Evaluate authorization design.** Check that every operation has a defined authorization rule. Verify that the rule is expressed in terms of principal, resource, and action, not just role names.
-4. **Evaluate session and token management.** Check token lifetime, rotation policy, revocation mechanism, binding (IP, device fingerprint, or none), and storage location.
-5. **Evaluate secrets handling.** Check that secrets are never embedded in code, configuration files, or environment variables without a secrets manager. Verify key rotation and least-access policies.
-6. **Evaluate input and output boundaries.** Check that validation occurs at every trust boundary entry. Check that output encoding is appropriate for every rendering context (HTML, JSON, SQL, shell, etc.).
-7. **Evaluate data classification and protection.** Verify that every data element is classified and that the protection controls (encryption, access restriction, masking) match the classification.
-8. **Evaluate encryption design.** Check algorithm selection, key management, certificate validation, and whether encryption is applied to data at rest, in transit, and in use where required.
-9. **Evaluate audit logging design.** Check that security-relevant events (login, logout, access denied, privilege change, data export) are logged with sufficient detail for forensic reconstruction, without logging sensitive data.
-10. **Evaluate least-privilege and defense-in-depth.** Check that each service, process, and user has only the permissions it needs. Check that the design has multiple independent control layers rather than relying on a single control.
-11. **Identify secure-default gaps.** Check whether the design defaults to secure behavior (deny by default, opt-in access, explicit allowlists) or relies on administrators to apply hardening after deployment.
-12. **Produce design-change recommendations.** For each gap, propose a specific design change: which component is responsible, what mechanism to use, and what the expected security property is.
-
-## Skill-Specific Checklist
-
-- [ ] Every entry point has an explicitly named authentication mechanism.
-- [ ] Authentication enforcement precedes all business logic in the request flow.
-- [ ] Every operation has an explicit authorization rule (principal, resource, action).
-- [ ] Authorization rules are enforced at the service layer, not only at the API gateway or load balancer.
-- [ ] Token lifetime and revocation mechanism are specified.
-- [ ] Session tokens are not stored in localStorage or URLs where they are accessible to JavaScript or logged.
-- [ ] Secrets are never embedded in code or config files committed to VCS.
-- [ ] A secrets manager or vault is named and the access-control policy is described.
-- [ ] Input validation is specified at every trust boundary, with the validation mechanism and failure behavior named.
-- [ ] Output encoding is specified for every rendering context.
-- [ ] Every data element is classified and protection controls match the classification.
-- [ ] Encryption algorithms and modes are explicitly named (e.g., AES-256-GCM, TLS 1.2+, not just "encrypted").
-- [ ] Audit log events are listed with the fields to be captured and what must not be captured.
-- [ ] The design defaults to deny-by-default for access control decisions.
-- [ ] Defense-in-depth: at least two independent control layers exist for any Critical asset or operation.
-
-## Decision Rules
-
-- If an entry point has no defined authentication mechanism, the design is incomplete; do not approve it until authentication is specified.
-- If authorization is implemented only at the API gateway or perimeter, flag it as a High design risk; internal services can be accessed directly if the perimeter is bypassed.
-- If token revocation is not specified, flag it as a High risk; stolen tokens must have a defined invalidation path.
-- If a secret is referenced in a design document as an environment variable without a named secrets manager, flag it as a Medium risk and specify the required change.
-- If encryption is mentioned without naming the algorithm and key management approach, mark the encryption control as "underspecified" and return it for revision.
-- If an audit log design includes user-entered fields or PII without explicit redaction, flag it as a privacy and forensics risk.
-- If the design relies on a single control layer for a Critical asset, recommend a second independent control with justification.
-
-## DevSecOps Guardrails
-
-- Do not approve a design that has no authentication mechanism for any non-public entry point.
-- Do not accept "TLS" as a complete encryption specification; require algorithm, version minimum, and certificate validation behavior.
-- Do not accept "admin can configure security later" as a design decision; security must be on by default.
-- Do not conflate authentication and authorization; verify both independently for every operation.
-- Do not accept "same as the existing service" as an authorization specification without confirming the existing service's model is documented and correct.
-- Do not include actual credentials, keys, or sensitive tokens in design review artifacts.
-
-## Output Requirements
-
-- **Authentication assessment**: each entry point with its authentication mechanism, enforcement layer, and gaps.
-- **Authorization assessment**: each operation with its authorization rule, enforcement layer, and gaps.
-- **Session and token assessment**: lifetime, rotation, revocation, binding, and storage with gaps.
-- **Secrets handling assessment**: storage mechanism, access policy, rotation plan, and gaps.
-- **Input/output boundary assessment**: validation mechanism and encoding approach per trust boundary and rendering context.
-- **Data classification and protection assessment**: data elements, classification, protection controls, and gaps.
-- **Encryption assessment**: algorithm, key management, and coverage with gaps.
-- **Audit logging assessment**: logged events, captured fields, redaction requirements, and gaps.
-- **Prioritized design-change recommendations**: Severity, Component, Gap, Recommended Design Change.
-
-## Acceptance Criteria
-
-- Every entry point has a named, specified authentication mechanism.
-- Every operation has an explicit, documented authorization rule.
-- Token management (lifetime, revocation, storage) is fully specified.
-- All secrets have a named storage mechanism with an access-control policy.
-- All data elements are classified and protection controls are matched to classification.
-- Encryption specifications name algorithm, mode, and key management—not just "encrypted".
-- Audit log design lists required event types, fields, and explicit redaction rules.
-- All Critical and High findings have concrete design-change recommendations.
-
-## Anti-Patterns
-
-- **Perimeter-only authorization**: Enforcing authorization only at the API gateway and assuming internal calls are trusted.
-- **Algorithm vagueness**: Specifying "we use encryption" without naming the algorithm, mode, key length, or key management approach.
-- **Security opt-in defaults**: Designing so that security controls must be explicitly enabled by operators rather than being active by default.
-- **Shared secret sprawl**: Using the same secret across multiple services or environments without rotation or per-service isolation.
-- **Audit log PII leakage**: Including user-entered data, passwords, tokens, or PII fields in log entries without explicit redaction.
-- **Authentication-authorization confusion**: Treating a valid authentication token as proof of authorization for all operations.
-- **Single-layer defense**: Relying on a single control (e.g., WAF) as the only protection for a Critical asset.
-
-## Changelog
-
-### {{.Version}} - {{.LastModified}}
-
-- Initial generated DevSecOps SDLC skill.
-`
-
-const safeImplementerBody = `
-# {{.Title}}
-
-## Purpose
-
-Implement requested changes safely, minimally, and traceably. Make only what was asked for—no opportunistic refactoring, no unrequested API changes, no silent behavior changes. Every change must be testable, rollback-capable, and accompanied by updated tests. The goal is a diff that a reviewer can understand in full, a test suite that fails before the change and passes after, and a rollback path that is stated explicitly.
-
-## When to Use This Skill
-
-- A feature, bug fix, configuration change, or infrastructure update needs to be implemented.
-- An accepted design from $architecture-reviewer or $secure-design-reviewer is ready for implementation.
-- A failing test or regression needs to be fixed without introducing new risk.
-- You are routed here by the central agent via $safe-implementer.
-
-## Inputs
-
-- Accepted requirements and acceptance criteria from $requirements-analyst.
-- Design approval from $secure-design-reviewer, if applicable.
-- The failing test, bug report, or feature specification that defines the change.
-- Repository context: existing code structure, conventions, test framework, CI configuration.
-- Rollback constraints: deployment model, migration reversibility, feature flag availability.
-
-## Skill-Specific Operating Model
-
-1. **Read the acceptance criteria.** State each acceptance criterion that the implementation must satisfy. Do not begin coding until every criterion is understood.
-2. **Identify the minimal change surface.** List the files and interfaces that must change to satisfy the acceptance criteria. Prefer modifying existing code over introducing new abstractions unless the design requires them.
-3. **Write or update failing tests first.** Before implementing, write or update tests that fail against the current code and will pass after the correct implementation. This defines the change boundary.
-4. **Implement only what is tested.** Make the minimal code change that causes the failing tests to pass without breaking existing tests. Do not extend scope beyond what the tests define.
-5. **Validate input at every trust boundary.** Verify that all inputs entering the changed code from outside the trust boundary are validated before use. Reject invalid inputs with appropriate error codes and without leaking internal state.
-6. **Handle errors explicitly.** Wrap errors with context. Do not swallow errors silently. Do not expose internal error details in external-facing responses.
-7. **Verify API compatibility.** If the change touches a public or internal API, confirm that existing callers are unaffected. If a breaking change is unavoidable and was explicitly approved, version the API.
-8. **Check for side effects.** Verify that the implementation does not introduce global state mutation, shared mutable state between concurrent requests, or unexpected behavior on retries.
-9. **State the rollback path.** For every change that alters data schema, configuration, or deployment behavior, state how to revert the change and whether reversion requires downtime.
-10. **Produce a clean, minimal diff.** Separate functional changes from formatting or cleanup changes. Do not mix unrelated fixes in a single commit.
-
-## Skill-Specific Checklist
-
-- [ ] Every acceptance criterion is listed and each has a corresponding test that fails before the change.
-- [ ] The change surface is explicitly minimized: no opportunistic refactoring, no unrequested API additions.
-- [ ] All new code paths have corresponding tests (unit, integration, or both as appropriate).
-- [ ] All inputs from external trust boundaries are validated before use, with explicit reject behavior for invalid input.
-- [ ] Errors are wrapped with context, not swallowed or propagated raw.
-- [ ] Error responses to external callers do not expose stack traces, internal paths, database errors, or secret values.
-- [ ] Public and internal API contracts are unchanged unless a breaking change was explicitly requested and approved.
-- [ ] No new global state, singleton state, or shared mutable state is introduced.
-- [ ] No secrets, tokens, passwords, or environment-specific values are hardcoded in the implementation.
-- [ ] The rollback path for data migrations, schema changes, and configuration changes is explicitly stated.
-- [ ] The diff separates functional changes from formatting or whitespace changes.
-- [ ] No test mocks bypass real validation logic in a way that would hide a regression in production.
-- [ ] The implementation compiles, all tests pass, and linting is clean before delivery.
-- [ ] If a feature flag was used to gate the change, the flag name and the expected enabled/disabled behavior are documented.
-- [ ] Acceptance criteria are verified one by one after implementation: each criterion is either confirmed met or listed as a known gap.
-
-## Decision Rules
-
-- If an acceptance criterion cannot be satisfied without modifying an unrelated component, stop and flag it as a scope change requiring approval before proceeding.
-- If implementing a requirement requires a breaking API change that was not approved, propose the change as a version bump and wait for explicit approval.
-- If a data migration is required, implement it as a separate, independently reversible step from the application change.
-- If a test cannot be written without mocking a real security control (e.g., actual token validation), use integration tests against a real implementation rather than a mock that bypasses the control.
-- If a feature flag is used, define both the enabled and disabled code paths explicitly and test both.
-- If the implementation introduces a new dependency, flag it to $dependency-risk-reviewer before merging.
-- If the rollback path requires data deletion or schema downgrade, document the risk explicitly and require explicit stakeholder approval before deployment.
-
-## DevSecOps Guardrails
-
-- Do not implement features beyond the stated acceptance criteria; unrequested behavior is untested behavior.
-- Do not hardcode secrets, API keys, credentials, or environment-specific values in any file committed to version control.
-- Do not expose internal error details, stack traces, or database errors in API responses accessible to external callers.
-- Do not introduce global mutable state or request-shared mutable state without explicit concurrency controls.
-- Do not skip validation at external trust boundaries, even when the calling service is internal and assumed trusted.
-- Do not deliver an implementation where the test suite cannot run in CI without manual environment setup.
-- Do not treat "tests pass locally" as equivalent to "tests pass in CI"; environment-specific tests are a deployment risk.
-
-## Output Requirements
-
-- **Change summary**: list of files changed, their purpose in the change, and the acceptance criterion each addresses.
-- **Test coverage evidence**: list of new or updated tests with the acceptance criterion each validates.
-- **API compatibility statement**: confirmation that existing callers are unaffected, or a description of the version change made.
-- **Rollback path**: how to revert each schema change, configuration change, or deployment change, and whether reversion requires downtime.
-- **Known gaps**: acceptance criteria not fully met, with reason and proposed follow-up.
-- **Security check confirmation**: validation behavior, error handling, secret handling, and global-state check results.
-
-## Acceptance Criteria
-
-- Every acceptance criterion has a corresponding test that fails before and passes after the change.
-- The diff contains only changes necessary to satisfy the stated acceptance criteria.
-- All external trust boundary inputs are validated with defined reject behavior.
-- No secrets, tokens, or credentials appear in any committed file.
-- The rollback path for every migration or deployment change is explicitly stated.
-- All existing tests continue to pass after the implementation.
-- The implementation is deliverable to CI without manual environment configuration.
-
-## Anti-Patterns
-
-- **Scope creep commits**: Fixing unrelated issues, renaming variables, or reformatting code in the same commit as a functional change.
-- **Silent error swallowing**: Catching an error, logging nothing, and returning a default value without the caller knowing the operation failed.
-- **Security-through-obscurity input handling**: Relying on callers to send well-formed input and omitting validation in the implementation.
-- **Test-bypassing mocks**: Mocking authentication, authorization, or validation logic in tests in a way that the mock would pass even if the production implementation is wrong.
-- **Rollback by prayer**: Deploying a schema migration without a documented, tested rollback path.
-- **Feature-flag abandonment**: Implementing a feature behind a flag without documenting the enabled/disabled behavior or scheduling flag removal.
-- **Hardcoded configuration**: Embedding environment-specific URLs, secrets, or credentials in code or configuration files.
-
-## Changelog
-
-### {{.Version}} - {{.LastModified}}
-
-- Initial generated DevSecOps SDLC skill.
-`
-
-const secureCodeReviewerBody = `
-# {{.Title}}
-
-## Purpose
-
-Review code changes for security risks, maintainability problems, and policy violations before merge. Identify injection vulnerabilities, authentication and authorization flaws, secrets exposure, insecure error handling, unsafe logging, race conditions, and supply-chain risks with file and function-level precision. Produce findings at a severity level that allows a reviewer to triage immediately: Blocker, High, Medium, Low, or Informational.
-
-## When to Use This Skill
-
-- A pull request or merge request is ready for security review.
-- A change touches authentication, authorization, input handling, cryptography, secrets, external calls, or persistence.
-- A new dependency has been added or an existing dependency upgraded.
-- A security finding from a prior review is being verified as resolved.
-- You are routed here by the central agent via $secure-code-reviewer.
-
-## Inputs
-
-- The pull request diff or the set of changed files.
-- The full file context for each changed function or class, not just the diff lines.
-- Test files covering the changed code.
-- Security requirements or threat model from earlier SDLC stages, if available.
-- CI pipeline results: SAST output, linting results, test results.
-
-## Skill-Specific Operating Model
-
-1. **Read the full context, not only the diff.** For each changed function or class, read the surrounding code to understand the trust model, data flow, and caller assumptions.
-2. **Identify injection risks.** Check every location where external input reaches a SQL query, shell command, file path, template, LDAP query, XML parser, or deserializer.
-3. **Check authentication and authorization.** Verify that every protected operation checks authentication before authorization, and authorization before business logic. Verify that authorization is enforced on the server, not in the client.
-4. **Check insecure deserialization.** Identify any location that deserializes untrusted data (JSON, XML, protobuf, binary formats) without schema validation or type restriction.
-5. **Check path traversal and SSRF.** Identify locations where user-controlled input determines a file path or an outbound HTTP/DNS target.
-6. **Check XSS and CSRF.** For web-facing code, verify output encoding in every rendering context and verify CSRF token presence for state-changing operations.
-7. **Check secret exposure.** Scan for hardcoded secrets, API keys, tokens, passwords, and connection strings in code and configuration. Scan for secrets in log statements, error messages, and API responses.
-8. **Check unsafe logging.** Verify that log statements do not include passwords, tokens, session IDs, PII, or full request/response bodies containing sensitive data.
-9. **Check error handling.** Verify that errors are wrapped with context, not swallowed, and that internal details (stack traces, DB errors, file paths) do not reach external API responses.
-10. **Check cryptography.** Identify use of deprecated algorithms (MD5, SHA-1, DES, RC4), weak key lengths, static IVs, or home-grown cryptographic constructs.
-11. **Check race conditions and concurrency.** Identify shared mutable state, time-of-check to time-of-use (TOCTOU) races, and non-atomic read-modify-write operations.
-12. **Check test coverage.** Verify that security-relevant paths (rejection of invalid input, authorization denial, error handling) have explicit test coverage.
-13. **Produce a severity-classified finding report.** For each finding: file name, function name, line range, severity, description, and a specific remediation recommendation.
-
-## Skill-Specific Checklist
-
-- [ ] Every location where external input reaches a SQL query, shell command, or file path is checked for injection.
-- [ ] Every protected endpoint checks authentication before authorization, and authorization before business logic.
-- [ ] Authorization is enforced on the server; client-side checks are noted as supplemental only.
-- [ ] Deserialization of untrusted data uses explicit schema validation or type allowlists.
-- [ ] File paths derived from user input are canonicalized and checked against an allowlist of permitted directories.
-- [ ] Outbound HTTP/DNS targets are validated against an allowlist or restricted to known safe domains.
-- [ ] XSS: output encoding is present and correct for every rendering context (HTML body, HTML attribute, JSON, JavaScript context).
-- [ ] CSRF: state-changing operations require a validated, unpredictable, per-session token.
-- [ ] No secrets, API keys, tokens, or passwords appear in any committed file or log statement.
-- [ ] Log statements do not include PII, session identifiers, or full request bodies containing sensitive data.
-- [ ] Errors are wrapped with context; no bare error returns that lose diagnostic information.
-- [ ] External API responses do not include stack traces, internal file paths, or database error details.
-- [ ] No deprecated cryptographic algorithms (MD5, SHA-1, DES, RC4) are used for security purposes.
-- [ ] No static, hardcoded, or predictable IVs or nonces are used with symmetric encryption.
-- [ ] Shared mutable state accessed from multiple goroutines, threads, or requests is protected by explicit synchronization.
-- [ ] Security-relevant paths (rejection, denial, error) have explicit test coverage.
-
-## Decision Rules
-
-- Classify a finding as Blocker if it would allow an unauthenticated or unauthorized attacker to read, modify, or delete data, or to execute code on the server.
-- Classify a finding as High if it enables authenticated attackers to escalate privileges, access other users' data, or exfiltrate secrets.
-- Classify a finding as Medium if it increases attack surface, degrades auditability, or violates a security policy without direct immediate exploitability.
-- Classify a finding as Low if it represents a defense-in-depth gap or a code quality issue with indirect security implications.
-- If a Blocker or High finding is present, the pull request must not be merged until the finding is resolved or accepted with explicit, documented risk acceptance by a named owner.
-- If a finding involves a secret already exposed in a committed file, treat it as Blocker and recommend immediate rotation, even if the file is scheduled for deletion.
-- Do not mark a finding as "not exploitable" based on upstream validation without verifying that the upstream validation is always enforced and cannot be bypassed.
-
-## DevSecOps Guardrails
-
-- Do not approve a pull request with a Blocker finding without explicit, documented risk acceptance by a named security owner.
-- Do not accept "input is validated upstream" without verifying that the upstream validation is unconditional and covers all callers.
-- Do not dismiss a secret exposure as "it's a test key" without confirming the key has no permissions in any production or staging environment.
-- Do not review only the changed lines; always read the full function or class context to understand the security model.
-- Do not accept "the test passes" as evidence that a security control is implemented correctly; verify the test actually exercises the rejection path.
-- Do not report generic findings ("validate input") without citing the specific file, function, and line where the risk exists.
-
-## Output Requirements
-
-- **Findings table**: Severity (Blocker/High/Medium/Low/Info), File, Function, Line Range, Description, Remediation.
-- **Injection risk summary**: list of all locations where external input reaches sensitive sinks, with finding status.
-- **Authentication and authorization assessment**: each protected operation assessed for correct enforcement order and server-side enforcement.
-- **Secrets scan result**: confirmation that no hardcoded secrets are present, or list of found secrets with remediation.
-- **Logging and error handling assessment**: log statements and error paths assessed for sensitive data exposure.
-- **Cryptography assessment**: algorithms and key management assessed with any deprecated or weak usage flagged.
-- **Test coverage gap analysis**: security-relevant paths without test coverage.
-- **Merge recommendation**: Approve / Request Changes / Block, with explicit reasoning.
-
-## Acceptance Criteria
-
-- All Blocker and High findings are either resolved with a code change or accepted with a documented, named risk owner.
-- Every finding includes a specific file, function, and line reference—no generic findings.
-- No hardcoded secrets, API keys, tokens, or passwords appear in any committed file.
-- Every protected operation has server-side authentication and authorization enforcement verified.
-- Deprecated cryptographic algorithms are not used for any security purpose.
-- Security-relevant rejection paths have explicit test coverage.
-
-## Anti-Patterns
-
-- **Diff-only review**: Reading only changed lines without understanding the full function's trust model and caller assumptions.
-- **Generic findings**: Reporting "SQL injection risk" without naming the specific file, function, and parameter.
-- **Test-pass acceptance**: Treating passing tests as proof of security without verifying that the tests exercise rejection paths.
-- **Upstream validation trust**: Accepting that input is safe because "it was validated somewhere else" without verifying the upstream control is unconditional.
-- **Severity inflation**: Classifying every finding as Blocker to force attention, making the report impossible to triage.
-- **False-negative test key dismissal**: Dismissing a hardcoded key as "test-only" without checking whether the key has production permissions.
-- **Missing remediation**: Reporting a finding without a specific, actionable remediation recommendation.
-
-## Changelog
-
-### {{.Version}} - {{.LastModified}}
-
-- Initial generated DevSecOps SDLC skill.
-`
-
-const testStrategistBody = `
-# {{.Title}}
-
-## Purpose
-
-Design and document a comprehensive test strategy for a feature, service, or change. Identify the required test types, coverage targets, test data requirements, CI gate configuration, and known coverage risks. The strategy must cover positive, negative, security, and edge-case paths. Output is a testable plan that a developer can execute and a CI pipeline can enforce.
-
-## When to Use This Skill
-
-- A new feature or service is entering implementation and a test plan is needed.
-- A significant refactoring requires assessing which existing tests provide adequate coverage and which need updating.
-- Acceptance criteria from $requirements-analyst need to be mapped to specific test types and locations.
-- CI pipelines lack appropriate test gates and a strategy for adding them is needed.
-- You are routed here by the central agent via $test-strategist.
-
-## Inputs
-
-- Acceptance criteria and requirements from $requirements-analyst.
-- Architecture description and component boundaries.
-- Existing test suite structure, coverage reports, and CI pipeline configuration.
-- API contracts and interface specifications.
-- Security requirements and threat model from $threat-modeler, if available.
-- Constraints: test infrastructure, environments available, time budget.
-
-## Skill-Specific Operating Model
-
-1. **Map acceptance criteria to test types.** For each acceptance criterion, identify whether it requires a unit test, integration test, contract test, end-to-end test, or security test. State why.
-2. **Define the test pyramid target.** State the target distribution: unit tests at the base (fast, isolated), integration tests in the middle (real dependencies, scoped), E2E and security tests at the top (slow, full-stack). Justify deviations.
-3. **Identify unit test scope.** For each changed function or module, identify the pure logic paths, boundary conditions, error cases, and security-relevant inputs that require unit tests.
-4. **Identify integration test scope.** For each integration point (database, external service, message queue, cache), identify the contracts to test, the failure modes to simulate, and the test data required.
-5. **Identify contract tests.** For each API consumed or produced, identify whether a consumer-driven contract test exists and whether it needs to be created or updated.
-6. **Identify security tests.** For each trust boundary, identify the security validation tests: authentication rejection, authorization denial, injection rejection, rate limiting, and boundary enforcement.
-7. **Identify negative and edge-case tests.** For each requirement, write the negative: what must NOT happen. For each data input, identify boundary values, null/empty inputs, and malformed inputs.
-8. **Define test data requirements.** State what test data is needed, whether it can be synthetic, whether PII must be masked, and whether it must match production schemas.
-9. **Define CI gate configuration.** State the minimum coverage threshold, which test suites must pass before merge, and which suites must pass before deployment.
-10. **Identify coverage risks.** List paths that cannot be adequately unit-tested due to external dependencies, flaky environment behavior, or infrastructure complexity. Recommend mitigations.
-
-## Skill-Specific Checklist
-
-- [ ] Every Must-have acceptance criterion has at least one test mapped to it by type (unit, integration, contract, E2E, security).
-- [ ] Positive paths (happy paths) are covered by at least unit and integration tests.
-- [ ] Negative paths (rejection, denial, error) are covered by explicit tests—not only inferred from passing positive tests.
-- [ ] Security validation tests cover: authentication rejection (invalid/missing token), authorization denial (insufficient permission), and input validation rejection (malformed, oversized, injected input).
-- [ ] Contract tests exist or are planned for every external API consumed or produced.
-- [ ] Test data requirements are defined: data source, schema, PII masking, and refresh strategy.
-- [ ] Flaky test risks are identified and mitigation strategy is stated (retry, quarantine, synthetic data).
-- [ ] CI gate configuration is specified: coverage threshold, required test suites, and gate position (pre-merge vs. pre-deploy).
-- [ ] Tests do not use shared mutable state between test cases; each test is independent and idempotent.
-- [ ] Test mocks accurately reflect the real behavior of the mocked component, including error paths.
-- [ ] Tests are deterministic: no dependency on execution order, wall-clock time, or random values without seeding.
-- [ ] Security tests verify rejection paths, not only acceptance paths.
-- [ ] Edge cases include: null/empty inputs, maximum length inputs, Unicode boundary characters, concurrent access scenarios, and retry behavior.
-- [ ] Coverage gaps (paths that cannot be tested) are documented with the reason and a risk assessment.
-- [ ] The strategy distinguishes Must-test (blocks merge) from Should-test (recommended) from Could-test (nice-to-have).
-
-## Decision Rules
-
-- If a security-relevant path has no explicit rejection test, flag it as a test coverage gap and block merge until the test is added.
-- If a contract test for an external API does not exist and the API is consumed by multiple services, recommend creating a consumer-driven contract test before the change ships.
-- If test data requires PII, recommend synthetic data generation and document the masking approach; do not copy production data without explicit approval and data classification review.
-- If a test is marked flaky due to external environment dependency, recommend either fixing the root cause or quarantining the test from the blocking gate until it is fixed.
-- If coverage drops below the project threshold, the change must not merge until the gap is addressed or the threshold reduction is explicitly approved.
-- If the test requires mocking an authentication or authorization mechanism, use a real implementation in an integration test rather than a mock that would pass even if the production implementation is broken.
-
-## DevSecOps Guardrails
-
-- Do not use production data in test environments without an explicit data classification review and masking policy.
-- Do not treat test coverage percentage as the only quality metric; coverage of rejection paths and security-relevant inputs matters more than line coverage.
-- Do not allow tests that bypass real authentication or authorization implementations to serve as evidence that the controls work.
-- Do not mark a test suite as green if flaky tests are being suppressed rather than fixed; document them as known gaps.
-- Do not skip contract tests for external APIs under time pressure; contract drift is a production incident waiting to happen.
-- Do not share test state between tests in ways that create order dependencies or mask failures in isolation.
-
-## Output Requirements
-
-- **Test type mapping**: table mapping each acceptance criterion to its required test type(s) and the location where the test belongs.
-- **Test pyramid target**: target distribution with justification for any deviation.
-- **Unit test scope**: functions and logic paths requiring unit tests, with boundary conditions and error cases listed.
-- **Integration test scope**: integration points to test, failure modes to simulate, and test data required.
-- **Contract test plan**: APIs to test, test framework, and creation/update schedule.
-- **Security test plan**: trust boundary validation tests, with specific scenarios per boundary.
-- **Negative and edge-case matrix**: for each requirement, the negative case and edge cases to cover.
-- **CI gate specification**: coverage threshold, required suites, gate positions.
-- **Coverage risk register**: paths that cannot be adequately tested with reason and risk assessment.
-
-## Acceptance Criteria
-
-- Every Must-have acceptance criterion has at least one test mapped to a specific type and location.
-- Negative paths (rejection, denial, error) have explicit test coverage.
-- Security validation tests cover authentication rejection, authorization denial, and input validation rejection for every trust boundary.
-- Contract tests exist or are explicitly scheduled for every external API consumed or produced.
-- CI gate configuration is specified with minimum coverage threshold and required test suites.
-- Test data requirements are defined with PII handling stated.
-- Coverage gaps are documented with risk assessment.
-
-## Anti-Patterns
-
-- **Happy-path-only testing**: Writing only tests that verify the system does the right thing when inputs are valid, ignoring rejection, failure, and abuse scenarios.
-- **Coverage theater**: Achieving line coverage targets with trivial tests that do not verify behavior.
-- **Mock-as-implementation**: Writing mocks that return expected values unconditionally, making the test pass even when the production implementation is wrong.
-- **Shared test state**: Using class-level or module-level mutable state that causes tests to pass or fail depending on execution order.
-- **PII in test data**: Using real or copied production data in tests without masking, creating a data breach risk in non-production environments.
-- **Flaky test acceptance**: Merging with known flaky tests in the blocking gate rather than fixing or quarantining them.
-- **Test-after-the-fact**: Writing tests only after a bug is found in production rather than as part of the feature development cycle.
-
-## Changelog
-
-### {{.Version}} - {{.LastModified}}
-
-- Initial generated DevSecOps SDLC skill.
-`

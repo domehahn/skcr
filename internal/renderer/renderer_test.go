@@ -99,6 +99,20 @@ func TestRenderFilesAllPlatformsAndContent(t *testing.T) {
 	if strings.Contains(paths["skills/security-reviewer/SKILL.md"], "slash-command: enabled") == false {
 		t.Fatal("expected gitlab skill slash metadata by default")
 	}
+	arch := paths[".agents/skills/architecture-reviewer/SKILL.md"]
+	for _, want := range []string{
+		"## Skill-Specific Review Scope",
+		"## Skill-Specific Checklist",
+		"Module boundaries, service boundaries",
+		"## Decision Rules",
+		"## Finding Categories",
+		"## Severity Guidance",
+		"## Anti-Patterns",
+	} {
+		if !strings.Contains(arch, want) {
+			t.Fatalf("expected rendered architecture-reviewer skill to include %q", want)
+		}
+	}
 
 	resolved.GitLabDuo = map[string]any{"slash_command": false}
 	files2, err := RenderFiles(cfg, resolved)
@@ -310,6 +324,9 @@ func TestRenderFilesPerPlatformAddErrorPaths(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
+			}
+			if c.brokenTpl == "shared/SKILL.md.j2" {
+				target.Skills = []string{"custom-reviewer"}
 			}
 
 			if _, err := RenderFiles(cfg, target); err == nil {

@@ -2,6 +2,10 @@
 
 `skcr` is a Go CLI for creating versioned AI agent skill structures and rendering agentic project and platform files across multiple agent platforms.
 
+## Purpose
+
+This repository contains versioned Agent Skills and the `skcr` CLI used to scaffold, render, sync, validate, and package those skills across Codex, GitLab Duo, Claude Code, GitHub Copilot, OpenHands, OpenCode, Ollama, Cursor, Roo Code, Kiro, Junie, Gemini CLI, Windsurf, and other agent platforms.
+
 ```text
 skcr  = init / add / remove / rename / list / bake / sync / status / doctor / export / validate / clean
 skpm  = validate / version / package / publish / install / update / lock / verify
@@ -70,6 +74,42 @@ All platform directories receive the complete scaffold. `.agents/skills/` is the
 
 Platform-specific instruction files (AGENTS.md, CLAUDE.md, etc.) are tracked in `.agentic-template.lock` and managed by `skcr bake`.
 
+## Repository Structure
+
+- `.agents/skills/` contains canonical skill sources for this repository.
+- `skills/` contains the GitLab Duo platform copy generated or synchronized from `.agents/skills/`.
+- `.claude/skills/`, `.github/skills/`, `.opencode/skills/`, `.openhands/skills/`, `.ollama/skills/`, `.cursor/skills/`, `.roo/skills/`, `.kiro/skills/`, `.junie/skills/`, `.gemini/skills/`, and `.windsurf/skills/` contain platform-specific synchronized copies.
+- `agentic.bake.yaml` defines platform rendering and governance rules.
+- `AGENTS.md` defines agent routing and usage rules.
+- `docs/skill-content-readiness.md` defines when a skill is framework-ready versus content-ready.
+
+## Skill Authoring Rules
+
+- Every skill must contain complete YAML frontmatter.
+- Every skill must contain a `## Changelog` section.
+- Every skill must contain skill-specific checklists, decision rules, acceptance criteria, and output requirements.
+- Generic copy-paste skill bodies are not production-ready.
+- Edit canonical skill content in `.agents/skills/<name>/SKILL.md`, then run `skcr sync`.
+- Changes must go through merge requests.
+- Security-sensitive changes require review.
+
+## Production Readiness
+
+A skill is production-ready only when it has:
+
+- complete versioning metadata,
+- validated platform compatibility from the central compatibility matrix,
+- concrete operating model,
+- concrete checklist,
+- concrete acceptance criteria,
+- changelog,
+- security guardrails,
+- clear output requirements.
+
+## Platform Compatibility
+
+Built-in production skills use concrete `min_platform_version` values from `internal/platforms/compatibility.go`. `unknown` is reserved for incomplete custom metadata and should be treated as a validation warning, not as a production-ready compatibility claim.
+
 ## Supported platforms
 
 `skcr` recognises all platforms from the [agentskills.io](https://agentskills.io) open standard.
@@ -78,6 +118,7 @@ Platform-specific instruction files (AGENTS.md, CLAUDE.md, etc.) are tracked in 
 
 | Platform | Alias(es) | Skill directory |
 | --- | --- | --- |
+| `gitlab-duo` | `gitlab` | `skills/` |
 | `claude-code` | `claude` | `.claude/skills/` |
 | `github-copilot` | `copilot`, `github` | `.github/skills/` |
 | `cursor` | | `.cursor/skills/` |
@@ -86,8 +127,11 @@ Platform-specific instruction files (AGENTS.md, CLAUDE.md, etc.) are tracked in 
 | `roo-code` | `roo` | `.roo/skills/` |
 | `kiro` | | `.kiro/skills/` |
 | `opencode` | | `.opencode/skills/` |
+| `openhands` | | `.openhands/skills/` |
+| `ollama` | | `.ollama/skills/` |
+| `windsurf` | | `.windsurf/skills/` |
 
-**All other platforms** (including `codex`, `gitlab-duo`, `windsurf`, `openhands`, `ollama`, `amp`, `goose`, `cursor`, `trae`, and 30+ more) use `.agents/skills/` as the universal fallback.
+**All other platforms** (including `codex`, `amp`, `goose`, `trae`, and 30+ more) use `.agents/skills/` as the universal fallback.
 
 Full platform list: `sklib/spec/platform.go`.
 

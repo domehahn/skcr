@@ -5,9 +5,11 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	"github.com/domehahn/skcr/internal/catalog"
 	"github.com/domehahn/skcr/internal/models"
+	"github.com/domehahn/skcr/internal/scaffold"
 	"github.com/flosch/pongo2/v6"
 )
 
@@ -146,7 +148,36 @@ func RenderFilesWithOptions(config *models.BakeConfig, target *models.TargetConf
 	files := []models.RenderedFile{}
 	platformDocs := []map[string]any{}
 
-	add := func(platform, template, destination string, extra map[string]any) error {
+	var add func(platform, template, destination string, extra map[string]any) error
+
+	addRenderedSkill := func(platform, template, destination string, skill map[string]any, invocationPrefix string, slashCommand bool) error {
+		owner, _ := config.Variables["owner_team"].(string)
+		if owner == "" {
+			owner = "platform-engineering"
+		}
+		name, _ := skill["name"].(string)
+		title, _ := skill["title"].(string)
+		description, _ := skill["description"].(string)
+		if rendered, ok, err := scaffold.RenderRegisteredSkillMarkdown(name, title, description, "1.0.0", "2025-01-01", "2026-06-10", owner, "stable", "", target.Platforms); err != nil {
+			return err
+		} else if ok {
+			if slashCommand {
+				rendered = addSlashCommandMetadata(rendered)
+			}
+			files = append(files, models.RenderedFile{
+				Source:      "internal/scaffold/skill_templates.go",
+				Destination: destination,
+				Content:     rendered,
+				Platform:    platform,
+			})
+			return nil
+		}
+
+		extra := map[string]any{"skill": skill, "invocation_prefix": invocationPrefix, "slash_command": slashCommand}
+		return add(platform, template, destination, extra)
+	}
+
+	add = func(platform, template, destination string, extra map[string]any) error {
 		ctx := pongo2.Context{}
 		for k, v := range baseContext {
 			ctx[k] = v
@@ -186,8 +217,7 @@ func RenderFilesWithOptions(config *models.BakeConfig, target *models.TargetConf
 		}
 		platformDocs = append(platformDocs, map[string]any{"platform": "codex", "path": ".agentic/codex/AGENTS.md", "description": "Codex instructions and skill routing"})
 		for _, skill := range skills {
-			extra := map[string]any{"skill": skill, "invocation_prefix": "$", "slash_command": false}
-			if err := add("codex", "shared/SKILL.md.j2", fmt.Sprintf(".agents/skills/%s/SKILL.md", skill["name"]), extra); err != nil {
+			if err := addRenderedSkill("codex", "shared/SKILL.md.j2", fmt.Sprintf(".agents/skills/%s/SKILL.md", skill["name"]), skill, "$", false); err != nil {
 				return nil, err
 			}
 		}
@@ -203,8 +233,7 @@ func RenderFilesWithOptions(config *models.BakeConfig, target *models.TargetConf
 		}
 		slashCommandEnabled := gitlabSlashCommandEnabled(target)
 		for _, skill := range skills {
-			extra := map[string]any{"skill": skill, "invocation_prefix": "/", "slash_command": slashCommandEnabled}
-			if err := add("gitlab-duo", "shared/SKILL.md.j2", fmt.Sprintf("skills/%s/SKILL.md", skill["name"]), extra); err != nil {
+			if err := addRenderedSkill("gitlab-duo", "shared/SKILL.md.j2", fmt.Sprintf("skills/%s/SKILL.md", skill["name"]), skill, "/", slashCommandEnabled); err != nil {
 				return nil, err
 			}
 		}
@@ -225,8 +254,7 @@ func RenderFilesWithOptions(config *models.BakeConfig, target *models.TargetConf
 		}
 		platformDocs = append(platformDocs, map[string]any{"platform": "claude-code", "path": ".agentic/claude/AGENTS.md", "description": "Claude Code integration, skills, and subagent routing"})
 		for _, skill := range skills {
-			extra := map[string]any{"skill": skill, "invocation_prefix": "/", "slash_command": false}
-			if err := add("claude", "shared/SKILL.md.j2", fmt.Sprintf(".claude/skills/%s/SKILL.md", skill["name"]), extra); err != nil {
+			if err := addRenderedSkill("claude", "shared/SKILL.md.j2", fmt.Sprintf(".claude/skills/%s/SKILL.md", skill["name"]), skill, "/", false); err != nil {
 				return nil, err
 			}
 		}
@@ -289,8 +317,7 @@ func RenderFilesWithOptions(config *models.BakeConfig, target *models.TargetConf
 
 	if contains("generic") {
 		for _, skill := range skills {
-			extra := map[string]any{"skill": skill, "invocation_prefix": "$", "slash_command": false}
-			if err := add("generic", "shared/SKILL.md.j2", fmt.Sprintf(".agentic/skills/%s/SKILL.md", skill["name"]), extra); err != nil {
+			if err := addRenderedSkill("generic", "shared/SKILL.md.j2", fmt.Sprintf(".agentic/skills/%s/SKILL.md", skill["name"]), skill, "$", false); err != nil {
 				return nil, err
 			}
 		}
@@ -320,6 +347,22 @@ func RenderFilesWithOptions(config *models.BakeConfig, target *models.TargetConf
 	}
 
 	return files, nil
+}
+
+func addSlashCommandMetadata(content string) string {
+	if strings.Contains(content, "\nmetadata:\n  slash-command: enabled\n") {
+		return content
+	}
+	const start = "---\n"
+	if !strings.HasPrefix(content, start) {
+		return content
+	}
+	idx := strings.Index(content[len(start):], "\n---\n")
+	if idx < 0 {
+		return content
+	}
+	pos := len(start) + idx
+	return content[:pos] + "\nmetadata:\n  slash-command: enabled" + content[pos:]
 }
 
 func safeExecuteTemplate(tpl *pongo2.Template, ctx pongo2.Context) (content string, err error) {

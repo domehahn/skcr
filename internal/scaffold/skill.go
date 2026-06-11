@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/domehahn/skcr/internal/models"
+	platformcompat "github.com/domehahn/skcr/internal/platforms"
 	"github.com/domehahn/sklib/spec"
 	"gopkg.in/yaml.v3"
 )
@@ -195,19 +196,14 @@ func skillMarkdown(name, description, license, version, stability, owner string,
 		Stability:    stability,
 		License:      license,
 		Platforms:    platforms,
+		MinPlatforms: platformcompat.AllMinVersions(),
 	}
 	if rendered, err := renderSkillTemplate(name, data); err == nil && rendered != "" {
 		return rendered
 	}
 
 	// Generic fallback for unregistered skill names.
-	platformBlock := ""
-	for _, p := range platforms {
-		platformBlock += fmt.Sprintf("  %s: \"unknown\"\n", p)
-	}
-	if platformBlock == "" {
-		platformBlock = "  codex: \"unknown\"\n"
-	}
+	platformBlock := minPlatformVersionBlock(platforms)
 
 	frontmatter := fmt.Sprintf(`---
 name: %s
@@ -240,62 +236,106 @@ changelog:
 
 %s
 
-## When to Use This Skill
+## When to use
 
-Use this skill when the task matches the description above or when central agent instructions route work to $%s.
+- The task matches this skill's purpose or central routing selects $%s.
+- Repository evidence must be turned into concrete findings, implementation guidance, or validation steps.
+- Security, governance, platform compatibility, release, or operational risk must be considered.
+- The result needs a clear pass, conditional pass, block, or implementation-ready recommendation.
+- A production-ready skill body is required rather than generic placeholder guidance.
 
-## Skill-Specific Operating Model
+## Operating model
 
-1. Clarify the goal and constraints.
-2. Inspect the minimum relevant repository context.
-3. Produce a concise execution plan for non-trivial work.
-4. Execute with tools when implementation is requested.
-5. Validate the result with repository-native checks.
-6. Summarize changed files, validation results, and residual risks.
+1. Clarify the goal, scope, constraints, and expected output.
+2. Inspect the minimum relevant repository context before making claims.
+3. Apply the skill-specific review scope and checklist.
+4. Classify findings using severity guidance.
+5. Validate with repository-native checks where practical.
+6. Summarize evidence, residual risk, and next actions.
+
+## Skill-Specific Review Scope
+
+- The stated purpose and domain boundaries of %s.
+- Repository files, generated outputs, workflows, or controls directly affected by the request.
+- Security, governance, platform compatibility, validation, and rollback implications.
+- Assumptions, dependencies, owners, and open decisions that affect safe completion.
+- Evidence needed to support findings, recommendations, or implementation changes.
 
 ## Skill-Specific Checklist
 
-- [ ] Confirm the request matches the stated purpose and identify affected files, systems, or workflows.
-- [ ] Check concrete risks, edge cases, and validation needs for: %s
-- [ ] Verify outputs are actionable and do not rely on generic guidance.
+- [ ] Confirm the request actually matches %s and identify affected files, systems, or workflows.
+- [ ] Check the concrete risks, edge cases, and validation needs implied by: %s
+- [ ] Verify outputs are actionable for the target platform and do not rely on generic copy-paste guidance.
+- [ ] Confirm platform compatibility metadata is present and does not invent versions.
+- [ ] Check security and governance guardrails before claiming completion.
+- [ ] Identify required validation commands or explain why validation cannot run.
+- [ ] Check whether generated or synchronized files need updating.
+- [ ] Verify changelog and version metadata when instructions change materially.
+- [ ] Identify residual risks and follow-up owners.
+- [ ] Confirm output is specific to this skill's purpose.
 
 ## Decision Rules
 
 - Use this skill only when its purpose directly applies or central routing selects it.
-- Escalate to a domain-specific skill when a more targeted skill covers the risk.
-- Do not claim production readiness unless checklist, acceptance criteria, and output requirements are satisfied.
+- Escalate to a more specific reviewer skill when the dominant risk is security, secrets, CI/CD, dependencies, IaC, observability, release readiness, or compliance.
+- Do not claim production readiness unless checklist, severity guidance, acceptance criteria, validation, and output requirements are satisfied.
+- If evidence is missing, report the gap instead of assuming success.
+- If a recommendation changes security, release, governance, or platform behavior, require explicit review.
+
+## Finding Categories
+
+- Missing or weak domain-specific evidence.
+- Incorrect or unsafe control, implementation, or recommendation.
+- Missing validation, test, sync, or generated-output consistency.
+- Security, compliance, privacy, release, or operational risk.
+- Unclear ownership, assumption, decision, or residual risk.
+
+## Severity Guidance
+
+- Critical: immediate risk to secrets, regulated data, production safety, release integrity, or destructive behavior.
+- High: credible security, compliance, compatibility, rollback, or operational risk requiring owner action before merge or release.
+- Medium: meaningful maintainability, validation, documentation, or process gap that should be tracked.
+- Low: advisory improvement or clarity issue with limited immediate impact.
 
 ## DevSecOps Guardrails
 
-- Do not read secrets, .env files, private keys, production credentials, masked CI/CD variables, or sensitive logs unless explicitly required.
+- Do not read secrets, .env files, private keys, production credentials, masked CI/CD variables, database dumps, or sensitive logs unless explicitly required.
 - Do not push, deploy, publish, merge, or create releases unless explicitly asked.
 - Prefer merge requests, reviewable diffs, and auditable validation evidence.
-- Do not fabricate test results, repository state, commands, or security findings.
+- Prefer least privilege, minimal changes, and explicit rollback notes.
+- Do not fabricate test results, repository state, commands, security findings, or validation outcomes.
+- Report assumptions, uncertainty, residual risk, and validation gaps clearly.
 
 ## Output Requirements
 
 - State the actions taken or analysis performed.
-- List files, systems, or workflows reviewed or changed.
+- List files, systems, workflows, controls, or artifacts reviewed or changed.
 - Report validation performed, findings or risks, and the recommended next step.
+- Include severity, evidence, and remediation for each significant finding.
+- Separate confirmed facts from assumptions and open questions.
 
 ## Acceptance Criteria
 
 - The result addresses the specific purpose of %s rather than only restating the request.
 - Findings or changes are backed by repository evidence, validation, or clearly stated assumptions.
 - Security, governance, and platform compatibility constraints remain intact.
+- Required sections, version metadata, and changelog are present.
+- Residual risks and validation gaps are explicit.
 
 ## Anti-Patterns
 
-- Producing generic guidance not grounded in the specific repository context.
-- Skipping the skill-specific checklist and jumping directly to recommendations.
-- Conflating symptom with root cause without evidence.
+- Creating a skill that only differs by name and description.
+- Using generic checklist language that does not mention the skill domain.
+- Claiming validation passed without running or naming validation.
+- Hiding residual risk, assumptions, or missing evidence.
+- Weakening governance or DevSecOps guardrails to simplify the output.
 
 ## Changelog
 
 ### %s - %s
 
 - Initial release.
-`, name, description, name, name, name, version, today)
+`, name, description, name, name, name, description, name, version, today)
 }
 
 func markdownList(values []string) string {
@@ -312,6 +352,26 @@ func stringsToSpecPlatforms(values []string) []spec.Platform {
 		out[i] = spec.Platform(v)
 	}
 	return out
+}
+
+func minPlatformVersionBlock(selected []string) string {
+	entries := platformcompat.MinVersionsFor(selected)
+	if len(entries) == 0 {
+		for _, platform := range selected {
+			entries = append(entries, platformcompat.CompatibilityEntry{
+				Name:       platform,
+				MinVersion: platformcompat.MinVersionOrUnknown(platform),
+			})
+		}
+	}
+	if len(entries) == 0 {
+		entries = platformcompat.AllMinVersions()
+	}
+	var b strings.Builder
+	for _, entry := range entries {
+		fmt.Fprintf(&b, "  %s: \"%s\"\n", entry.Name, entry.MinVersion)
+	}
+	return b.String()
 }
 
 func licenseText(name string) string {
