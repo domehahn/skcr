@@ -18,6 +18,7 @@ type SkillOptions struct {
 	Version     string
 	Description string
 	Owner       string
+	Stability   string
 	Platforms   []string
 	License     string
 	Force       bool
@@ -63,7 +64,7 @@ func PlanSkill(opts SkillOptions) ([]PlannedFile, error) {
 	}
 
 	return []PlannedFile{
-		{Path: filepath.Join(root, "SKILL.md"), Content: skillMarkdown(opts.Name, description, opts.License, opts.Version, opts.Platforms)},
+		{Path: filepath.Join(root, "SKILL.md"), Content: skillMarkdown(opts.Name, description, opts.License, opts.Version, opts.Stability, opts.Owner, opts.Platforms)},
 		{Path: filepath.Join(root, "skill.yaml"), Content: string(skillYAMLBytes)},
 		{Path: filepath.Join(root, "VERSION"), Content: opts.Version + "\n"},
 		{Path: filepath.Join(root, "CHANGELOG.md"), Content: fmt.Sprintf("# Changelog\n\n## %s\n\n- Initial skill scaffold.\n", opts.Version)},
@@ -156,6 +157,12 @@ func validateSkillOptions(opts *SkillOptions) error {
 	if opts.License == "" {
 		opts.License = "MIT"
 	}
+	if opts.Stability == "" {
+		opts.Stability = "experimental"
+	}
+	if opts.Owner == "" {
+		opts.Owner = "platform-engineering"
+	}
 	if len(opts.Platforms) == 0 {
 		opts.Platforms = []string{"claude-code", "codex"}
 	}
@@ -167,9 +174,33 @@ func validateSkillOptions(opts *SkillOptions) error {
 	return nil
 }
 
-func skillMarkdown(name, description, license, version string, platforms []string) string {
+func skillMarkdown(name, description, license, version, stability, owner string, platforms []string) string {
 	today := time.Now().Format("2006-01-02")
+	if stability == "" {
+		stability = "experimental"
+	}
+	if owner == "" {
+		owner = "platform-engineering"
+	}
 
+	// Use skill-specific template if one is registered.
+	data := skillTemplateData{
+		Name:         name,
+		Title:        skillTitle(name),
+		Description:  description,
+		Version:      version,
+		Since:        today,
+		LastModified: today,
+		Owner:        owner,
+		Stability:    stability,
+		License:      license,
+		Platforms:    platforms,
+	}
+	if rendered, err := renderSkillTemplate(name, data); err == nil && rendered != "" {
+		return rendered
+	}
+
+	// Generic fallback for unregistered skill names.
 	platformBlock := ""
 	for _, p := range platforms {
 		platformBlock += fmt.Sprintf("  %s: \"unknown\"\n", p)
@@ -185,8 +216,8 @@ version: "%s"
 since: "%s"
 last_modified: "%s"
 authors:
-  - platform-engineering
-stability: experimental
+  - %s
+stability: %s
 min_platform_version:
 %sdeprecated_since:
 replaces:
@@ -195,7 +226,7 @@ changelog:
   - version: "%s"
     date: "%s"
     change: "Initial release"
-`, name, description, version, today, today, platformBlock, version, today)
+`, name, description, version, today, today, owner, stability, platformBlock, version, today)
 
 	if license != "" {
 		frontmatter += fmt.Sprintf("license: %s\n", license)
@@ -209,33 +240,62 @@ changelog:
 
 %s
 
-## When to use this skill
+## When to Use This Skill
 
-Use this skill when...
+Use this skill when the task matches the description above or when central agent instructions route work to $%s.
 
-## Inputs
+## Skill-Specific Operating Model
 
-- Repository context
-- User request
-- Relevant files or diffs
+1. Clarify the goal and constraints.
+2. Inspect the minimum relevant repository context.
+3. Produce a concise execution plan for non-trivial work.
+4. Execute with tools when implementation is requested.
+5. Validate the result with repository-native checks.
+6. Summarize changed files, validation results, and residual risks.
 
-## Workflow
+## Skill-Specific Checklist
 
-1. Inspect the request.
-2. Identify the relevant context.
-3. Apply the skill-specific rules.
-4. Produce a clear, actionable result.
+- [ ] Confirm the request matches the stated purpose and identify affected files, systems, or workflows.
+- [ ] Check concrete risks, edge cases, and validation needs for: %s
+- [ ] Verify outputs are actionable and do not rely on generic guidance.
 
-## Output
+## Decision Rules
 
-Describe the expected output format.
+- Use this skill only when its purpose directly applies or central routing selects it.
+- Escalate to a domain-specific skill when a more targeted skill covers the risk.
+- Do not claim production readiness unless checklist, acceptance criteria, and output requirements are satisfied.
+
+## DevSecOps Guardrails
+
+- Do not read secrets, .env files, private keys, production credentials, masked CI/CD variables, or sensitive logs unless explicitly required.
+- Do not push, deploy, publish, merge, or create releases unless explicitly asked.
+- Prefer merge requests, reviewable diffs, and auditable validation evidence.
+- Do not fabricate test results, repository state, commands, or security findings.
+
+## Output Requirements
+
+- State the actions taken or analysis performed.
+- List files, systems, or workflows reviewed or changed.
+- Report validation performed, findings or risks, and the recommended next step.
+
+## Acceptance Criteria
+
+- The result addresses the specific purpose of %s rather than only restating the request.
+- Findings or changes are backed by repository evidence, validation, or clearly stated assumptions.
+- Security, governance, and platform compatibility constraints remain intact.
+
+## Anti-Patterns
+
+- Producing generic guidance not grounded in the specific repository context.
+- Skipping the skill-specific checklist and jumping directly to recommendations.
+- Conflating symptom with root cause without evidence.
 
 ## Changelog
 
 ### %s - %s
 
 - Initial release.
-`, name, description, version, today)
+`, name, description, name, name, name, version, today)
 }
 
 func markdownList(values []string) string {
