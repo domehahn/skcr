@@ -27,40 +27,40 @@ skill_sources:
   skills:
     - name: requirements-analyst
       description: "Decompose requirements into unambiguous, testable acceptance criteria; surface security, compliance, and privacy obligations before design begins."
-    - name: threat-modeler
-      description: "Perform STRIDE threat modeling to produce a threat register, attack-surface map, and prioritized control recommendations."
+    - name: cost-based-planner
+      description: "Estimate and track effort, cost drivers, and scope trade-offs; produce budget-aware implementation plans with explicit risk and uncertainty."
     - name: architecture-reviewer
       description: "Evaluate module boundaries, coupling, dependency direction, API contracts, and security-by-design properties of architectural changes."
-    - name: secure-design-reviewer
-      description: "Review authentication, authorization, session management, secrets handling, data classification, encryption, and audit logging before implementation."
+    - name: threat-modeler
+      description: "Perform STRIDE threat modeling to produce a threat register, attack-surface map, and prioritized control recommendations."
     - name: safe-implementer
       description: "Implement requested changes minimally and safely with test coverage, validated inputs, no secrets, and a documented rollback path."
-    - name: secure-code-reviewer
-      description: "Review code changes for injection, authentication and authorization flaws, secrets exposure, unsafe logging, and OWASP Top 10 risks."
-    - name: test-strategist
-      description: "Design a test strategy covering unit, integration, contract, security, and edge-case tests with CI gate configuration."
-    - name: dependency-risk-reviewer
-      description: "Review dependencies and container images for CVEs, license conflicts, version pinning, and supply-chain attack vectors."
-    - name: ci-cd-security-reviewer
-      description: "Review CI/CD pipelines for token permissions, script injection, secrets exposure, artifact integrity, and deployment gate risks."
-    - name: container-security-reviewer
-      description: "Review Dockerfiles and container runtime configuration for root runtime, unpinned images, secrets in layers, and Kubernetes security context gaps."
-    - name: iac-security-reviewer
-      description: "Review Terraform, Kubernetes, Helm, and CloudFormation configurations for IAM least privilege, network exposure, and encryption gaps."
-    - name: secrets-auditor
-      description: "Detect secrets, credentials, and tokens in code, configuration, CI/CD pipelines, and git history; produce rotation and prevention plans."
-    - name: privacy-reviewer
-      description: "Identify personal data flows, assess legal basis and data minimization, flag retention and logging risks, and assess DPIA necessity."
+    - name: test-strategy-engineer
+      description: "Design a test strategy covering unit, integration, contract, security, and edge-case tests with CI gate configuration and flaky-test mitigation."
+    - name: verification-reviewer
+      description: "Verify that implementation satisfies acceptance criteria; produce a validation evidence summary with pass, conditional pass, or block recommendation."
+    - name: security-reviewer
+      description: "Review code changes for injection, AuthZ bypass, SSRF, path traversal, unsafe logging, insecure defaults, and OWASP Top 10 risks."
+    - name: secrets-reviewer
+      description: "Detect secrets, credentials, and tokens in code, configuration, CI/CD pipelines, and git history; produce rotation, revocation, and prevention plans."
+    - name: dependency-supply-chain-reviewer
+      description: "Review dependencies for CVEs, license conflicts, lockfile gaps, SBOM coverage, provenance, and supply-chain attack vectors."
+    - name: ci-cd-reviewer
+      description: "Review CI/CD pipelines for token permissions, cache poisoning, artifact integrity, runner trust, and deployment gate risks."
+    - name: iac-gitops-reviewer
+      description: "Review Terraform, Kubernetes, Helm, and GitOps configurations for IAM/RBAC least privilege, drift, network exposure, and rollback gaps."
+    - name: compliance-governance-reviewer
+      description: "Map controls to audit evidence, assess segregation of duties, identify policy exceptions, and produce an audit-ready evidence package."
     - name: release-readiness-reviewer
-      description: "Assess release readiness with Go/No-Go recommendation covering test status, security findings, rollback, migrations, and monitoring coverage."
-    - name: incident-response-helper
-      description: "Support structured incident triage, containment, eradication, recovery, RCA, and blameless postmortem production."
-    - name: compliance-evidence-collector
-      description: "Map compliance controls to evidence, assess evidence quality, identify gaps, and produce an audit-ready evidence package."
-    - name: policy-as-code-reviewer
-      description: "Review OPA/Rego, Kyverno, and Kubernetes admission policies for logic correctness, coverage, test completeness, and bypass risks."
-    - name: observability-readiness-reviewer
-      description: "Review logging, metrics, SLOs, alerting, distributed tracing, dashboards, and runbooks for operational readiness."
+      description: "Assess release readiness with go/no-go recommendation covering test status, security findings, rollback, feature flags, and monitoring coverage."
+    - name: observability-reviewer
+      description: "Review logging, metrics, SLOs/SLIs, alerting, distributed tracing, correlation IDs, cardinality, and runbook coverage for operational readiness."
+    - name: incident-postmortem-assistant
+      description: "Support structured incident triage, timeline reconstruction, root cause analysis, severity classification, corrective actions, and blameless postmortem production."
+    - name: documentation-maintainer
+      description: "Create and update README quickstart guides, ADRs, setup guides, API docs, runbooks, changelogs, and release notes for accuracy and completeness."
+    - name: universal-skill-creator
+      description: "Generate new domain-specific, production-ready SKILL.md files with complete anti-patterns, compatibility metadata, and changelog — never generic copy-paste templates."
 targets:
   codex:
     description: Codex AGENTS.md and project skills
@@ -84,23 +84,23 @@ targets:
     - devsecops
     skills:
     - requirements-analyst
-    - threat-modeler
+    - cost-based-planner
     - architecture-reviewer
-    - secure-design-reviewer
+    - threat-modeler
     - safe-implementer
-    - secure-code-reviewer
-    - test-strategist
-    - dependency-risk-reviewer
-    - ci-cd-security-reviewer
-    - container-security-reviewer
-    - iac-security-reviewer
-    - secrets-auditor
-    - privacy-reviewer
+    - test-strategy-engineer
+    - verification-reviewer
+    - security-reviewer
+    - secrets-reviewer
+    - dependency-supply-chain-reviewer
+    - ci-cd-reviewer
+    - iac-gitops-reviewer
+    - compliance-governance-reviewer
     - release-readiness-reviewer
-    - incident-response-helper
-    - compliance-evidence-collector
-    - policy-as-code-reviewer
-    - observability-readiness-reviewer
+    - observability-reviewer
+    - incident-postmortem-assistant
+    - documentation-maintainer
+    - universal-skill-creator
     flows: []
     rules:
       no_direct_push: true

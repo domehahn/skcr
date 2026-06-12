@@ -1,11 +1,18 @@
 package scaffold
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 
 	"github.com/domehahn/skcr/internal/platforms"
 )
+
+const testSince = "2026-06-10"
+const testLastModified = "2026-06-12"
+const testVersion = "1.0.0"
+
+var dateRE = regexp.MustCompile(`^\d{4}-\d{2}-\d{2}$`)
 
 var expectedSDLCSkills = []string{
 	"requirements-analyst",
@@ -95,8 +102,13 @@ func TestEveryRegisteredSkillRendersProductionReadySkillMD(t *testing.T) {
 					t.Errorf("skill %q missing required section %q", name, section)
 				}
 			}
-			if !strings.Contains(rendered, `date: "2026-06-11"`) || !strings.Contains(rendered, "### 1.0.0 - 2026-06-11") {
-				t.Errorf("skill %q frontmatter and body changelog dates are not synchronized", name)
+			date := extractFrontmatterDate(rendered)
+			if date == "" {
+				t.Errorf("skill %q frontmatter changelog missing date field", name)
+			} else if !dateRE.MatchString(date) {
+				t.Errorf("skill %q frontmatter changelog date %q is not YYYY-MM-DD", name, date)
+			} else if !strings.Contains(rendered, "### "+testVersion+" - "+date) {
+				t.Errorf("skill %q body changelog heading does not match frontmatter date %q", name, date)
 			}
 			if !strings.Contains(rendered, `change: "Initial generated production-ready SDLC / DevSecOps skill"`) ||
 				!strings.Contains(rendered, "- Initial generated production-ready SDLC / DevSecOps skill.") {
@@ -275,9 +287,9 @@ func renderForTest(t *testing.T, name string) string {
 		Name:         name,
 		Title:        skillTitle(name),
 		Description:  "Test description for " + name,
-		Version:      "1.0.0",
-		Since:        "2025-01-01",
-		LastModified: "2026-06-11",
+		Version:      testVersion,
+		Since:        testSince,
+		LastModified: testLastModified,
 		Owner:        "platform-engineering",
 		Stability:    "stable",
 		License:      "MIT",
@@ -349,4 +361,15 @@ func wordSet(s string) map[string]struct{} {
 		}
 	}
 	return out
+}
+
+func extractFrontmatterDate(rendered string) string {
+	for _, line := range strings.Split(rendered, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "date:") {
+			val := strings.TrimSpace(strings.TrimPrefix(trimmed, "date:"))
+			return strings.Trim(val, `"`)
+		}
+	}
+	return ""
 }

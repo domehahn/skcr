@@ -110,12 +110,30 @@ func newCompatibilityCheckCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			var errs []string
+			verified := 0
 			for _, entry := range matrix {
-				if entry.Status == "verified" {
-					fmt.Fprintf(cmd.OutOrStdout(), "verified\t%s\t%s\t%s\n", entry.Name, entry.MinVersion, entry.Evidence)
+				if entry.Status == "verified" || entry.MinVersion != "unknown" {
+					if valErr := platforms.ValidateEvidenceEntry(root, entry); valErr != nil {
+						errs = append(errs, fmt.Sprintf("  %s: %v", entry.Name, valErr))
+					} else {
+						verified++
+						fmt.Fprintf(cmd.OutOrStdout(), "ok\t%s\t%s\t%s\n", entry.Name, entry.MinVersion, entry.Evidence)
+					}
 				}
 			}
-			fmt.Fprintln(cmd.OutOrStdout(), "Compatibility evidence valid")
+			if len(errs) > 0 {
+				fmt.Fprintf(cmd.OutOrStdout(), "\n%d error(s):\n", len(errs))
+				for _, e := range errs {
+					fmt.Fprintln(cmd.OutOrStdout(), e)
+				}
+				return fmt.Errorf("compatibility evidence has %d invalid entr%s", len(errs), map[bool]string{true: "y", false: "ies"}[len(errs) == 1])
+			}
+			if verified == 0 {
+				fmt.Fprintln(cmd.OutOrStdout(), "No verified entries found — all platforms are unverified")
+				return nil
+			}
+			fmt.Fprintf(cmd.OutOrStdout(), "\n%d verified entr%s valid\n", verified, map[bool]string{true: "y", false: "ies"}[verified == 1])
 			return nil
 		},
 	}

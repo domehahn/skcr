@@ -17,6 +17,7 @@ type SkillOptions struct {
 	Name        string
 	OutputDir   string
 	Version     string
+	Since       string
 	Description string
 	Owner       string
 	Stability   string
@@ -42,6 +43,11 @@ func PlanSkill(opts SkillOptions) ([]PlannedFile, error) {
 		return nil, err
 	}
 	root := filepath.Join(opts.OutputDir, opts.Name)
+	if opts.Since == "" {
+		if existing := readExistingSince(filepath.Join(root, "SKILL.md")); existing != "" {
+			opts.Since = existing
+		}
+	}
 	platformBlock := markdownList(opts.Platforms)
 	description := opts.Description
 	if description == "" {
@@ -65,7 +71,7 @@ func PlanSkill(opts SkillOptions) ([]PlannedFile, error) {
 	}
 
 	return []PlannedFile{
-		{Path: filepath.Join(root, "SKILL.md"), Content: skillMarkdown(opts.Name, description, opts.License, opts.Version, opts.Stability, opts.Owner, opts.Platforms)},
+		{Path: filepath.Join(root, "SKILL.md"), Content: skillMarkdown(opts.Name, description, opts.License, opts.Version, opts.Stability, opts.Owner, opts.Since, opts.Platforms)},
 		{Path: filepath.Join(root, "skill.yaml"), Content: string(skillYAMLBytes)},
 		{Path: filepath.Join(root, "VERSION"), Content: opts.Version + "\n"},
 		{Path: filepath.Join(root, "CHANGELOG.md"), Content: fmt.Sprintf("# Changelog\n\n## %s\n\n- Initial skill scaffold.\n", opts.Version)},
@@ -178,13 +184,34 @@ func validateSkillOptions(opts *SkillOptions) error {
 	return nil
 }
 
-func skillMarkdown(name, description, license, version, stability, owner string, platforms []string) string {
+func readExistingSince(path string) string {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return ""
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "since:") {
+			val := strings.TrimSpace(strings.TrimPrefix(trimmed, "since:"))
+			val = strings.Trim(val, `"`)
+			if val != "" && val != "YYYY-MM-DD" {
+				return val
+			}
+		}
+	}
+	return ""
+}
+
+func skillMarkdown(name, description, license, version, stability, owner, since string, platforms []string) string {
 	today := time.Now().Format("2006-01-02")
 	if stability == "" {
 		stability = "experimental"
 	}
 	if owner == "" {
 		owner = "platform-engineering"
+	}
+	if since == "" {
+		since = today
 	}
 
 	// Use skill-specific template if one is registered.
@@ -193,7 +220,7 @@ func skillMarkdown(name, description, license, version, stability, owner string,
 		Title:        skillTitle(name),
 		Description:  description,
 		Version:      version,
-		Since:        today,
+		Since:        since,
 		LastModified: today,
 		Owner:        owner,
 		Stability:    stability,
@@ -225,7 +252,7 @@ changelog:
   - version: "%s"
     date: "%s"
     change: "Initial release"
-`, name, description, version, today, today, owner, stability, platformBlock, version, today)
+`, name, description, version, since, today, owner, stability, platformBlock, version, today)
 
 	if license != "" {
 		frontmatter += fmt.Sprintf("license: %s\n", license)
