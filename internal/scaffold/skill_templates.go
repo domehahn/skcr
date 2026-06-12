@@ -26,6 +26,10 @@ type skillTemplateData struct {
 // RenderRegisteredSkillMarkdown renders a built-in SDLC / DevSecOps skill.
 // The second return value is false when name is not registered.
 func RenderRegisteredSkillMarkdown(name, title, description, version, since, lastModified, owner, stability, license string, platforms []string) (string, bool, error) {
+	return RenderRegisteredSkillMarkdownWithCompatibility(name, title, description, version, since, lastModified, owner, stability, license, platforms, platformcompat.AllMinVersions())
+}
+
+func RenderRegisteredSkillMarkdownWithCompatibility(name, title, description, version, since, lastModified, owner, stability, license string, platforms []string, minPlatforms []platformcompat.CompatibilityEntry) (string, bool, error) {
 	if _, ok := skillBodies[name]; !ok {
 		return "", false, nil
 	}
@@ -43,7 +47,7 @@ func RenderRegisteredSkillMarkdown(name, title, description, version, since, las
 		Stability:    stability,
 		License:      license,
 		Platforms:    platforms,
-		MinPlatforms: platformcompat.AllMinVersions(),
+		MinPlatforms: minPlatforms,
 	}
 	rendered, err := renderSkillTemplate(name, data)
 	if err != nil {

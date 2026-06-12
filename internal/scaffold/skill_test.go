@@ -21,10 +21,10 @@ func TestWriteSkillScaffold(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(files) != 7 {
-		t.Fatalf("expected 7 scaffold files, got %d", len(files))
+	if len(files) != 10 {
+		t.Fatalf("expected 10 scaffold files, got %d", len(files))
 	}
-	for _, rel := range []string{"SKILL.md", "skill.yaml", "VERSION", "CHANGELOG.md", "README.md", "LICENSE", filepath.Join("tests", "README.md")} {
+	for _, rel := range []string{"SKILL.md", "skill.yaml", "VERSION", "CHANGELOG.md", "README.md", "LICENSE", filepath.Join("scripts", "README.md"), filepath.Join("references", "README.md"), filepath.Join("assets", "README.md"), filepath.Join("tests", "README.md")} {
 		if _, err := os.Stat(filepath.Join(dir, "secure-code-review", rel)); err != nil {
 			t.Fatalf("missing %s: %v", rel, err)
 		}
@@ -53,7 +53,7 @@ func TestPlanSkillDefaultsDryRunAndValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(files) != 7 {
+	if len(files) != 10 {
 		t.Fatalf("expected planned files, got %d", len(files))
 	}
 	if _, err := os.Stat(filepath.Join(dir, "test-generator")); !os.IsNotExist(err) {
@@ -103,8 +103,8 @@ func TestWriteSkillSafe(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WriteSkillSafe first write: %v", err)
 	}
-	if len(result.Created) != 7 {
-		t.Fatalf("expected 7 created files, got %d", len(result.Created))
+	if len(result.Created) != 10 {
+		t.Fatalf("expected 10 created files, got %d", len(result.Created))
 	}
 	if len(result.Skipped) != 0 {
 		t.Fatalf("expected 0 skipped files, got %d", len(result.Skipped))
@@ -118,8 +118,8 @@ func TestWriteSkillSafe(t *testing.T) {
 	if len(result2.Created) != 0 {
 		t.Fatalf("expected 0 created (all exist), got %d", len(result2.Created))
 	}
-	if len(result2.Skipped) != 7 {
-		t.Fatalf("expected 7 skipped, got %d", len(result2.Skipped))
+	if len(result2.Skipped) != 10 {
+		t.Fatalf("expected 10 skipped, got %d", len(result2.Skipped))
 	}
 
 	// With force: all files overwritten.
@@ -128,8 +128,8 @@ func TestWriteSkillSafe(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WriteSkillSafe force: %v", err)
 	}
-	if len(result3.Created) != 7 {
-		t.Fatalf("expected 7 created with force, got %d", len(result3.Created))
+	if len(result3.Created) != 10 {
+		t.Fatalf("expected 10 created with force, got %d", len(result3.Created))
 	}
 	if len(result3.Skipped) != 0 {
 		t.Fatalf("expected 0 skipped with force, got %d", len(result3.Skipped))
@@ -143,8 +143,8 @@ func TestWriteSkillSafeDryRun(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WriteSkillSafe dry-run: %v", err)
 	}
-	if len(result.Created) != 7 {
-		t.Fatalf("expected 7 planned files, got %d", len(result.Created))
+	if len(result.Created) != 10 {
+		t.Fatalf("expected 10 planned files, got %d", len(result.Created))
 	}
 	if len(result.Skipped) != 0 {
 		t.Fatalf("expected 0 skipped in dry-run, got %d", len(result.Skipped))

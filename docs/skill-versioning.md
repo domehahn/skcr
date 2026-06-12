@@ -96,7 +96,7 @@ changelog:
 
 ## `min_platform_version`
 
-List every target platform. Built-in skills use the central compatibility matrix in `internal/platforms/compatibility.go`; do not hand-edit per-skill values. Keep a platform at `"unknown"` until the minimum version is validated.
+List every target platform. Built-in skills use the central compatibility matrix in `internal/platforms/compatibility.go` and repository-local verified overrides from `agentic.compatibility.yaml`; do not hand-edit per-skill values. Keep a platform at `"unknown"` until the minimum version is validated with evidence.
 
 ```yaml
 min_platform_version:
@@ -106,6 +106,20 @@ min_platform_version:
 ```
 
 `unknown` is an explicit unverified-compatibility marker. The validator reports it as a warning because production routing cannot treat it as verified compatibility.
+
+Use `skcr compatibility` to promote a platform from unverified to concrete:
+
+```bash
+skcr compatibility set codex \
+  --min-version 0.51.0 \
+  --evidence docs/compat/codex-0.51.0.md \
+  --validated 2026-06-12
+
+skcr compatibility check
+skcr bake --write
+```
+
+Concrete values require `status: verified`, a validation date, and an evidence file that exists in the repository. `skcr bake` loads those verified overrides and renders them into every generated `SKILL.md`.
 
 ---
 
@@ -198,6 +212,14 @@ skcr version release-bundle .agents/skills --since 2026-06-01 --changed --json
 
 `version bump` updates `SKILL.md` frontmatter, the body `## Changelog`, `VERSION`, `skill.yaml`, and `CHANGELOG.md` when those files exist.
 
+`bake --write` performs the same local artifact synchronization after the final `SKILL.md` is rendered. This prevents registered generated skills from keeping stale scaffold defaults in `VERSION`, `skill.yaml`, or `CHANGELOG.md`.
+
+`version check` treats version drift as an error when any existing local artifact disagrees with `SKILL.md`:
+
+- `VERSION` must equal `SKILL.md` frontmatter `version`.
+- `skill.yaml` `version` must equal `SKILL.md` frontmatter `version`.
+- The latest `CHANGELOG.md` entry must equal `SKILL.md` frontmatter `version`.
+
 `version check --changed` and `version changed` use git status plus the version in `HEAD:SKILL.md` to detect material skill edits that did not bump the skill version. Use this in CI before releasing generated skills.
 
 ---
@@ -211,7 +233,7 @@ When the `$universal-skill-creator` skill generates a new skill, it MUST:
 3. Set `stability` explicitly.
 4. Set `since` and `last_modified` to the creation date (`YYYY-MM-DD`).
 5. Set `authors` (at least one entry).
-6. Set `min_platform_version` for every relevant platform using the central compatibility matrix; use a concrete version only after validation, otherwise keep `"unknown"`.
+6. Set `min_platform_version` for every relevant platform using the central compatibility matrix and verified local compatibility evidence; use a concrete version only after validation, otherwise keep `"unknown"`.
 7. Include `replaces` and `supersedes` (empty if not applicable).
 8. Include a machine-readable `changelog` in the frontmatter.
 9. Include a `## Changelog` section in the body.

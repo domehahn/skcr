@@ -65,6 +65,42 @@ func TestBumpSynchronizesSkillArtifacts(t *testing.T) {
 	}
 }
 
+func TestCheckDetectsDivergentSkillArtifacts(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := scaffold.WriteSkill(scaffold.SkillOptions{
+		Name:      "secure-code-review",
+		OutputDir: dir,
+		Version:   "1.0.0",
+		Owner:     "platform-engineering",
+		Platforms: []string{"codex"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	skillDir := filepath.Join(dir, "secure-code-review")
+	if err := os.WriteFile(filepath.Join(skillDir, "VERSION"), []byte("9.9.9\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "skill.yaml"), []byte("name: secure-code-review\nversion: 9.9.9\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "CHANGELOG.md"), []byte("# Changelog\n\n## 9.9.9 - 2026-06-12\n\n- Drift.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	infos, err := Check(skillDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(infos) != 1 {
+		t.Fatalf("expected one skill info, got %#v", infos)
+	}
+	errText := strings.Join(infos[0].Errors, "\n")
+	for _, want := range []string{"VERSION", "skill.yaml", "CHANGELOG.md"} {
+		if !strings.Contains(errText, want) {
+			t.Fatalf("expected %s drift error, got %#v", want, infos[0].Errors)
+		}
+	}
+}
+
 func TestBumpRejectsInvalidInputs(t *testing.T) {
 	if _, err := Bump(t.TempDir(), BumpPatch, "2026-06-12", ""); err == nil {
 		t.Fatal("expected missing change error")

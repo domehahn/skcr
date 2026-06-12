@@ -22,6 +22,7 @@ var (
 type Options struct {
 	LockedSkills []map[string]any
 	SkillsMode   string
+	Root         string
 }
 
 func templateRoot() (string, error) {
@@ -140,6 +141,10 @@ func RenderFilesWithOptions(config *models.BakeConfig, target *models.TargetConf
 
 	skills := skillMeta(target.Skills)
 	claudeSubagents := claudeSubagentsForTarget(target)
+	compatMatrix, err := platforms.LoadMatrix(opts.Root)
+	if err != nil {
+		return nil, err
+	}
 
 	baseContext := pongo2.Context{
 		"variables":        config.Variables,
@@ -167,7 +172,7 @@ func RenderFilesWithOptions(config *models.BakeConfig, target *models.TargetConf
 		name, _ := skill["name"].(string)
 		title, _ := skill["title"].(string)
 		description, _ := skill["description"].(string)
-		if rendered, ok, err := scaffold.RenderRegisteredSkillMarkdown(name, title, description, "1.0.0", "2025-01-01", "2026-06-10", owner, "stable", "", target.Platforms); err != nil {
+		if rendered, ok, err := scaffold.RenderRegisteredSkillMarkdownWithCompatibility(name, title, description, "1.0.0", "2025-01-01", "2026-06-10", owner, "stable", "", target.Platforms, compatMatrix); err != nil {
 			return err
 		} else if ok {
 			if slashCommand {

@@ -7,7 +7,7 @@
 This repository contains versioned Agent Skills and the `skcr` CLI used to scaffold, render, sync, validate, version-check, and release-prepare those skills across Codex, GitLab Duo, Claude Code, GitHub Copilot, OpenHands, OpenCode, Ollama, Cursor, Roo Code, Kiro, Junie, Gemini CLI, Windsurf, Antigravity, Amazon Q, Qwen, and other agent platforms.
 
 ```text
-skcr  = init / add / remove / rename / list / bake / sync / status / doctor / export / validate / version / clean
+skcr  = init / add / remove / rename / list / bake / sync / status / doctor / export / validate / compatibility / version / clean
 skpm  = validate / package / publish / install / update / lock / verify
 ```
 
@@ -42,6 +42,12 @@ skcr status
 
 skcr doctor
   → checks bakefile, skill files, platform sync, and toolchain without modifying anything
+
+skcr compatibility set <platform> --min-version <version> --evidence <path> --validated <YYYY-MM-DD>
+  → records verified local platform compatibility evidence used by bake
+
+skcr compatibility check
+  → validates compatibility evidence before concrete min_platform_version values are rendered
 
 skcr version check <path> [--changed] [--json]
   → validates SKILL.md version metadata and optionally checks git changes
@@ -80,6 +86,12 @@ Skills are declared once in `targets.*.skills`. `skcr bake --write` scaffolds th
   ├── CHANGELOG.md
   ├── README.md
   ├── LICENSE
+  ├── scripts/              ← Agent Skills optional executable helpers
+  │   └── README.md
+  ├── references/           ← Agent Skills optional supplemental docs
+  │   └── README.md
+  ├── assets/               ← Agent Skills optional templates/resources
+  │   └── README.md
   └── tests/
       └── README.md
 
@@ -127,7 +139,7 @@ Built-in generated skills also include a `## Spec-Driven Change Context` section
 A skill is production-ready only when it has:
 
 - complete versioning metadata,
-- platform compatibility recorded through the central compatibility matrix,
+- platform compatibility recorded through verified compatibility evidence or kept explicitly unverified,
 - durable spec-driven change context,
 - concrete operating model,
 - concrete checklist,
@@ -140,7 +152,24 @@ For local release readiness, `skcr version changed` detects material skill edits
 
 ## Platform Compatibility
 
-Built-in skills use `min_platform_version` values from `internal/platforms/compatibility.go`. Concrete values should be set only when the minimum platform version is validated; otherwise use `"unknown"` and treat compatibility as unverified.
+Built-in skills use `min_platform_version` values from `internal/platforms/compatibility.go` plus optional repository-local evidence in `agentic.compatibility.yaml`. Concrete values are rendered only when the minimum platform version has verified evidence; otherwise `skcr bake` keeps `"unknown"` and treats compatibility as unverified.
+
+Use the compatibility workflow when a platform/version combination has been validated:
+
+```bash
+mkdir -p docs/compat
+# Add a short validation note, test transcript, release note link, or CI evidence file.
+skcr compatibility set codex \
+  --min-version 0.51.0 \
+  --evidence docs/compat/codex-0.51.0.md \
+  --validated 2026-06-12
+
+skcr compatibility check
+skcr compatibility matrix
+skcr bake --write
+```
+
+`agentic.compatibility.yaml` stores verified overrides only. The referenced evidence file must exist, and `skcr compatibility check` fails if a concrete version is missing evidence. This keeps generated `min_platform_version` values auditable instead of optimistic.
 
 ## Supported platforms
 
@@ -238,6 +267,9 @@ skcr version release-bundle .agents/skills --changed --json
 | `skcr sync` | Propagate `SKILL.md` edits from `.agents/skills/` to all platform dirs |
 | `skcr status` | Show skill scaffold status across all platform directories |
 | `skcr doctor` | Check project health: bakefile, skills, platform sync, and toolchain |
+| `skcr compatibility matrix` | Print built-in plus local platform compatibility status |
+| `skcr compatibility set <platform>` | Record verified local compatibility evidence for a concrete minimum version |
+| `skcr compatibility check` | Validate local compatibility evidence before baking concrete versions |
 | `skcr version check <path>` | Validate skill version metadata, optionally with git changed-skill checks |
 | `skcr version changed <path>` | Report changed skills and missing version bumps |
 | `skcr version bump <skill-dir>` | Bump one skill or all changed skills and synchronize version artifacts |
@@ -653,6 +685,10 @@ skcr version release-bundle .agents/skills --since 2026-06-01 --changed --json
 - `VERSION`,
 - `skill.yaml`,
 - `CHANGELOG.md`.
+
+`skcr bake --write` also synchronizes these local version artifacts after rendering `SKILL.md`, so generated registered skills do not keep stale scaffold defaults in `VERSION`, `skill.yaml`, or `CHANGELOG.md`.
+
+`skcr version check` verifies that all existing local version artifacts agree with the `SKILL.md` frontmatter version. Drift between `SKILL.md`, `VERSION`, `skill.yaml`, and `CHANGELOG.md` is reported as an error.
 
 `skcr version changed` compares the current working tree against `HEAD:SKILL.md` and reports material skill edits that did not change the skill version.
 

@@ -1,6 +1,11 @@
 package platforms
 
-import "testing"
+import (
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
 
 func TestCompatibilityMatrixIsExplicitAboutValidationState(t *testing.T) {
 	if len(CompatibilityMatrix) == 0 {
@@ -20,6 +25,9 @@ func TestCompatibilityMatrixIsExplicitAboutValidationState(t *testing.T) {
 		if entry.MinVersion != "unknown" && entry.Status != "verified" {
 			t.Fatalf("platform %s with concrete version must be verified, got %q", entry.Name, entry.Status)
 		}
+		if entry.MinVersion != "unknown" && entry.Evidence == "" {
+			t.Fatalf("platform %s with concrete version must declare evidence", entry.Name)
+		}
 		if _, ok := seen[entry.Name]; ok {
 			t.Fatalf("duplicate platform compatibility entry: %s", entry.Name)
 		}
@@ -27,6 +35,95 @@ func TestCompatibilityMatrixIsExplicitAboutValidationState(t *testing.T) {
 		if got, ok := MinVersion(entry.Name); !ok || got != entry.MinVersion {
 			t.Fatalf("MinVersion(%q) = %q, %v; want %q, true", entry.Name, got, ok, entry.MinVersion)
 		}
+	}
+}
+
+func TestCompatibilityEvidenceRoundTrip(t *testing.T) {
+	root := t.TempDir()
+	evidence := filepath.Join(root, "docs", "compat", "codex-0.51.0.md")
+	if err := os.MkdirAll(filepath.Dir(evidence), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(evidence, []byte("# Codex compatibility\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	entry := CompatibilityEntry{
+		Name:       "codex",
+		MinVersion: "0.51.0",
+		Status:     "verified",
+		Source:     "local-evidence",
+		Evidence:   "docs/compat/codex-0.51.0.md",
+		Validated:  "2026-06-12",
+	}
+	if err := SaveEvidence(root, entry); err != nil {
+		t.Fatal(err)
+	}
+	matrix, err := LoadMatrix(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, item := range matrix {
+		if item.Name == "codex" {
+			found = true
+			if item.MinVersion != "0.51.0" || item.Status != "verified" || item.Evidence == "" {
+				t.Fatalf("unexpected codex entry: %#v", item)
+			}
+		}
+	}
+	if !found {
+		t.Fatal("codex entry not found")
+	}
+	payload, err := os.ReadFile(filepath.Join(root, "agentic.compatibility.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(payload), "unknown") {
+		t.Fatalf("compatibility evidence file should store verified overrides only: %s", payload)
+	}
+}
+
+func TestValidateEvidenceRejectsConcreteVersionWithoutEvidence(t *testing.T) {
+	err := ValidateEvidenceEntry(t.TempDir(), CompatibilityEntry{Name: "codex", MinVersion: "0.51.0", Status: "verified"})
+	if err == nil {
+		t.Fatal("expected missing evidence error")
+	}
+}
+
+func TestValidateEvidenceRejectsPathsOutsideTarget(t *testing.T) {
+	root := t.TempDir()
+	for _, evidence := range []string{"/tmp/codex.md", "../codex.md"} {
+		err := ValidateEvidenceEntry(root, CompatibilityEntry{
+			Name:       "codex",
+			MinVersion: "0.51.0",
+			Status:     "verified",
+			Evidence:   evidence,
+			Validated:  "2026-06-12",
+		})
+		if err == nil {
+			t.Fatalf("expected evidence path %q to be rejected", evidence)
+		}
+	}
+}
+
+func TestValidateEvidenceRejectsInvalidValidatedDate(t *testing.T) {
+	root := t.TempDir()
+	evidence := filepath.Join(root, "docs", "compat", "codex.md")
+	if err := os.MkdirAll(filepath.Dir(evidence), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(evidence, []byte("# evidence\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := ValidateEvidenceEntry(root, CompatibilityEntry{
+		Name:       "codex",
+		MinVersion: "0.51.0",
+		Status:     "verified",
+		Evidence:   "docs/compat/codex.md",
+		Validated:  "12.06.2026",
+	})
+	if err == nil {
+		t.Fatal("expected invalid validated date error")
 	}
 }
 

@@ -13,6 +13,7 @@ import (
 	"github.com/domehahn/skcr/internal/renderer"
 	"github.com/domehahn/skcr/internal/scaffold"
 	"github.com/domehahn/skcr/internal/skilllock"
+	"github.com/domehahn/skcr/internal/skillversion"
 	"github.com/pmezard/go-difflib/difflib"
 	"github.com/spf13/cobra"
 )
@@ -103,11 +104,7 @@ func newBakeCommand() *cobra.Command {
 			}
 			var files []models.RenderedFile
 			if renderPlatformFilesEnabled(resolved) {
-				if len(renderOpts.LockedSkills) == 0 && renderOpts.SkillsMode == models.SkillModeReference {
-					files, err = cliRenderFiles(cfg, resolved)
-				} else {
-					files, err = cliRenderWithOpts(cfg, resolved, renderOpts)
-				}
+				files, err = cliRenderWithOpts(cfg, resolved, renderOpts)
 				if err != nil {
 					return err
 				}
@@ -276,6 +273,9 @@ func newBakeCommand() *cobra.Command {
 					return err
 				}
 			}
+			if err := syncRenderedSkillArtifacts(absTarget, files); err != nil {
+				return err
+			}
 
 			if err := cliWriteLockfile(absTarget, files, targetName); err != nil {
 				return err
@@ -294,6 +294,24 @@ func newBakeCommand() *cobra.Command {
 	cmd.Flags().StringVar(&platform, "platform", "", "Render only the selected canonical platform")
 
 	return cmd
+}
+
+func syncRenderedSkillArtifacts(root string, files []models.RenderedFile) error {
+	seen := map[string]struct{}{}
+	for _, rendered := range files {
+		if filepath.Base(rendered.Destination) != "SKILL.md" {
+			continue
+		}
+		skillDir := filepath.Dir(filepath.Join(root, rendered.Destination))
+		if _, ok := seen[skillDir]; ok {
+			continue
+		}
+		seen[skillDir] = struct{}{}
+		if _, err := skillversion.SyncArtifacts(skillDir); err != nil {
+			return fmt.Errorf("sync skill version artifacts for %s: %w", rendered.Destination, err)
+		}
+	}
+	return nil
 }
 
 // canonicalPlatformSkillBaseDir returns the base directory where skills are stored for a platform.
@@ -429,7 +447,7 @@ func renderPlatformFilesEnabled(resolved *models.TargetConfig) bool {
 }
 
 func loadSkillRenderOptions(root string, cfg *models.BakeConfig, target *models.TargetConfig, from, mode string) (renderer.Options, []models.RenderedFile, error) {
-	opts := renderer.Options{SkillsMode: models.SkillModeReference}
+	opts := renderer.Options{SkillsMode: models.SkillModeReference, Root: root}
 	if cfg != nil && cfg.Skills != nil {
 		opts.SkillsMode = cfg.Skills.Mode
 	}

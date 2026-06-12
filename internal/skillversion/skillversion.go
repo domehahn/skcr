@@ -1,7 +1,6 @@
 package skillversion
 
 import (
-	"bytes"
 	"fmt"
 	"os"
 	"os/exec"
@@ -76,6 +75,7 @@ type ReleaseBundle struct {
 
 var bodyChangelogRE = regexp.MustCompile(`(?m)^## Changelog\s*$`)
 var bodyEntryRE = regexp.MustCompile(`(?m)^###\s+([0-9A-Za-z.+-]+)\s+-\s+(\d{4}-\d{2}-\d{2})\s*$`)
+var changelogHeadingRE = regexp.MustCompile(`(?m)^##\s+([0-9A-Za-z.+-]+)(?:\s+-\s+\d{4}-\d{2}-\d{2})?\s*$`)
 var gitCommand = exec.Command
 
 func Check(path string) ([]SkillInfo, error) {
@@ -150,12 +150,56 @@ func BumpWithOptions(path string, opts BumpOptions) (BumpResult, error) {
 		return BumpResult{}, err
 	}
 	dir := filepath.Dir(file)
-	_ = updateTextFileIfExists(filepath.Join(dir, "VERSION"), next+"\n")
-	_ = updateSkillYAMLIfExists(filepath.Join(dir, "skill.yaml"), next)
-	_ = prependChangelogIfExists(filepath.Join(dir, "CHANGELOG.md"), next, date, change)
+	if err := updateTextFileIfExists(filepath.Join(dir, "VERSION"), next+"\n"); err != nil {
+		return BumpResult{}, err
+	}
+	if err := updateSkillYAMLIfExists(filepath.Join(dir, "skill.yaml"), next); err != nil {
+		return BumpResult{}, err
+	}
+	if err := prependChangelogIfExists(filepath.Join(dir, "CHANGELOG.md"), next, date, change); err != nil {
+		return BumpResult{}, err
+	}
 	info, err = parseInfo(file, updated)
 	result.Info = info
 	return result, err
+}
+
+func SyncArtifacts(path string) (SkillInfo, error) {
+	file := skillFile(path)
+	contentBytes, err := os.ReadFile(file)
+	if err != nil {
+		return SkillInfo{}, err
+	}
+	content := string(contentBytes)
+	info, err := parseInfo(file, content)
+	if err != nil {
+		return info, err
+	}
+	frontmatter, _, ok := splitFrontmatter(content)
+	if !ok {
+		return info, fmt.Errorf("missing YAML frontmatter")
+	}
+	fm := spec.SkillMDFrontmatter{}
+	if err := yaml.Unmarshal([]byte(frontmatter), &fm); err != nil {
+		return info, err
+	}
+	date := fm.LastModified
+	change := "Version metadata synchronized"
+	if len(fm.Changelog) > 0 {
+		date = fm.Changelog[0].Date
+		change = fm.Changelog[0].Change
+	}
+	dir := filepath.Dir(file)
+	if err := updateTextFileIfExists(filepath.Join(dir, "VERSION"), fm.Version+"\n"); err != nil {
+		return info, err
+	}
+	if err := updateSkillYAMLIfExists(filepath.Join(dir, "skill.yaml"), fm.Version); err != nil {
+		return info, err
+	}
+	if err := syncChangelogIfExists(filepath.Join(dir, "CHANGELOG.md"), fm.Version, date, change); err != nil {
+		return info, err
+	}
+	return parseInfo(file, content)
 }
 
 func Changelog(path string) ([]ReleaseEntry, error) {
@@ -344,6 +388,7 @@ func parseInfo(path, content string) (SkillInfo, error) {
 	if err := validator.ValidateSkillMetadata(content); err != "" {
 		info.Errors = append(info.Errors, strings.TrimPrefix(err, "Skill metadata invalid: "))
 	}
+	info.Errors = append(info.Errors, artifactConsistencyErrors(path, info.Version)...)
 	info.Warnings = validator.ValidateSkillWarnings(content)
 	return info, nil
 }
@@ -514,12 +559,112 @@ func prependChangelogIfExists(path, version, date, change string) error {
 	if err != nil {
 		return nil
 	}
-	entry := fmt.Sprintf("## %s - %s\n\n- %s\n\n", version, date, change)
-	if bytes.HasPrefix(content, []byte("# Changelog\n\n")) {
-		updated := append([]byte("# Changelog\n\n"+entry), content[len("# Changelog\n\n"):]...)
-		return os.WriteFile(path, updated, 0o644)
+	updated := ensureChangelogEntry(string(content), version, date, change)
+	return os.WriteFile(path, []byte(updated), 0o644)
+}
+
+func syncChangelogIfExists(path, version, date, change string) error {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		return nil
 	}
-	return os.WriteFile(path, append([]byte(entry), content...), 0o644)
+	updated := ensureChangelogEntry(string(content), version, date, change)
+	return os.WriteFile(path, []byte(updated), 0o644)
+}
+
+func ensureChangelogEntry(content, version, date, change string) string {
+	entry := fmt.Sprintf("## %s - %s\n\n- %s\n\n", version, date, change)
+	if strings.HasPrefix(content, "# Changelog\n\n") {
+		body := content[len("# Changelog\n\n"):]
+		if strings.HasPrefix(body, entry) {
+			return content
+		}
+		body = removeFirstChangelogEntryForVersion(body, version)
+		return "# Changelog\n\n" + entry + strings.TrimLeft(body, "\n")
+	}
+	body := removeFirstChangelogEntryForVersion(content, version)
+	return "# Changelog\n\n" + entry + strings.TrimLeft(body, "\n")
+}
+
+func removeFirstChangelogEntryForVersion(body, version string) string {
+	matches := changelogHeadingRE.FindAllStringSubmatchIndex(body, -1)
+	if len(matches) == 0 {
+		return body
+	}
+	if body[matches[0][2]:matches[0][3]] != version {
+		return body
+	}
+	end := len(body)
+	if len(matches) > 1 {
+		end = matches[1][0]
+	}
+	return body[:matches[0][0]] + body[end:]
+}
+
+func artifactConsistencyErrors(skillPath, version string) []string {
+	if version == "" {
+		return nil
+	}
+	dir := filepath.Dir(skillPath)
+	errors := []string{}
+	if got, ok, err := versionFileVersion(filepath.Join(dir, "VERSION")); err != nil {
+		errors = append(errors, fmt.Sprintf("VERSION unreadable: %v", err))
+	} else if ok && got != version {
+		errors = append(errors, fmt.Sprintf("VERSION %q does not match SKILL.md version %q", got, version))
+	}
+	if got, ok, err := skillYAMLVersion(filepath.Join(dir, "skill.yaml")); err != nil {
+		errors = append(errors, fmt.Sprintf("skill.yaml version unreadable: %v", err))
+	} else if ok && got != version {
+		errors = append(errors, fmt.Sprintf("skill.yaml version %q does not match SKILL.md version %q", got, version))
+	}
+	if got, ok, err := changelogVersion(filepath.Join(dir, "CHANGELOG.md")); err != nil {
+		errors = append(errors, fmt.Sprintf("CHANGELOG.md unreadable: %v", err))
+	} else if ok && got != version {
+		errors = append(errors, fmt.Sprintf("CHANGELOG.md latest version %q does not match SKILL.md version %q", got, version))
+	}
+	return errors
+}
+
+func versionFileVersion(path string) (string, bool, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+	return strings.TrimSpace(string(content)), true, nil
+}
+
+func skillYAMLVersion(path string) (string, bool, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+	raw := map[string]any{}
+	if err := yaml.Unmarshal(content, &raw); err != nil {
+		return "", true, err
+	}
+	version, _ := raw["version"].(string)
+	return strings.TrimSpace(version), true, nil
+}
+
+func changelogVersion(path string) (string, bool, error) {
+	content, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+	match := changelogHeadingRE.FindSubmatch(content)
+	if match == nil {
+		return "", false, nil
+	}
+	return string(match[1]), true, nil
 }
 
 func gitRoot(path string) (string, error) {

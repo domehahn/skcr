@@ -71,6 +71,9 @@ func PlanSkill(opts SkillOptions) ([]PlannedFile, error) {
 		{Path: filepath.Join(root, "CHANGELOG.md"), Content: fmt.Sprintf("# Changelog\n\n## %s\n\n- Initial skill scaffold.\n", opts.Version)},
 		{Path: filepath.Join(root, "README.md"), Content: fmt.Sprintf("# %s\n\nThis is an AI agent skill scaffolded with `skcr`.\n\n## Version\n\nCurrent version: `%s`\n\n## Compatible platforms\n\n%s\n## Lifecycle\n\nAfter editing this skill, use `skpm` for lifecycle management:\n\n```bash\nskpm validate %s\nskpm package %s\nskpm publish %s\n```\n", opts.Name, opts.Version, platformBlock, opts.Name, opts.Name, opts.Name)},
 		{Path: filepath.Join(root, "LICENSE"), Content: licenseText(opts.License)},
+		{Path: filepath.Join(root, "scripts", "README.md"), Content: fmt.Sprintf("# %s Scripts\n\nPlace executable helper scripts for this skill here. Keep scripts self-contained, document dependencies, and reference them from `SKILL.md` only when the agent should run them.\n", opts.Name)},
+		{Path: filepath.Join(root, "references", "README.md"), Content: fmt.Sprintf("# %s References\n\nPlace focused supplemental documentation for this skill here. Agents should load these files on demand via relative links from `SKILL.md`.\n", opts.Name)},
+		{Path: filepath.Join(root, "assets", "README.md"), Content: fmt.Sprintf("# %s Assets\n\nPlace templates, static resources, schemas, diagrams, example payloads, or lookup tables for this skill here.\n", opts.Name)},
 		{Path: filepath.Join(root, "tests", "README.md"), Content: fmt.Sprintf("# %s Tests\n\nAdd examples, fixtures, and expected outputs for this skill here.\n", opts.Name)},
 	}, nil
 }

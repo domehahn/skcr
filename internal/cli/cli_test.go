@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/domehahn/skcr/internal/models"
+	"github.com/domehahn/skcr/internal/renderer"
 	"github.com/domehahn/skcr/internal/scaffold"
 	"gopkg.in/yaml.v3"
 )
@@ -76,6 +77,64 @@ func TestSkillVersionLifecycleCommands(t *testing.T) {
 	}
 	if err := runRoot("version", "release-bundle", skillDir, "--since", "2026-06-12", "--json"); err != nil {
 		t.Fatalf("version release-bundle failed: %v", err)
+	}
+}
+
+func TestCompatibilityCommandsAndBakeUseEvidence(t *testing.T) {
+	dir := t.TempDir()
+	evidence := filepath.Join(dir, "docs", "compat", "codex-0.51.0.md")
+	if err := os.MkdirAll(filepath.Dir(evidence), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(evidence, []byte("# Codex evidence\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := runRoot("init", "--target", dir, "--platform", "codex", "--project-name", "Demo"); err != nil {
+		t.Fatalf("init failed: %v", err)
+	}
+	if err := runRoot("compatibility", "set", "codex", "--target", dir, "--min-version", "0.51.0", "--evidence", "docs/compat/codex-0.51.0.md", "--validated", "2026-06-12"); err != nil {
+		t.Fatalf("compatibility set failed: %v", err)
+	}
+	if err := runRoot("compatibility", "check", "--target", dir); err != nil {
+		t.Fatalf("compatibility check failed: %v", err)
+	}
+	if err := runRoot("compatibility", "matrix", "--target", dir, "--json"); err != nil {
+		t.Fatalf("compatibility matrix failed: %v", err)
+	}
+	if err := runRoot("bake", "default", "--target", dir, "--write"); err != nil {
+		t.Fatalf("bake failed: %v", err)
+	}
+	content, err := os.ReadFile(filepath.Join(dir, ".agents", "skills", "security-reviewer", "SKILL.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(content), `codex: "0.51.0"`) {
+		t.Fatalf("expected baked skill to use verified codex min version: %s", content)
+	}
+	skillDir := filepath.Join(dir, ".agents", "skills", "security-reviewer")
+	versionFile, err := os.ReadFile(filepath.Join(skillDir, "VERSION"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(string(versionFile)) != "1.0.0" {
+		t.Fatalf("VERSION not synchronized with SKILL.md: %q", versionFile)
+	}
+	skillYAML, err := os.ReadFile(filepath.Join(skillDir, "skill.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(skillYAML), "version: 1.0.0") {
+		t.Fatalf("skill.yaml not synchronized with SKILL.md: %s", skillYAML)
+	}
+	changelog, err := os.ReadFile(filepath.Join(skillDir, "CHANGELOG.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(changelog), "## 1.0.0 - 2026-06-10") {
+		t.Fatalf("CHANGELOG.md not synchronized with SKILL.md: %s", changelog)
+	}
+	if err := runRoot("version", "check", skillDir); err != nil {
+		t.Fatalf("version check should pass for baked skill artifacts: %v", err)
 	}
 }
 
@@ -213,7 +272,7 @@ func TestScaffoldSkillCommand(t *testing.T) {
 	); err != nil {
 		t.Fatalf("scaffold skill failed: %v", err)
 	}
-	for _, rel := range []string{"SKILL.md", "skill.yaml", "VERSION", "CHANGELOG.md", "README.md", "LICENSE", filepath.Join("tests", "README.md")} {
+	for _, rel := range []string{"SKILL.md", "skill.yaml", "VERSION", "CHANGELOG.md", "README.md", "LICENSE", filepath.Join("scripts", "README.md"), filepath.Join("references", "README.md"), filepath.Join("assets", "README.md"), filepath.Join("tests", "README.md")} {
 		if _, err := os.Stat(filepath.Join(dir, "secure-code-review", rel)); err != nil {
 			t.Fatalf("missing %s: %v", rel, err)
 		}
@@ -314,14 +373,14 @@ func TestBakeInjectedErrorPaths(t *testing.T) {
 	}
 	cliResolveTarget = origResolve
 
-	origRender := cliRenderFiles
-	cliRenderFiles = func(*models.BakeConfig, *models.TargetConfig) ([]models.RenderedFile, error) {
+	origRenderWithOpts := cliRenderWithOpts
+	cliRenderWithOpts = func(*models.BakeConfig, *models.TargetConfig, renderer.Options) ([]models.RenderedFile, error) {
 		return nil, errors.New("render fail")
 	}
 	if err := runRoot("bake", "default", "--target", dir); err == nil {
 		t.Fatal("expected bake render error")
 	}
-	cliRenderFiles = origRender
+	cliRenderWithOpts = origRenderWithOpts
 
 	origLoadLock := cliLoadLockfile
 	cliLoadLockfile = func(string) (map[string]any, error) { return nil, errors.New("lock fail") }
@@ -605,7 +664,7 @@ targets:
 	}
 
 	for _, skillName := range []string{"my-skill", "another-skill"} {
-		for _, rel := range []string{"SKILL.md", "skill.yaml", "VERSION", "CHANGELOG.md", "README.md", "LICENSE", filepath.Join("tests", "README.md")} {
+		for _, rel := range []string{"SKILL.md", "skill.yaml", "VERSION", "CHANGELOG.md", "README.md", "LICENSE", filepath.Join("scripts", "README.md"), filepath.Join("references", "README.md"), filepath.Join("assets", "README.md"), filepath.Join("tests", "README.md")} {
 			if _, err := os.Stat(filepath.Join(dir, "skills", skillName, rel)); err != nil {
 				t.Fatalf("missing %s/%s/%s: %v", skillName, rel, skillName, err)
 			}
