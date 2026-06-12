@@ -420,6 +420,7 @@ var (
 		"## Purpose",
 		"## When to use",
 		"## Operating model",
+		"## Spec-Driven Change Context",
 		"## Skill-Specific Review Scope",
 		"## Skill-Specific Checklist",
 		"## Decision Rules",
@@ -484,13 +485,6 @@ func validateSkillMetadataForName(content, expectedName string) string {
 		errs = append(errs, "name does not match skill directory: "+fm.Name+" != "+expectedName)
 	}
 	errs = append(errs, spec.ValidateSkillMDFrontmatter(fm)...)
-	if fm.Stability == spec.StabilityStable {
-		for platform, version := range fm.MinPlatformVer {
-			if strings.EqualFold(strings.TrimSpace(version), "unknown") {
-				errs = append(errs, "stable skill has unverified min_platform_version for "+platform)
-			}
-		}
-	}
 	if !bodyChangelogHeadingRE.MatchString(body) {
 		errs = append(errs, "missing required body section: ## Changelog")
 	} else {

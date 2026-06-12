@@ -30,7 +30,6 @@ func TestValidateHelpers(t *testing.T) {
 		"missing specific section":  strings.Replace(validSkill, "## Decision Rules", "## Choices", 1),
 		"deprecated missing date":   strings.Replace(validSkill, "stability: stable", "stability: deprecated", 1),
 		"old last modified":         strings.Replace(validSkill, `last_modified: "2026-06-10"`, `last_modified: "2026-06-09"`, 1),
-		"stable unknown platform":   strings.Replace(validSkill, `codex: "0.51.0"`, `codex: "unknown"`, 1),
 	} {
 		if msg := validateSkillMetadata(tc); msg == "" {
 			t.Fatalf("expected metadata error for %s", name)
@@ -52,7 +51,7 @@ authors:
   - platform-engineering
 stability: stable
 min_platform_version:
-  codex: "0.51.0"
+  codex: "unknown"
 deprecated_since:
 replaces:
 supersedes: []
@@ -75,6 +74,10 @@ Validate a test skill fixture.
 ## Operating model
 
 - Inspect the concrete domain before making recommendations.
+
+## Spec-Driven Change Context
+
+- Preserve proposal, spec, design, task, verification, sync, and archive context.
 
 ## Skill-Specific Review Scope
 

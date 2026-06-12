@@ -43,6 +43,42 @@ func TestRootAndVersionCommand(t *testing.T) {
 	}
 }
 
+func TestSkillVersionLifecycleCommands(t *testing.T) {
+	dir := t.TempDir()
+	if err := runRoot("scaffold", "skill", "secure-code-review", "--output-dir", dir, "--version", "1.0.0", "--platform", "codex"); err != nil {
+		t.Fatalf("scaffold skill failed: %v", err)
+	}
+	skillDir := filepath.Join(dir, "secure-code-review")
+	if err := runRoot("version", "check", skillDir); err != nil {
+		t.Fatalf("version check failed: %v", err)
+	}
+	if err := runRoot("version", "check", skillDir, "--json"); err != nil {
+		t.Fatalf("version check json failed: %v", err)
+	}
+	if err := runRoot("version", "bump", skillDir, "--kind", "patch", "--date", "2026-06-12", "--change", "Preview release lifecycle automation", "--dry-run", "--json"); err != nil {
+		t.Fatalf("version bump dry-run json failed: %v", err)
+	}
+	if err := runRoot("version", "bump", skillDir, "--kind", "patch", "--date", "2026-06-12", "--change", "Add release lifecycle automation"); err != nil {
+		t.Fatalf("version bump failed: %v", err)
+	}
+	content, err := os.ReadFile(filepath.Join(skillDir, "SKILL.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(content), `version: 1.0.1`) && !strings.Contains(string(content), `version: "1.0.1"`) {
+		t.Fatalf("SKILL.md was not bumped: %s", content)
+	}
+	if err := runRoot("version", "changelog", skillDir); err != nil {
+		t.Fatalf("version changelog failed: %v", err)
+	}
+	if err := runRoot("version", "release-notes", skillDir, "--since", "2026-06-12"); err != nil {
+		t.Fatalf("version release-notes failed: %v", err)
+	}
+	if err := runRoot("version", "release-bundle", skillDir, "--since", "2026-06-12", "--json"); err != nil {
+		t.Fatalf("version release-bundle failed: %v", err)
+	}
+}
+
 func TestApplyBuildInfo(t *testing.T) {
 	origV, origC, origD := Version, Commit, Date
 	t.Cleanup(func() {

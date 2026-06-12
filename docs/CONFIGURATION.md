@@ -29,6 +29,7 @@ Top-level fields:
 | `inherits` | List of target names to merge into this target. |
 | `platforms` | Platforms to render. |
 | `profiles` | Behavioral profile names used in templates. |
+| `delivery` | Optional delivery intent such as `skills`, `commands`, or `both` for future profile-aware rendering. |
 | `skills` | Skill names to generate/register. |
 | `rules` | Governance flags rendered into instructions/rules. |
 | `flows` | Flow template names to generate. |
@@ -44,6 +45,12 @@ Top-level fields:
 - `openhands`
 - `opencode`
 - `ollama`
+- `antigravity`
+- `amazon-q`
+- `cline`
+- `kilocode`
+- `qoder`
+- `qwen`
 - `generic`
 
 Aliases:
@@ -51,6 +58,11 @@ Aliases:
 - `gitlab` -> `gitlab-duo`
 - `copilot` -> `github-copilot`
 - `claude-code` -> `claude`
+- `amazon`, `amazon-q-developer` -> `amazon-q`
+- `kilo`, `kilo-code` -> `kilocode`
+- `qwen-code` -> `qwen`
+
+`skcr` keeps a central capability matrix for skill and command surfaces inspired by OpenSpec-style tool integrations. New tool IDs can be accepted as skills-first targets even before minimum compatible platform versions are validated; in that case generated `min_platform_version` entries stay `"unknown"`.
 
 ## Init with comma-separated platforms
 

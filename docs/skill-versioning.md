@@ -29,19 +29,25 @@ authors:
   - platform-engineering
 stability: stable
 min_platform_version:
-  codex: "0.51.0"
-  claude-code: "1.0.44"
-  github-copilot: "1.300.0"
-  gitlab-duo: "18.0"
-  opencode: "0.6.0"
-  openhands: "0.39.0"
-  cursor: "1.0.0"
-  roo-code: "3.20.0"
-  kiro: "0.2.0"
-  junie: "2025.2"
-  gemini-cli: "0.1.12"
-  windsurf: "1.9.0"
-  ollama: "0.7.0"
+  codex: "unknown"
+  amazon-q: "unknown"
+  antigravity: "unknown"
+  claude-code: "unknown"
+  cline: "unknown"
+  github-copilot: "unknown"
+  gitlab-duo: "unknown"
+  opencode: "unknown"
+  openhands: "unknown"
+  cursor: "unknown"
+  roo-code: "unknown"
+  kiro: "unknown"
+  junie: "unknown"
+  gemini-cli: "unknown"
+  kilocode: "unknown"
+  qoder: "unknown"
+  qwen: "unknown"
+  windsurf: "unknown"
+  ollama: "unknown"
 deprecated_since:
 replaces:
 supersedes: []
@@ -62,7 +68,7 @@ changelog:
 | `last_modified` | Date of the last material change in `YYYY-MM-DD` format. |
 | `authors` | List of responsible teams or persons (at least one entry). |
 | `stability` | One of `experimental`, `stable`, or `deprecated`. |
-| `min_platform_version` | Minimum platform version per target. Built-in production skills must use concrete versions from `internal/platforms/compatibility.go`. |
+| `min_platform_version` | Minimum platform version per target. Use concrete versions only when validated; otherwise use `"unknown"`. |
 | `changelog` | Machine-readable list of changes. Most recent entry first. |
 
 ### Optional fields
@@ -90,16 +96,16 @@ changelog:
 
 ## `min_platform_version`
 
-List every target platform. Built-in production skills must use the central compatibility matrix in `internal/platforms/compatibility.go`; do not hand-edit per-skill values or use `"unknown"` for stable built-ins.
+List every target platform. Built-in skills use the central compatibility matrix in `internal/platforms/compatibility.go`; do not hand-edit per-skill values. Keep a platform at `"unknown"` until the minimum version is validated.
 
 ```yaml
 min_platform_version:
-  codex: "0.51.0"
-  claude-code: "1.0.44"
-  gitlab-duo: "18.0"
+  codex: "unknown"
+  claude-code: "unknown"
+  gitlab-duo: "unknown"
 ```
 
-`unknown` is allowed only as an incomplete custom-skill marker. The validator reports it as a warning because production routing cannot treat it as verified compatibility.
+`unknown` is an explicit unverified-compatibility marker. The validator reports it as a warning because production routing cannot treat it as verified compatibility.
 
 ---
 
@@ -176,6 +182,26 @@ Add a new entry whenever skill instructions, the operating model, or guardrails 
 
 ---
 
+## CLI lifecycle
+
+Use `skcr version` commands for repeatable skill version work:
+
+```bash
+skcr version check .agents/skills --changed
+skcr version changed .agents/skills --json
+skcr version bump .agents/skills/security-reviewer --kind patch --change "Tighten SSRF decision rules"
+skcr version bump .agents/skills --all-changed --kind patch --change "Refresh generated skill guidance" --dry-run
+skcr version changelog .agents/skills --json
+skcr version release-notes .agents/skills --since 2026-06-01
+skcr version release-bundle .agents/skills --since 2026-06-01 --changed --json
+```
+
+`version bump` updates `SKILL.md` frontmatter, the body `## Changelog`, `VERSION`, `skill.yaml`, and `CHANGELOG.md` when those files exist.
+
+`version check --changed` and `version changed` use git status plus the version in `HEAD:SKILL.md` to detect material skill edits that did not bump the skill version. Use this in CI before releasing generated skills.
+
+---
+
 ## `universal-skill-creator` requirements
 
 When the `$universal-skill-creator` skill generates a new skill, it MUST:
@@ -185,7 +211,7 @@ When the `$universal-skill-creator` skill generates a new skill, it MUST:
 3. Set `stability` explicitly.
 4. Set `since` and `last_modified` to the creation date (`YYYY-MM-DD`).
 5. Set `authors` (at least one entry).
-6. Set `min_platform_version` for every relevant platform using the central compatibility matrix; use `"unknown"` only for incomplete custom-skill drafts.
+6. Set `min_platform_version` for every relevant platform using the central compatibility matrix; use a concrete version only after validation, otherwise keep `"unknown"`.
 7. Include `replaces` and `supersedes` (empty if not applicable).
 8. Include a machine-readable `changelog` in the frontmatter.
 9. Include a `## Changelog` section in the body.
@@ -215,7 +241,7 @@ The validator scans every configured platform skill directory and enforces:
 | `authors` | Present with at least one entry. |
 | `stability` | Present and one of `experimental`, `stable`, or `deprecated`. |
 | `deprecated_since` | Present and formatted as `YYYY-MM-DD` when `stability: deprecated`. |
-| `min_platform_version` | Present with at least one platform entry; stable skills must not use `unknown`. |
+| `min_platform_version` | Present with at least one platform entry; `unknown` values produce compatibility warnings. |
 | `replaces` | Present, even when empty. |
 | `supersedes` | Present, using `[]` when empty. |
 | Frontmatter `changelog` | Present with at least one entry; newest entry must match `version`. |

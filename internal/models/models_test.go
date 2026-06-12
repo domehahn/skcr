@@ -12,6 +12,10 @@ func TestNormalizePlatform(t *testing.T) {
 		{"github-copilot-chat", "github-copilot", false},
 		{"open-hands", "openhands", false},
 		{"codex", "codex", false},
+		{"antigravity", "antigravity", false},
+		{"Amazon Q Developer", "amazon-q", false},
+		{"kilo-code", "kilocode", false},
+		{"qwen-code", "qwen", false},
 		{"unknown", "", true},
 	}
 
@@ -54,5 +58,31 @@ func TestParsePlatforms(t *testing.T) {
 
 	if _, err := ParsePlatforms("codex,invalid"); err == nil {
 		t.Fatal("expected error for invalid platform")
+	}
+}
+
+func TestAllConcretePlatformsExcludesAllAndIncludesExtendedTools(t *testing.T) {
+	got := AllConcretePlatforms()
+	seen := map[string]struct{}{}
+	for _, platform := range got {
+		if platform == "all" {
+			t.Fatal("AllConcretePlatforms must not include all")
+		}
+		if _, ok := seen[platform]; ok {
+			t.Fatalf("AllConcretePlatforms contains duplicate %q: %#v", platform, got)
+		}
+		seen[platform] = struct{}{}
+	}
+	for _, want := range []string{"codex", "generic", "antigravity", "amazon-q", "qwen"} {
+		found := false
+		for _, platform := range got {
+			if platform == want {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("AllConcretePlatforms missing %q: %#v", want, got)
+		}
 	}
 }

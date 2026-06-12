@@ -99,6 +99,9 @@ func TestRenderFilesAllPlatformsAndContent(t *testing.T) {
 	if strings.Contains(paths["skills/security-reviewer/SKILL.md"], "slash-command: enabled") == false {
 		t.Fatal("expected gitlab skill slash metadata by default")
 	}
+	if !strings.Contains(paths[".agents/skills/security-reviewer/SKILL.md"], "## Spec-Driven Change Context") {
+		t.Fatal("expected generated skills to include spec-driven change context")
+	}
 	arch := paths[".agents/skills/architecture-reviewer/SKILL.md"]
 	for _, want := range []string{
 		"## Skill-Specific Review Scope",
@@ -126,6 +129,39 @@ func TestRenderFilesAllPlatformsAndContent(t *testing.T) {
 	}
 
 	_ = target
+}
+
+func TestRenderFilesUsesCapabilitySkillPathsForAdditionalTools(t *testing.T) {
+	cfg, err := bake.BuildInitialConfig([]string{"antigravity", "amazon-q", "qwen"}, "Demo", "team", "de", "strict", "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	resolved, err := bake.ResolveTarget(cfg, "default")
+	if err != nil {
+		t.Fatal(err)
+	}
+	files, err := RenderFiles(cfg, resolved)
+	if err != nil {
+		t.Fatal(err)
+	}
+	paths := map[string]string{}
+	for _, f := range files {
+		paths[f.Destination] = f.Content
+	}
+	for _, path := range []string{
+		".agent/skills/security-reviewer/SKILL.md",
+		".amazonq/skills/security-reviewer/SKILL.md",
+		".qwen/skills/security-reviewer/SKILL.md",
+	} {
+		if !strings.Contains(paths[path], "## Spec-Driven Change Context") {
+			t.Fatalf("missing rendered capability skill at %s", path)
+		}
+	}
+	for _, want := range []string{"`antigravity`: `.agent/skills/`", "`amazon-q`: `.amazonq/skills/`", "`qwen`: `.qwen/skills/`"} {
+		if !strings.Contains(paths["AGENTS.md"], want) {
+			t.Fatalf("expected AGENTS.md to include %q", want)
+		}
+	}
 }
 
 func TestRenderFilesErrorWhenTemplateMissing(t *testing.T) {

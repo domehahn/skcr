@@ -4,20 +4,20 @@
 
 ## Purpose
 
-This repository contains versioned Agent Skills and the `skcr` CLI used to scaffold, render, sync, validate, and package those skills across Codex, GitLab Duo, Claude Code, GitHub Copilot, OpenHands, OpenCode, Ollama, Cursor, Roo Code, Kiro, Junie, Gemini CLI, Windsurf, and other agent platforms.
+This repository contains versioned Agent Skills and the `skcr` CLI used to scaffold, render, sync, validate, version-check, and release-prepare those skills across Codex, GitLab Duo, Claude Code, GitHub Copilot, OpenHands, OpenCode, Ollama, Cursor, Roo Code, Kiro, Junie, Gemini CLI, Windsurf, Antigravity, Amazon Q, Qwen, and other agent platforms.
 
 ```text
-skcr  = init / add / remove / rename / list / bake / sync / status / doctor / export / validate / clean
-skpm  = validate / version / package / publish / install / update / lock / verify
+skcr  = init / add / remove / rename / list / bake / sync / status / doctor / export / validate / version / clean
+skpm  = validate / package / publish / install / update / lock / verify
 ```
 
-`skcr` creates and renders. `skpm` manages the skill lifecycle.
+`skcr` creates, renders, synchronizes, validates local version metadata, detects changed skills, bumps local skill versions, and generates release notes. `skpm` manages registry-facing lifecycle work such as packaging, publishing, installing, locking, and verifying registry artifacts.
 
 ## Architecture
 
 ```text
 skcr init
-  → creates agentic.bake.yaml
+  → creates agentic.bake.yaml; without --platform it includes every known concrete platform
 
 skcr add skill <name>
   → adds skill to all bakefile targets and scaffolds immediately
@@ -43,6 +43,27 @@ skcr status
 skcr doctor
   → checks bakefile, skill files, platform sync, and toolchain without modifying anything
 
+skcr version check <path> [--changed] [--json]
+  → validates SKILL.md version metadata and optionally checks git changes
+
+skcr version changed <path> [--json]
+  → reports changed skills and whether their version changed
+
+skcr version bump <skill-dir> --kind patch --change "Describe change" [--dry-run] [--json]
+  → bumps skill version and synchronizes SKILL.md, VERSION, skill.yaml, and CHANGELOG.md
+
+skcr version bump <path> --all-changed --change "Describe change"
+  → bumps all git-changed skills that have not already changed version
+
+skcr version changelog <path>
+  → prints machine-readable changelog entries across one skill or a skill tree
+
+skcr version release-notes <path> [--since YYYY-MM-DD]
+  → generates release notes from skill changelog entries
+
+skcr version release-bundle <path> [--since YYYY-MM-DD] [--changed] [--json]
+  → generates checks, changelog, changed-skill report, and release notes
+
 skcr export [--out SKILLS.md] [--in-target <name>] [--skill <name>]
   → concatenates all SKILL.md files into one document for LLM context or documentation
 ```
@@ -67,6 +88,9 @@ Skills are declared once in `targets.*.skills`. `skcr bake --write` scaffolds th
 .cursor/skills/<name>/     ← Cursor  (full scaffold)
 .roo/skills/<name>/        ← Roo Code  (full scaffold)
 .kiro/skills/<name>/       ← Kiro  (full scaffold)
+.agent/skills/<name>/      ← Antigravity/OpenSpec-style target
+.amazonq/skills/<name>/    ← Amazon Q target
+.qwen/skills/<name>/       ← Qwen target
 ...
 ```
 
@@ -74,11 +98,13 @@ All platform directories receive the complete scaffold. `.agents/skills/` is the
 
 Platform-specific instruction files (AGENTS.md, CLAUDE.md, etc.) are tracked in `.agentic-template.lock` and managed by `skcr bake`.
 
+Built-in generated skills also include a `## Spec-Driven Change Context` section. It instructs agents to preserve durable proposal/design/tasks context, track spec deltas, verify against those artifacts, and sync or archive completed change records instead of relying on chat-only intent.
+
 ## Repository Structure
 
 - `.agents/skills/` contains canonical skill sources for this repository.
 - `skills/` contains the GitLab Duo platform copy generated or synchronized from `.agents/skills/`.
-- `.claude/skills/`, `.github/skills/`, `.opencode/skills/`, `.openhands/skills/`, `.ollama/skills/`, `.cursor/skills/`, `.roo/skills/`, `.kiro/skills/`, `.junie/skills/`, `.gemini/skills/`, and `.windsurf/skills/` contain platform-specific synchronized copies.
+- `.claude/skills/`, `.github/skills/`, `.opencode/skills/`, `.openhands/skills/`, `.ollama/skills/`, `.cursor/skills/`, `.roo/skills/`, `.kiro/skills/`, `.junie/skills/`, `.gemini/skills/`, `.windsurf/skills/`, `.agent/skills/`, `.amazonq/skills/`, `.qwen/skills/`, and other capability-matrix paths contain platform-specific synchronized copies.
 - `agentic.bake.yaml` defines platform rendering and governance rules.
 - `AGENTS.md` defines agent routing and usage rules.
 - `docs/skill-content-readiness.md` defines when a skill is framework-ready versus content-ready.
@@ -87,9 +113,12 @@ Platform-specific instruction files (AGENTS.md, CLAUDE.md, etc.) are tracked in 
 
 - Every skill must contain complete YAML frontmatter.
 - Every skill must contain a `## Changelog` section.
+- Every material skill change must bump the skill version and add synchronized frontmatter/body changelog entries.
 - Every skill must contain skill-specific checklists, decision rules, acceptance criteria, and output requirements.
+- Every production-ready skill must include durable spec-driven change context.
 - Generic copy-paste skill bodies are not production-ready.
 - Edit canonical skill content in `.agents/skills/<name>/SKILL.md`, then run `skcr sync`.
+- Before release, run `skcr version check .agents/skills --changed`.
 - Changes must go through merge requests.
 - Security-sensitive changes require review.
 
@@ -98,7 +127,8 @@ Platform-specific instruction files (AGENTS.md, CLAUDE.md, etc.) are tracked in 
 A skill is production-ready only when it has:
 
 - complete versioning metadata,
-- validated platform compatibility from the central compatibility matrix,
+- platform compatibility recorded through the central compatibility matrix,
+- durable spec-driven change context,
 - concrete operating model,
 - concrete checklist,
 - concrete acceptance criteria,
@@ -106,34 +136,45 @@ A skill is production-ready only when it has:
 - security guardrails,
 - clear output requirements.
 
+For local release readiness, `skcr version changed` detects material skill edits without version bumps, `skcr version bump --all-changed` synchronizes version artifacts, and `skcr version release-bundle` produces CI-friendly checks, changelog entries, changed-skill reports, and release notes.
+
 ## Platform Compatibility
 
-Built-in production skills use concrete `min_platform_version` values from `internal/platforms/compatibility.go`. `unknown` is reserved for incomplete custom metadata and should be treated as a validation warning, not as a production-ready compatibility claim.
+Built-in skills use `min_platform_version` values from `internal/platforms/compatibility.go`. Concrete values should be set only when the minimum platform version is validated; otherwise use `"unknown"` and treat compatibility as unverified.
 
 ## Supported platforms
 
 `skcr` recognises all platforms from the [agentskills.io](https://agentskills.io) open standard.
 
-**Platforms with dedicated skill directories:**
+**Platforms with dedicated or OpenSpec-style skill directories:**
 
-| Platform | Alias(es) | Skill directory |
-| --- | --- | --- |
-| `gitlab-duo` | `gitlab` | `skills/` |
-| `claude-code` | `claude` | `.claude/skills/` |
-| `github-copilot` | `copilot`, `github` | `.github/skills/` |
-| `cursor` | | `.cursor/skills/` |
-| `junie` | `jetbrains` | `.junie/skills/` |
-| `gemini-cli` | `gemini` | `.gemini/skills/` |
-| `roo-code` | `roo` | `.roo/skills/` |
-| `kiro` | | `.kiro/skills/` |
-| `opencode` | | `.opencode/skills/` |
-| `openhands` | | `.openhands/skills/` |
-| `ollama` | | `.ollama/skills/` |
-| `windsurf` | | `.windsurf/skills/` |
+| Platform | Alias(es) | Skill directory | Command surface |
+| --- | --- | --- | --- |
+| `gitlab-duo` | `gitlab` | `skills/` | `.gitlab/duo/flows/` |
+| `claude-code` | `claude` | `.claude/skills/` | `.claude/commands/opsx/` |
+| `github-copilot` | `copilot`, `github` | `.github/skills/` | `.github/prompts/` |
+| `codex` | | `.agents/skills/` | `$CODEX_HOME/prompts/` |
+| `cursor` | | `.cursor/skills/` | `.cursor/commands/` |
+| `junie` | `jetbrains` | `.junie/skills/` | `.junie/commands/` |
+| `gemini-cli` | `gemini` | `.gemini/skills/` | `.gemini/commands/opsx/` |
+| `roo-code` | `roo` | `.roo/skills/` | `.roo/commands/` |
+| `kiro` | | `.kiro/skills/` | `.kiro/prompts/` |
+| `opencode` | | `.opencode/skills/` | `.opencode/commands/` |
+| `windsurf` | | `.windsurf/skills/` | `.windsurf/commands/` |
+| `antigravity` | | `.agent/skills/` | `.agent/workflows/` |
+| `amazon-q` | `amazon`, `amazon-q-developer` | `.amazonq/skills/` | `.amazonq/prompts/` |
+| `cline` | | `.cline/skills/` | `.clinerules/workflows/` |
+| `kilocode` | `kilo`, `kilo-code` | `.kilocode/skills/` | `.kilocode/workflows/` |
+| `qoder` | | `.qoder/skills/` | `.qoder/commands/opsx/` |
+| `qwen` | `qwen-code` | `.qwen/skills/` | `.qwen/commands/` |
+| `openhands` | | `.openhands/skills/` | platform instructions |
+| `ollama` | | `.ollama/skills/` | model/runtime config |
 
-**All other platforms** (including `codex`, `amp`, `goose`, `trae`, and 30+ more) use `.agents/skills/` as the universal fallback.
+Additional OpenSpec-style tool IDs such as `auggie`, `bob`, `codebuddy`, `continue`, `costrict`, `crush`, `factory`, `forgecode`, `iflow`, `kimi`, `lingma`, and `pi` are accepted as skills-first targets through the central capability matrix. Compatibility remains unverified until validated.
 
-Full platform list: `sklib/spec/platform.go`.
+**All other platforms** (including `amp`, `goose`, `trae`, and 30+ more) use `.agents/skills/` as the universal fallback.
+
+Platform normalization starts with `sklib/spec/platform.go` and is extended by `internal/models/models.go`. Skill and command surfaces are described in `internal/platforms/capabilities.go`.
 
 ## Prerequisites
 
@@ -156,8 +197,11 @@ go install github.com/domehahn/skcr/cmd/skcr@latest
 ## Quick start
 
 ```bash
-# 1. Initialise
+# 1. Initialise a targeted setup
 skcr init --target . --project-name MyProject --platform codex,claude-code,github-copilot
+
+# Or initialise every known concrete platform
+skcr init --target . --project-name MyProject
 
 # 2. Add skills (writes to bakefile + scaffolds immediately)
 skcr add skill requirements-analyst
@@ -172,8 +216,12 @@ skcr status
 # 5. Edit .agents/skills/requirements-analyst/SKILL.md, then propagate
 skcr sync
 
-# 6. Validate
+# 6. Validate project state
 skcr validate
+
+# 7. Check local skill version lifecycle before release
+skcr version check .agents/skills --changed
+skcr version release-bundle .agents/skills --changed --json
 ```
 
 ## Commands
@@ -190,6 +238,12 @@ skcr validate
 | `skcr sync` | Propagate `SKILL.md` edits from `.agents/skills/` to all platform dirs |
 | `skcr status` | Show skill scaffold status across all platform directories |
 | `skcr doctor` | Check project health: bakefile, skills, platform sync, and toolchain |
+| `skcr version check <path>` | Validate skill version metadata, optionally with git changed-skill checks |
+| `skcr version changed <path>` | Report changed skills and missing version bumps |
+| `skcr version bump <skill-dir>` | Bump one skill or all changed skills and synchronize version artifacts |
+| `skcr version changelog <path>` | Print skill changelog entries |
+| `skcr version release-notes <path>` | Generate release notes from skill changelogs |
+| `skcr version release-bundle <path>` | Generate checks, changelog entries, changed-skill report, and release notes |
 | `skcr export` | Export all skill content as a single Markdown document |
 | `skcr validate` | Validate configuration and generated state |
 | `skcr clean` | Remove skcr-managed files listed in `.agentic-template.lock` |
@@ -559,17 +613,60 @@ skcr validate --skills
 - Generated platform files match the lockfile state
 - `skill.yaml` and `SKILL.md` presence in discovered skill directories
 
-## Skill lifecycle (with `skpm`)
+## `skcr version`
 
-`skcr` creates and scaffolds. `skpm` handles versioning, packaging, publishing, and installation.
+Manages local skill version metadata and release-preparation workflows.
 
 ```bash
-# After editing a skill:
+# Validate version metadata
+skcr version check .agents/skills
+
+# Fail when git changed a skill without a version bump
+skcr version check .agents/skills --changed
+
+# List changed skills and affected files
+skcr version changed .agents/skills --json
+
+# Preview a single bump
+skcr version bump .agents/skills/security-reviewer \
+  --kind patch \
+  --date 2026-06-12 \
+  --change "Tighten SSRF decision rules" \
+  --dry-run
+
+# Bump every changed skill that has not already changed version
+skcr version bump .agents/skills \
+  --all-changed \
+  --kind patch \
+  --change "Refresh generated skill guidance"
+
+# Generate changelog and release output
+skcr version changelog .agents/skills --json
+skcr version release-notes .agents/skills --since 2026-06-01
+skcr version release-bundle .agents/skills --since 2026-06-01 --changed --json
+```
+
+`skcr version bump` synchronizes:
+
+- `SKILL.md` frontmatter `version`, `last_modified`, and `changelog`,
+- body `## Changelog`,
+- `VERSION`,
+- `skill.yaml`,
+- `CHANGELOG.md`.
+
+`skcr version changed` compares the current working tree against `HEAD:SKILL.md` and reports material skill edits that did not change the skill version.
+
+## Skill lifecycle with `skpm`
+
+`skcr` prepares and validates local skill artifacts. `skpm` handles registry-facing lifecycle work: package, publish, install, update, lock, and verify registry artifacts.
+
+```bash
+# After skcr version checks pass:
 skpm validate .agents/skills/requirements-analyst
 skpm package  .agents/skills/requirements-analyst
 skpm publish  .agents/skills/requirements-analyst --source myregistry
 
-# Install skills from a registry:
+# Install skills from a registry
 skpm add requirements-analyst@^1.0.0
 skpm lock && skpm install
 skcr bake --skills-from agent-skills.lock --write
@@ -584,10 +681,13 @@ skcr bake --skills-from agent-skills.lock --write
 - Render and sync platform-specific output files
 - Track generated files in `.agentic-template.lock`
 - Validate generated project state
+- Validate local skill version metadata
+- Detect changed skills without version bumps
+- Bump local skill versions and synchronize local version artifacts
+- Generate local changelogs, release notes, and release bundles
 
 `skcr` **must not**:
 
-- Bump skill versions
 - Package or publish skills
 - Resolve registry versions or download artifacts
 - Write `agent-skills.lock`

@@ -17,6 +17,9 @@ var SupportedPlatforms = func() map[string]struct{} {
 	for _, p := range spec.ExpandAllPlatforms([]spec.Platform{spec.PlatformAll}) {
 		m[string(p)] = struct{}{}
 	}
+	for _, p := range ExtendedAgentPlatforms {
+		m[p] = struct{}{}
+	}
 	return m
 }()
 
@@ -25,14 +28,62 @@ var SupportedPlatforms = func() map[string]struct{} {
 var PlatformAliases = map[string]string{
 	"gitlab-duo-agent-platform": "gitlab-duo",
 	"github-copilot-chat":       "github-copilot",
+	"amazon":                    "amazon-q",
+	"amazon q":                  "amazon-q",
+	"amazon q developer":        "amazon-q",
+	"amazon-q-developer":        "amazon-q",
+	"auggie-cli":                "auggie",
+	"cline-code":                "cline",
+	"kilo-code":                 "kilocode",
+	"kilo":                      "kilocode",
+	"roo":                       "roo-code",
+	"qwen-code":                 "qwen",
+	"qoder-ide":                 "qoder",
+}
+
+var ExtendedAgentPlatforms = []string{
+	"amazon-q",
+	"antigravity",
+	"auggie",
+	"bob",
+	"cline",
+	"codebuddy",
+	"continue",
+	"costrict",
+	"crush",
+	"factory",
+	"forgecode",
+	"iflow",
+	"kilocode",
+	"kimi",
+	"lingma",
+	"pi",
+	"qoder",
+	"qwen",
 }
 
 // CanonicalPlatforms is the ordered list of all concrete canonical platforms followed by "all".
 // Derived from sklib/spec so it stays in sync automatically.
-var CanonicalPlatforms = append(
+var CanonicalPlatforms = append(append(
 	spec.PlatformStrings(spec.ExpandAllPlatforms([]spec.Platform{spec.PlatformAll})),
-	"all",
-)
+	ExtendedAgentPlatforms...),
+	"all")
+
+func AllConcretePlatforms() []string {
+	out := make([]string, 0, len(CanonicalPlatforms))
+	seen := map[string]struct{}{}
+	for _, platform := range CanonicalPlatforms {
+		if platform == "all" {
+			continue
+		}
+		if _, ok := seen[platform]; ok {
+			continue
+		}
+		seen[platform] = struct{}{}
+		out = append(out, platform)
+	}
+	return out
+}
 
 const (
 	SkillModeReference = "reference"
@@ -82,6 +133,7 @@ type TargetConfig struct {
 	Inherits    []string       `yaml:"inherits,omitempty"`
 	Platforms   []string       `yaml:"platforms,omitempty"`
 	Profiles    []string       `yaml:"profiles,omitempty"`
+	Delivery    string         `yaml:"delivery,omitempty"`
 	Skills      []string       `yaml:"skills,omitempty"`
 	Flows       []string       `yaml:"flows,omitempty"`
 	Rules       map[string]any `yaml:"rules,omitempty"`
@@ -115,6 +167,11 @@ func NormalizePlatform(value string) (string, error) {
 		if alias, ok := PlatformAliases[normalized]; ok {
 			return alias, nil
 		}
+		for _, platform := range ExtendedAgentPlatforms {
+			if normalized == platform {
+				return platform, nil
+			}
+		}
 		return "", fmt.Errorf("unsupported platform: %s", value)
 	}
 	return string(p), nil
@@ -133,6 +190,12 @@ func NormalizePlatforms(values []string) ([]string, error) {
 		if p == "all" {
 			for _, canonical := range spec.ExpandAllPlatforms([]spec.Platform{spec.PlatformAll}) {
 				s := string(canonical)
+				if _, ok := seen[s]; !ok {
+					seen[s] = struct{}{}
+					result = append(result, s)
+				}
+			}
+			for _, s := range ExtendedAgentPlatforms {
 				if _, ok := seen[s]; !ok {
 					seen[s] = struct{}{}
 					result = append(result, s)

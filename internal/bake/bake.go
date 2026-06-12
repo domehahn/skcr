@@ -158,6 +158,11 @@ func normalizeTarget(target *models.TargetConfig) error {
 	if target.GitLabDuo == nil {
 		target.GitLabDuo = map[string]any{}
 	}
+	switch target.Delivery {
+	case "", "skills", "commands", "both":
+	default:
+		return fmt.Errorf("unsupported delivery mode: %s", target.Delivery)
+	}
 	return nil
 }
 
@@ -199,6 +204,9 @@ func ResolveTarget(config *models.BakeConfig, targetName string) (*models.Target
 			merged.Rules = deepMerge(merged.Rules, parentTarget.Rules)
 			merged.Model = deepMerge(merged.Model, parentTarget.Model)
 			merged.GitLabDuo = deepMerge(merged.GitLabDuo, parentTarget.GitLabDuo)
+			if merged.Delivery == "" {
+				merged.Delivery = parentTarget.Delivery
+			}
 		}
 
 		merged.Platforms = mergeUnique(merged.Platforms, target.Platforms)
@@ -208,6 +216,9 @@ func ResolveTarget(config *models.BakeConfig, targetName string) (*models.Target
 		merged.Rules = deepMerge(merged.Rules, target.Rules)
 		merged.Model = deepMerge(merged.Model, target.Model)
 		merged.GitLabDuo = deepMerge(merged.GitLabDuo, target.GitLabDuo)
+		if target.Delivery != "" {
+			merged.Delivery = target.Delivery
+		}
 
 		activeStack = activeStack[:len(activeStack)-1]
 		return merged, nil
@@ -224,21 +235,7 @@ func BuildInitialConfig(
 	governanceLevel string,
 	preset string,
 ) (*models.BakeConfig, error) {
-	defaultRuntimePlatforms := []string{
-		"codex",
-		"github-copilot",
-		"claude-code",
-		"gitlab-duo",
-		"opencode",
-		"openhands",
-		"ollama",
-		"cursor",
-		"roo-code",
-		"kiro",
-		"junie",
-		"gemini-cli",
-		"windsurf",
-	}
+	defaultRuntimePlatforms := models.AllConcretePlatforms()
 	var err error
 	platforms, err = models.NormalizePlatforms(platforms)
 	if err != nil {
@@ -283,6 +280,7 @@ func BuildInitialConfig(
 			Description: "Codex AGENTS.md and project skills",
 			Platforms:   []string{"codex"},
 			Profiles:    []string{"base", "devsecops"},
+			Delivery:    "both",
 			Skills:      slices.Clone(catalog.CoreSkills),
 			Rules:       deepMerge(map[string]any{}, catalog.BaseRules),
 		}
@@ -293,6 +291,7 @@ func BuildInitialConfig(
 			Description: "GitHub Copilot repository instructions and prompt files",
 			Platforms:   []string{"github-copilot"},
 			Profiles:    []string{"base", "devsecops", "documentation"},
+			Delivery:    "both",
 			Skills:      slices.Clone(catalog.CoreSkills),
 			Rules:       deepMerge(map[string]any{}, catalog.BaseRules),
 		}
@@ -303,6 +302,7 @@ func BuildInitialConfig(
 			Description: "Claude Code CLAUDE.md and project skills",
 			Platforms:   []string{"claude-code"},
 			Profiles:    []string{"base", "devsecops"},
+			Delivery:    "both",
 			Skills:      slices.Clone(catalog.CoreSkills),
 			Rules:       deepMerge(map[string]any{}, catalog.BaseRules),
 		}
@@ -313,6 +313,7 @@ func BuildInitialConfig(
 			Description: "GitLab Duo Agent Platform setup with AGENTS.md, project-level skills, custom rules, and flow templates",
 			Platforms:   []string{"gitlab-duo"},
 			Profiles:    []string{"base", "gitlab-governance", "devsecops", "documentation"},
+			Delivery:    "both",
 			Skills:      slices.Clone(catalog.CoreSkills),
 			Rules:       deepMerge(map[string]any{}, catalog.BaseRules),
 			Flows:       slices.Clone(catalog.DevsecopsFlows),
@@ -333,6 +334,7 @@ func BuildInitialConfig(
 			Description: "Local Ollama/OpenCode/OpenHands setup",
 			Platforms:   localPlatforms,
 			Profiles:    []string{"base", "local-models"},
+			Delivery:    "both",
 			Skills:      slices.Clone(catalog.CoreSkills),
 			Rules:       deepMerge(map[string]any{}, catalog.BaseRules),
 			Model: map[string]any{
@@ -363,6 +365,7 @@ func BuildInitialConfig(
 			Description: "Skill directory scaffolds for platforms without dedicated instruction templates",
 			Platforms:   skillsOnlyPlatforms,
 			Profiles:    []string{"base", "devsecops"},
+			Delivery:    "skills",
 			Skills:      slices.Clone(catalog.CoreSkills),
 			Rules:       deepMerge(map[string]any{}, catalog.BaseRules),
 		}

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/domehahn/skcr/internal/models"
+	"github.com/domehahn/skcr/internal/platforms"
 	"gopkg.in/yaml.v3"
 )
 
@@ -156,6 +157,9 @@ func PlatformSkillDestination(platform, name string) string {
 	case "cursor", "windsurf", "generic":
 		return filepath.ToSlash(filepath.Join(".agentic", "skills", name, "SKILL.md"))
 	default:
+		if capability, ok := platforms.CapabilityFor(platform); ok && capability.SkillPathPattern != "" {
+			return filepath.ToSlash(fmt.Sprintf(capability.SkillPathPattern, name))
+		}
 		return ""
 	}
 }

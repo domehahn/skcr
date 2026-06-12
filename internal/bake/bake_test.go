@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -314,7 +315,10 @@ func TestBuildInitialConfigDefaultPlatformsIncludeSkillOnlyTargets(t *testing.T)
 	if err != nil {
 		t.Fatalf("BuildInitialConfig: %v", err)
 	}
-	for _, want := range []string{"cursor", "roo-code", "kiro", "junie", "gemini-cli", "windsurf"} {
+	if !reflect.DeepEqual(cfg.SkillSources.Defaults.CompatibleWith, models.AllConcretePlatforms()) {
+		t.Fatalf("expected default compatible_with to include all concrete platforms, got %#v want %#v", cfg.SkillSources.Defaults.CompatibleWith, models.AllConcretePlatforms())
+	}
+	for _, want := range []string{"cursor", "roo-code", "kiro", "junie", "gemini-cli", "windsurf", "antigravity", "amazon-q", "qwen", "generic"} {
 		if !stringSliceContains(cfg.SkillSources.Defaults.CompatibleWith, want) {
 			t.Fatalf("expected compatible_with to include %q, got %#v", want, cfg.SkillSources.Defaults.CompatibleWith)
 		}
@@ -323,7 +327,7 @@ func TestBuildInitialConfigDefaultPlatformsIncludeSkillOnlyTargets(t *testing.T)
 	if err != nil {
 		t.Fatalf("ResolveTarget: %v", err)
 	}
-	for _, want := range []string{"kiro", "junie"} {
+	for _, want := range []string{"kiro", "junie", "antigravity", "amazon-q", "qwen", "generic"} {
 		if !stringSliceContains(resolved.Platforms, want) {
 			t.Fatalf("expected resolved default platforms to include %q, got %#v", want, resolved.Platforms)
 		}

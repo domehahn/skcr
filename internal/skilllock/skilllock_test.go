@@ -75,3 +75,16 @@ func TestLoadErrorsAreSkpmOriented(t *testing.T) {
 		t.Fatalf("expected skpm verify hint, got %v", err)
 	}
 }
+
+func TestPlatformSkillDestinationUsesCapabilityMatrix(t *testing.T) {
+	got := PlatformSkillDestination("antigravity", "security-reviewer")
+	want := ".agent/skills/security-reviewer/SKILL.md"
+	if got != want {
+		t.Fatalf("PlatformSkillDestination antigravity = %q, want %q", got, want)
+	}
+	got = PlatformSkillDestination("qwen", "security-reviewer")
+	want = ".qwen/skills/security-reviewer/SKILL.md"
+	if got != want {
+		t.Fatalf("PlatformSkillDestination qwen = %q, want %q", got, want)
+	}
+}

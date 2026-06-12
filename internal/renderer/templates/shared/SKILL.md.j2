@@ -8,25 +8,43 @@ authors:
   - {{ variables.owner_team }}
 stability: stable
 min_platform_version:
-  codex: "0.51.0"
-  claude-code: "1.0.44"
-  github-copilot: "1.300.0"
-  gitlab-duo: "18.0"
-  opencode: "0.6.0"
-  openhands: "0.39.0"
-  cursor: "1.0.0"
-  roo-code: "3.20.0"
-  kiro: "0.2.0"
-  junie: "2025.2"
-  gemini-cli: "0.1.12"
-  windsurf: "1.9.0"
-  ollama: "0.7.0"
+  codex: "unknown"
+  amazon-q: "unknown"
+  antigravity: "unknown"
+  auggie: "unknown"
+  bob: "unknown"
+  claude-code: "unknown"
+  cline: "unknown"
+  codebuddy: "unknown"
+  continue: "unknown"
+  costrict: "unknown"
+  crush: "unknown"
+  github-copilot: "unknown"
+  gitlab-duo: "unknown"
+  factory: "unknown"
+  forgecode: "unknown"
+  opencode: "unknown"
+  openhands: "unknown"
+  cursor: "unknown"
+  roo-code: "unknown"
+  kiro: "unknown"
+  junie: "unknown"
+  gemini-cli: "unknown"
+  iflow: "unknown"
+  kilocode: "unknown"
+  kimi: "unknown"
+  lingma: "unknown"
+  pi: "unknown"
+  qoder: "unknown"
+  qwen: "unknown"
+  windsurf: "unknown"
+  ollama: "unknown"
 deprecated_since:
 replaces:
 supersedes: []
 changelog:
   - version: "1.0.0"
-    date: "2025-01-01"
+    date: "2026-06-10"
     change: "Initial release"
 {% if slash_command %}
 metadata:
@@ -52,6 +70,16 @@ Use this skill when the task matches the description above or when the central a
 4. Execute with tools when implementation is requested.
 5. Validate the result with repository-native checks.
 6. Summarize changed files, validation results, and residual risks.
+
+## Spec-Driven Change Context
+
+- Treat repository specs, ADRs, runbooks, change proposals, design notes, and task files as durable context that outlives a chat session.
+- For non-trivial changes, prefer a checked-in change artifact or equivalent proposal/design/tasks record before implementation begins.
+- Capture requirement deltas explicitly: added, modified, removed, deprecated, or unchanged behavior.
+- Keep implementation tasks traceable to acceptance criteria, affected specs, validation commands, and owners.
+- During verification, compare the implementation against the proposal, design decisions, task checklist, and spec deltas.
+- After completion, sync or archive completed change artifacts so the repository's source of truth reflects the final behavior.
+- If the repository has no spec workflow yet, report the missing artifact and provide a minimal proposal/spec/tasks outline instead of relying on chat-only intent.
 
 ## DevSecOps guardrails
 
@@ -94,13 +122,13 @@ Use this skill when the task matches the description above or when the central a
 - Use this skill only when its purpose directly applies or central routing selects it.
 - Escalate to a more specific reviewer skill when the dominant risk is security, secrets, CI/CD, dependencies, IaC, observability, release readiness, or compliance.
 - Do not claim production readiness unless the checklist, acceptance criteria, validation, and output requirements are satisfied.
-- If evidence is missing, report the gap instead of assuming success.
+- When required repository proof is unavailable, state the limitation and reduce confidence instead of assuming success.
 - If a recommendation changes security, release, governance, or platform behavior, require explicit review.
 
 ## Finding Categories
 
-- Missing or weak domain-specific evidence.
-- Incorrect or unsafe control, implementation, or recommendation.
+- Unsupported claim or recommendation for the requested domain.
+- Unsafe implementation, workflow, policy, or operational recommendation.
 - Missing validation, test, sync, or generated-output consistency.
 - Security, compliance, privacy, release, or operational risk.
 - Unclear ownership, assumption, decision, or residual risk.
@@ -139,6 +167,6 @@ Use this skill when the task matches the description above or when the central a
 
 ## Changelog
 
-### 1.0.0 - 2025-01-01
+### 1.0.0 - 2026-06-10
 
 - Initial release.

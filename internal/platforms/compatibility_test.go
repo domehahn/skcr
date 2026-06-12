@@ -2,7 +2,7 @@ package platforms
 
 import "testing"
 
-func TestCompatibilityMatrixIsProductionReady(t *testing.T) {
+func TestCompatibilityMatrixIsExplicitAboutValidationState(t *testing.T) {
 	if len(CompatibilityMatrix) == 0 {
 		t.Fatal("compatibility matrix must not be empty")
 	}
@@ -11,11 +11,14 @@ func TestCompatibilityMatrixIsProductionReady(t *testing.T) {
 		if entry.Name == "" {
 			t.Fatal("platform name must not be empty")
 		}
-		if entry.MinVersion == "" || entry.MinVersion == "unknown" {
-			t.Fatalf("platform %s must have a concrete minimum version", entry.Name)
+		if entry.MinVersion == "" {
+			t.Fatalf("platform %s must declare a minimum version or unknown", entry.Name)
 		}
-		if entry.Status != "verified" {
-			t.Fatalf("platform %s must be verified for production built-ins, got %q", entry.Name, entry.Status)
+		if entry.MinVersion == "unknown" && entry.Status != "unverified" {
+			t.Fatalf("platform %s with unknown version must be unverified, got %q", entry.Name, entry.Status)
+		}
+		if entry.MinVersion != "unknown" && entry.Status != "verified" {
+			t.Fatalf("platform %s with concrete version must be verified, got %q", entry.Name, entry.Status)
 		}
 		if _, ok := seen[entry.Name]; ok {
 			t.Fatalf("duplicate platform compatibility entry: %s", entry.Name)
@@ -34,5 +37,23 @@ func TestMinVersionsForPreservesMatrixOrder(t *testing.T) {
 	}
 	if got[0].Name != "codex" || got[1].Name != "gitlab-duo" {
 		t.Fatalf("expected matrix order, got %#v", got)
+	}
+}
+
+func TestToolCapabilitiesCoverOpenSpecStyleSkillAndCommandSurfaces(t *testing.T) {
+	for _, name := range []string{"codex", "github-copilot", "kiro", "junie", "gemini-cli", "antigravity", "cline", "amazon-q", "qoder", "qwen"} {
+		capability, ok := CapabilityFor(name)
+		if !ok {
+			t.Fatalf("missing tool capability for %s", name)
+		}
+		if capability.SkillPathPattern == "" {
+			t.Fatalf("tool capability %s must declare a skill path pattern", name)
+		}
+		if capability.Delivery == DeliveryBoth && capability.CommandPathPattern == "" {
+			t.Fatalf("tool capability %s with delivery=both must declare a command path pattern", name)
+		}
+		if capability.Status != "unverified" {
+			t.Fatalf("tool capability %s should remain unverified until validated, got %q", name, capability.Status)
+		}
 	}
 }

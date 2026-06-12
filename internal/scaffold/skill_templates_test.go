@@ -32,6 +32,7 @@ var requiredSections = []string{
 	"## Purpose",
 	"## When to use",
 	"## Operating model",
+	"## Spec-Driven Change Context",
 	"## Skill-Specific Review Scope",
 	"## Skill-Specific Checklist",
 	"## Decision Rules",
@@ -80,20 +81,26 @@ func TestEveryRegisteredSkillRendersProductionReadySkillMD(t *testing.T) {
 					t.Errorf("skill %q missing frontmatter field %q", name, field)
 				}
 			}
-			minPlatformBlock := frontmatterBlock(rendered, "min_platform_version:", "deprecated_since:")
-			if strings.Contains(minPlatformBlock, `"unknown"`) {
-				t.Errorf("skill %q must not use unknown min_platform_version values", name)
-			}
 			for _, platform := range platforms.AllMinVersions() {
 				want := platform.Name + `: "` + platform.MinVersion + `"`
 				if !strings.Contains(rendered, want) {
 					t.Errorf("skill %q missing min_platform_version entry %q", name, want)
+				}
+				if platform.Status == "verified" && platform.MinVersion == "unknown" {
+					t.Errorf("verified platform %q must not use unknown", platform.Name)
 				}
 			}
 			for _, section := range requiredSections {
 				if !strings.Contains(rendered, section) {
 					t.Errorf("skill %q missing required section %q", name, section)
 				}
+			}
+			if !strings.Contains(rendered, `date: "2026-06-11"`) || !strings.Contains(rendered, "### 1.0.0 - 2026-06-11") {
+				t.Errorf("skill %q frontmatter and body changelog dates are not synchronized", name)
+			}
+			if !strings.Contains(rendered, `change: "Initial generated production-ready SDLC / DevSecOps skill"`) ||
+				!strings.Contains(rendered, "- Initial generated production-ready SDLC / DevSecOps skill.") {
+				t.Errorf("skill %q frontmatter and body changelog messages are not synchronized", name)
 			}
 		})
 	}
@@ -139,9 +146,32 @@ func TestSkillBodiesAreNotNearlyIdentical(t *testing.T) {
 
 func TestRequiredDomainTerms(t *testing.T) {
 	cases := map[string][]string{
-		"architecture-reviewer": {"circular dependencies", "coupling", "module boundaries", "data ownership", "ADR"},
-		"threat-modeler":        {"assets", "trust boundaries", "entry points", "STRIDE", "abuse cases"},
-		"safe-implementer":      {"minimal", "rollback", "input validation", "tests", "broad refactoring"},
+		"requirements-analyst":             {"functional requirements", "non-functional requirements", "acceptance criteria", "traceability", "stakeholders"},
+		"cost-based-planner":               {"cost drivers", "budget", "scope", "trade-offs", "estimate"},
+		"architecture-reviewer":            {"circular dependencies", "coupling", "module boundaries", "data ownership", "ADR"},
+		"threat-modeler":                   {"assets", "trust boundaries", "entry points", "STRIDE", "abuse cases"},
+		"safe-implementer":                 {"minimal", "rollback", "input validation", "tests", "broad refactoring"},
+		"test-strategy-engineer":           {"contract tests", "negative tests", "fixtures", "CI gates", "flaky"},
+		"verification-reviewer":            {"acceptance criteria", "validation evidence", "generated outputs", "residual risk", "conditional pass"},
+		"security-reviewer":                {"AuthZ bypass", "injection", "SSRF", "path traversal", "unsafe logging", "insecure defaults"},
+		"secrets-reviewer":                 {"rotation", "revocation", "CI/CD secret", "redaction", "false positive"},
+		"dependency-supply-chain-reviewer": {"SBOM", "provenance", "lockfile", "reachability", "license"},
+		"ci-cd-reviewer":                   {"token permissions", "cache poisoning", "artifact integrity", "runner trust", "deployment gates"},
+		"iac-gitops-reviewer":              {"Terraform", "Kubernetes", "IAM/RBAC", "drift", "rollback"},
+		"compliance-governance-reviewer":   {"segregation of duties", "audit evidence", "risk acceptance", "policy exception", "retention"},
+		"release-readiness-reviewer":       {"go/no-go", "rollback", "monitoring", "known issues", "feature flag"},
+		"observability-reviewer":           {"SLO", "SLI", "correlation IDs", "cardinality", "alert routing"},
+		"incident-postmortem-assistant":    {"timeline", "root cause", "corrective actions", "severity", "evidence preservation"},
+		"documentation-maintainer": {
+			"README quickstart",
+			"ADRs",
+			"runbooks",
+			"API docs",
+			"setup guides",
+			"changelog",
+			"release notes",
+		},
+		"universal-skill-creator": {"domain-specific", "changelog", "anti-patterns", "compatibility", "generic copy-paste"},
 	}
 	for name, terms := range cases {
 		rendered := renderForTest(t, name)
@@ -149,6 +179,17 @@ func TestRequiredDomainTerms(t *testing.T) {
 		for _, term := range terms {
 			if !strings.Contains(lower, strings.ToLower(term)) {
 				t.Errorf("skill %q missing domain term %q", name, term)
+			}
+		}
+	}
+}
+
+func TestEverySkillIncludesDurableSpecDrivenContext(t *testing.T) {
+	for _, name := range expectedSDLCSkills {
+		rendered := renderForTest(t, name)
+		for _, term := range []string{"proposal/design/tasks", "spec deltas", "sync or archive", "chat-only intent"} {
+			if !strings.Contains(rendered, term) {
+				t.Errorf("skill %q missing spec-driven context term %q", name, term)
 			}
 		}
 	}
@@ -168,6 +209,30 @@ func TestNoPlaceholderText(t *testing.T) {
 		for _, forbidden := range []string{"TODO", "TBD", "Add checks here", "More details", "Describe what this skill helps"} {
 			if strings.Contains(rendered, forbidden) {
 				t.Errorf("skill %q contains placeholder text %q", name, forbidden)
+			}
+		}
+	}
+}
+
+func TestNoGeneratorSmellPhrases(t *testing.T) {
+	for _, name := range expectedSDLCSkills {
+		rendered := strings.ToLower(renderForTest(t, name))
+		if name == "universal-skill-creator" {
+			rendered = strings.ToLower(section(renderForTest(t, name), "## When to use") +
+				section(renderForTest(t, name), "## Operating model") +
+				section(renderForTest(t, name), "## Finding Categories") +
+				section(renderForTest(t, name), "## Acceptance Criteria"))
+		}
+		for _, forbidden := range []string{
+			"structured analysis or review",
+			strings.ReplaceAll(name, "-", " ") + " evidence",
+			strings.ReplaceAll(name, "-", " ") + " control",
+			"review scope is explicit and skill-specific",
+			"at least one concrete evidence source",
+			"using generic checklist language",
+		} {
+			if strings.Contains(rendered, forbidden) {
+				t.Errorf("skill %q contains generator-smell phrase %q", name, forbidden)
 			}
 		}
 	}
@@ -234,19 +299,6 @@ func section(markdown, heading string) string {
 	}
 	rest := markdown[start+len(heading):]
 	end := strings.Index(rest, "\n## ")
-	if end >= 0 {
-		return rest[:end]
-	}
-	return rest
-}
-
-func frontmatterBlock(markdown, startMarker, endMarker string) string {
-	start := strings.Index(markdown, startMarker)
-	if start < 0 {
-		return ""
-	}
-	rest := markdown[start+len(startMarker):]
-	end := strings.Index(rest, endMarker)
 	if end >= 0 {
 		return rest[:end]
 	}

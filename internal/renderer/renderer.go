@@ -9,6 +9,7 @@ import (
 
 	"github.com/domehahn/skcr/internal/catalog"
 	"github.com/domehahn/skcr/internal/models"
+	"github.com/domehahn/skcr/internal/platforms"
 	"github.com/domehahn/skcr/internal/scaffold"
 	"github.com/flosch/pongo2/v6"
 )
@@ -95,22 +96,29 @@ func claudeSubagentsForTarget(target *models.TargetConfig) []map[string]any {
 }
 
 func skillsOnlyPlatformDoc(platform string) (map[string]any, bool) {
-	known := map[string]map[string]string{
-		"cursor":     {"path": ".cursor/skills/", "description": "Cursor skill directory scaffold"},
-		"gemini-cli": {"path": ".gemini/skills/", "description": "Gemini CLI skill directory scaffold"},
-		"junie":      {"path": ".junie/skills/", "description": "JetBrains Junie skill directory scaffold"},
-		"kiro":       {"path": ".kiro/skills/", "description": "Kiro skill directory scaffold"},
-		"roo-code":   {"path": ".roo/skills/", "description": "Roo Code skill directory scaffold"},
-		"windsurf":   {"path": ".windsurf/skills/", "description": "Windsurf skill directory scaffold"},
-	}
-	if doc, ok := known[platform]; ok {
-		return map[string]any{"platform": platform, "path": doc["path"], "description": doc["description"]}, true
+	if capability, ok := platforms.CapabilityFor(platform); ok {
+		return map[string]any{
+			"platform":    platform,
+			"path":        skillBasePath(capability.SkillPathPattern),
+			"description": platform + " skill directory scaffold",
+		}, true
 	}
 	return map[string]any{
 		"platform":    platform,
 		"path":        ".agents/skills/",
 		"description": "Shared skill directory scaffold",
 	}, true
+}
+
+func skillBasePath(pattern string) string {
+	if pattern == "" {
+		return ".agents/skills/"
+	}
+	const marker = "%s/SKILL.md"
+	if strings.Contains(pattern, marker) {
+		return strings.TrimSuffix(pattern, marker)
+	}
+	return filepath.Dir(filepath.Dir(pattern)) + string(filepath.Separator)
 }
 
 func RenderFiles(config *models.BakeConfig, target *models.TargetConfig) ([]models.RenderedFile, error) {
@@ -147,6 +155,7 @@ func RenderFilesWithOptions(config *models.BakeConfig, target *models.TargetConf
 
 	files := []models.RenderedFile{}
 	platformDocs := []map[string]any{}
+	renderedSkillPlatforms := map[string]struct{}{}
 
 	var add func(platform, template, destination string, extra map[string]any) error
 
@@ -221,6 +230,7 @@ func RenderFilesWithOptions(config *models.BakeConfig, target *models.TargetConf
 				return nil, err
 			}
 		}
+		renderedSkillPlatforms["codex"] = struct{}{}
 	}
 
 	if contains("gitlab-duo") {
@@ -237,6 +247,7 @@ func RenderFilesWithOptions(config *models.BakeConfig, target *models.TargetConf
 				return nil, err
 			}
 		}
+		renderedSkillPlatforms["gitlab-duo"] = struct{}{}
 		if err := add("gitlab-duo", "gitlab-duo/flows/README.md.j2", ".gitlab/duo/flows/README.md", nil); err != nil {
 			return nil, err
 		}
@@ -258,6 +269,7 @@ func RenderFilesWithOptions(config *models.BakeConfig, target *models.TargetConf
 				return nil, err
 			}
 		}
+		renderedSkillPlatforms["claude-code"] = struct{}{}
 		for _, sub := range claudeSubagents {
 			if err := add("claude", "claude/agent.md.j2", fmt.Sprintf(".claude/agents/%s.md", sub["name"]), map[string]any{"subagent": sub}); err != nil {
 				return nil, err
@@ -279,6 +291,7 @@ func RenderFilesWithOptions(config *models.BakeConfig, target *models.TargetConf
 				return nil, err
 			}
 		}
+		renderedSkillPlatforms["github-copilot"] = struct{}{}
 	}
 
 	if contains("openhands") {
@@ -321,6 +334,24 @@ func RenderFilesWithOptions(config *models.BakeConfig, target *models.TargetConf
 				return nil, err
 			}
 		}
+		renderedSkillPlatforms["generic"] = struct{}{}
+	}
+
+	for _, platform := range target.Platforms {
+		if _, rendered := renderedSkillPlatforms[platform]; rendered {
+			continue
+		}
+		capability, ok := platforms.CapabilityFor(platform)
+		if !ok || capability.SkillPathPattern == "" {
+			continue
+		}
+		for _, skill := range skills {
+			name, _ := skill["name"].(string)
+			if err := addRenderedSkill(platform, "shared/SKILL.md.j2", fmt.Sprintf(capability.SkillPathPattern, name), skill, "$", false); err != nil {
+				return nil, err
+			}
+		}
+		renderedSkillPlatforms[platform] = struct{}{}
 	}
 
 	documented := map[string]struct{}{}

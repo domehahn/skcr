@@ -44,6 +44,7 @@ Content-ready skills must include:
 - `## Purpose`,
 - `## When to use`,
 - `## Operating model`,
+- `## Spec-Driven Change Context`,
 - `## Skill-Specific Review Scope`,
 - `## Skill-Specific Checklist`,
 - `## Decision Rules`,
@@ -56,6 +57,7 @@ Content-ready skills must include:
 - `## Changelog`,
 - complete frontmatter and body changelog,
 - security and governance guardrails,
+- durable change-artifact guidance for proposals, specs, designs, tasks, verification, sync, and archive,
 - concrete validation and output expectations.
 
 Minimum content counts:
@@ -93,9 +95,9 @@ Generated platform directories such as `.agents/skills/`, `.claude/skills/`, `.c
 
 ## Platform Compatibility
 
-Built-in production skills must use concrete `min_platform_version` values from `internal/platforms/compatibility.go`.
+Built-in skills must use `min_platform_version` values from `internal/platforms/compatibility.go`.
 
-Do not hand-edit per-skill platform versions. Update the central matrix after compatibility validation, then let the shared renderer propagate the value. `unknown` is reserved for incomplete custom-skill drafts and must be treated as a warning, not as verified production compatibility.
+Do not hand-edit per-skill platform versions. Keep a platform at `"unknown"` until the minimum supported version is validated. Update the central matrix only when validation evidence exists, then let the shared renderer propagate the value.
 
 ## Adding A Skill Template
 
@@ -106,7 +108,7 @@ To add a new built-in skill template:
 3. Fill every required section with domain-specific content.
 4. Keep shared DevSecOps guardrails generic enough to apply broadly, but make the review scope, checklist, decision rules, finding categories, severity guidance, output requirements, acceptance criteria, and anti-patterns specific to the skill.
 5. Add domain-term assertions when the skill has non-negotiable vocabulary or risk areas.
-6. Confirm the central compatibility matrix contains concrete minimum versions for every supported platform.
+6. Confirm the central compatibility matrix contains entries for every supported platform and only uses concrete versions where validation evidence exists.
 7. Run the scaffold and validator tests before release.
 
 ## Tests

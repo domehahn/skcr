@@ -253,6 +253,16 @@ changelog:
 5. Validate with repository-native checks where practical.
 6. Summarize evidence, residual risk, and next actions.
 
+## Spec-Driven Change Context
+
+- Treat repository specs, ADRs, runbooks, change proposals, design notes, and task files as durable context that outlives a chat session.
+- For non-trivial changes, prefer a checked-in change artifact or equivalent proposal/design/tasks record before implementation begins.
+- Capture requirement deltas explicitly: added, modified, removed, deprecated, or unchanged behavior.
+- Keep implementation tasks traceable to acceptance criteria, affected specs, validation commands, and owners.
+- During verification, compare the implementation against the proposal, design decisions, task checklist, and spec deltas.
+- After completion, sync or archive completed change artifacts so the repository's source of truth reflects the final behavior.
+- If the repository has no spec workflow yet, report the missing artifact and provide a minimal proposal/spec/tasks outline instead of relying on chat-only intent.
+
 ## Skill-Specific Review Scope
 
 - The stated purpose and domain boundaries of %s.
@@ -279,13 +289,13 @@ changelog:
 - Use this skill only when its purpose directly applies or central routing selects it.
 - Escalate to a more specific reviewer skill when the dominant risk is security, secrets, CI/CD, dependencies, IaC, observability, release readiness, or compliance.
 - Do not claim production readiness unless checklist, severity guidance, acceptance criteria, validation, and output requirements are satisfied.
-- If evidence is missing, report the gap instead of assuming success.
+- When required repository proof is unavailable, state the limitation and reduce confidence instead of assuming success.
 - If a recommendation changes security, release, governance, or platform behavior, require explicit review.
 
 ## Finding Categories
 
-- Missing or weak domain-specific evidence.
-- Incorrect or unsafe control, implementation, or recommendation.
+- Unsupported claim or recommendation for the requested domain.
+- Unsafe implementation, workflow, policy, or operational recommendation.
 - Missing validation, test, sync, or generated-output consistency.
 - Security, compliance, privacy, release, or operational risk.
 - Unclear ownership, assumption, decision, or residual risk.
