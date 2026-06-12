@@ -184,6 +184,12 @@ func validateSkillOptions(opts *SkillOptions) error {
 	return nil
 }
 
+// ReadExistingSince returns the since date from an existing SKILL.md frontmatter,
+// or empty string if the file doesn't exist or has no valid since field.
+func ReadExistingSince(path string) string {
+	return readExistingSince(path)
+}
+
 func readExistingSince(path string) string {
 	data, err := os.ReadFile(path)
 	if err != nil {

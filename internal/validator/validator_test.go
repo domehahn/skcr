@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/domehahn/skcr/internal/models"
 )
 
 func TestValidateHelpers(t *testing.T) {
@@ -413,5 +415,186 @@ targets:
 	}
 	if !strings.Contains(strings.Join(errs, "\n"), "No targets configured") {
 		t.Fatalf("expected no-targets error, got %v", errs)
+	}
+}
+
+func TestValidateSkillMetadataPublic(t *testing.T) {
+	valid := validSkillFixture()
+	if msg := ValidateSkillMetadata(valid); msg != "" {
+		t.Fatalf("expected no error for valid skill, got %q", msg)
+	}
+	if msg := ValidateSkillMetadata("no frontmatter"); !strings.Contains(msg, "frontmatter") {
+		t.Fatalf("expected frontmatter error, got %q", msg)
+	}
+	noDesc := strings.Replace(valid, "description: ok", `description: ""`, 1)
+	if msg := ValidateSkillMetadata(noDesc); !strings.Contains(msg, "description") {
+		t.Fatalf("expected description error for empty description, got %q", msg)
+	}
+	sinceAfterModified := strings.Replace(valid, `since: "2025-01-01"`, `since: "2027-01-01"`, 1)
+	if msg := ValidateSkillMetadata(sinceAfterModified); !strings.Contains(msg, "since") {
+		t.Fatalf("expected since > last_modified error, got %q", msg)
+	}
+}
+
+func TestValidateSkillWarnings(t *testing.T) {
+	withUnknown := validSkillFixture()
+	warnings := ValidateSkillWarnings(withUnknown)
+	if len(warnings) == 0 {
+		t.Fatal("expected warning for unknown min_platform_version, got none")
+	}
+	found := false
+	for _, w := range warnings {
+		if strings.Contains(w, "unknown") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("expected 'unknown' in warnings, got %v", warnings)
+	}
+
+	withConcrete := strings.Replace(withUnknown, `codex: "unknown"`, `codex: "0.51.0"`, 1)
+	warnings = ValidateSkillWarnings(withConcrete)
+	for _, w := range warnings {
+		if strings.Contains(w, "codex") && strings.Contains(w, "unknown") {
+			t.Fatalf("unexpected unknown warning for concrete version: %q", w)
+		}
+	}
+
+	if ValidateSkillWarnings("no frontmatter") != nil {
+		t.Fatal("expected nil warnings for skill without frontmatter")
+	}
+}
+
+func TestPlatformSkillBaseDir(t *testing.T) {
+	cases := map[string]string{
+		"claude-code":    ".claude/skills",
+		"github-copilot": ".github/skills",
+		"gitlab-duo":     "skills",
+		"cursor":         ".cursor/skills",
+		"junie":          ".junie/skills",
+		"gemini-cli":     ".gemini/skills",
+		"roo-code":       ".roo/skills",
+		"kiro":           ".kiro/skills",
+		"opencode":       ".opencode/skills",
+		"openhands":      ".openhands/skills",
+		"windsurf":       ".windsurf/skills",
+		"ollama":         ".ollama/skills",
+		"codex":          ".agents/skills",
+		"unknown-tool":   ".agents/skills",
+	}
+	for platform, want := range cases {
+		if got := platformSkillBaseDir(platform); got != want {
+			t.Errorf("platformSkillBaseDir(%q) = %q, want %q", platform, got, want)
+		}
+	}
+}
+
+func TestValidateGeneratedState(t *testing.T) {
+	dir := t.TempDir()
+
+	// Empty lock + no expected files → no errors.
+	if err := os.WriteFile(filepath.Join(dir, ".agentic-template.lock"), []byte(`{"version":"1","target":"default","files":[]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if errs := validateGeneratedState(dir, nil); len(errs) != 0 {
+		t.Fatalf("expected no errors for empty state, got %v", errs)
+	}
+
+	// Missing generated file → error.
+	rf := models.RenderedFile{Platform: "codex", Destination: "missing.md", Content: "hello"}
+	if errs := validateGeneratedState(dir, []models.RenderedFile{rf}); len(errs) == 0 {
+		t.Fatal("expected error for missing generated file")
+	}
+
+	// Present file with wrong content → checksum mismatch.
+	if err := os.WriteFile(filepath.Join(dir, "present.md"), []byte("wrong content"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rf2 := models.RenderedFile{Platform: "codex", Destination: "present.md", Content: "expected content"}
+	if errs := validateGeneratedState(dir, []models.RenderedFile{rf2}); len(errs) == 0 {
+		t.Fatal("expected checksum mismatch error for wrong content")
+	}
+
+	// SKILL.md paths are exempt from checksum check.
+	skillPath := filepath.Join(dir, ".agents", "skills", "test-skill")
+	if err := os.MkdirAll(skillPath, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillPath, "SKILL.md"), []byte("different"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	rfSkill := models.RenderedFile{Platform: "codex", Destination: ".agents/skills/test-skill/SKILL.md", Content: "expected"}
+	if errs := validateGeneratedState(dir, []models.RenderedFile{rfSkill}); len(errs) != 0 {
+		t.Fatalf("SKILL.md should be exempt from checksum check, got %v", errs)
+	}
+}
+
+func TestValidateSkillLock(t *testing.T) {
+	dir := t.TempDir()
+
+	// Missing lock file → error.
+	errs := validateSkillLock(dir, "agent-skills.lock", []string{"codex"})
+	if len(errs) == 0 {
+		t.Fatal("expected error for missing skill lock")
+	}
+
+	// Empty lock → no errors.
+	lockContent := `version: "1"
+skills: []
+`
+	lockPath := filepath.Join(dir, "agent-skills.lock")
+	if err := os.WriteFile(lockPath, []byte(lockContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if errs := validateSkillLock(dir, "agent-skills.lock", []string{"codex"}); len(errs) != 0 {
+		t.Fatalf("expected no errors for empty lock, got %v", errs)
+	}
+
+	// Locked skill with no install paths → error.
+	lockWithSkill := `version: "1"
+skills:
+  - name: my-skill
+    version: "1.0.0"
+    compatible_with:
+      - codex
+    installed_paths: []
+`
+	if err := os.WriteFile(lockPath, []byte(lockWithSkill), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	errs = validateSkillLock(dir, "agent-skills.lock", []string{"codex"})
+	if len(errs) == 0 {
+		t.Fatal("expected error for skill with no install paths")
+	}
+
+	// Locked skill with missing path → error.
+	lockWithMissing := `version: "1"
+skills:
+  - name: my-skill
+    version: "1.0.0"
+    compatible_with:
+      - codex
+    installed_paths:
+      - .agents/skills/my-skill
+`
+	if err := os.WriteFile(lockPath, []byte(lockWithMissing), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	errs = validateSkillLock(dir, "agent-skills.lock", []string{"codex"})
+	if len(errs) == 0 {
+		t.Fatal("expected error for skill with missing install path")
+	}
+
+	// Locked skill with valid SKILL.md present → no errors.
+	skillDir := filepath.Join(dir, ".agents", "skills", "my-skill")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("# My Skill\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if errs := validateSkillLock(dir, "agent-skills.lock", []string{"codex"}); len(errs) != 0 {
+		t.Fatalf("expected no errors for valid skill install, got %v", errs)
 	}
 }

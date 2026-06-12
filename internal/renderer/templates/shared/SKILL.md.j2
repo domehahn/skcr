@@ -2,8 +2,8 @@
 name: {{ skill.name }}
 description: {{ skill.description }}
 version: "1.0.0"
-since: "2025-01-01"
-last_modified: "2026-06-10"
+since: "{{ since }}"
+last_modified: "{{ last_modified }}"
 authors:
   - {{ variables.owner_team }}
 stability: stable
@@ -44,7 +44,7 @@ replaces:
 supersedes: []
 changelog:
   - version: "1.0.0"
-    date: "2026-06-10"
+    date: "{{ last_modified }}"
     change: "Initial release"
 {% if slash_command %}
 metadata:
@@ -167,6 +167,6 @@ Use this skill when the task matches the description above or when the central a
 
 ## Changelog
 
-### 1.0.0 - 2026-06-10
+### 1.0.0 - {{ last_modified }}
 
 - Initial release.

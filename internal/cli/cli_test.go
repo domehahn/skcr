@@ -130,8 +130,8 @@ func TestCompatibilityCommandsAndBakeUseEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(string(changelog), "## 1.0.0 - 2026-06-10") {
-		t.Fatalf("CHANGELOG.md not synchronized with SKILL.md: %s", changelog)
+	if !strings.Contains(string(changelog), "## 1.0.0 - ") {
+		t.Fatalf("CHANGELOG.md missing versioned entry with date: %s", changelog)
 	}
 	if err := runRoot("version", "check", skillDir); err != nil {
 		t.Fatalf("version check should pass for baked skill artifacts: %v", err)
@@ -885,5 +885,48 @@ func TestExecuteErrorSubprocess(t *testing.T) {
 	exitErr, ok := err.(*exec.ExitError)
 	if !ok || exitErr.ExitCode() != 1 {
 		t.Fatalf("expected exit code 1, got err=%v", err)
+	}
+}
+
+func TestCompatibilityCheckValidation(t *testing.T) {
+	dir := t.TempDir()
+
+	// No agentic.compatibility.yaml → no verified entries, no error.
+	if err := runRoot("compatibility", "check", "--target", dir); err != nil {
+		t.Fatalf("check with no evidence file should succeed: %v", err)
+	}
+
+	// Write invalid evidence: verified with unknown version → should fail.
+	badEvidence := `platforms:
+  - name: codex
+    min_version: "unknown"
+    status: "verified"
+    source: "test"
+`
+	if err := os.WriteFile(filepath.Join(dir, "agentic.compatibility.yaml"), []byte(badEvidence), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := runRoot("compatibility", "check", "--target", dir); err == nil {
+		t.Fatal("expected error for verified entry with unknown version")
+	}
+
+	// Valid evidence: verified with concrete version and existing evidence file.
+	evFile := filepath.Join(dir, "evidence.md")
+	if err := os.WriteFile(evFile, []byte("# evidence\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	goodEvidence := `platforms:
+  - name: codex
+    min_version: "0.51.0"
+    status: "verified"
+    source: "test"
+    evidence: "evidence.md"
+    validated: "2026-06-10"
+`
+	if err := os.WriteFile(filepath.Join(dir, "agentic.compatibility.yaml"), []byte(goodEvidence), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := runRoot("compatibility", "check", "--target", dir); err != nil {
+		t.Fatalf("expected no error for valid verified entry: %v", err)
 	}
 }

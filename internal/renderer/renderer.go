@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/domehahn/skcr/internal/catalog"
 	"github.com/domehahn/skcr/internal/models"
@@ -172,7 +173,13 @@ func RenderFilesWithOptions(config *models.BakeConfig, target *models.TargetConf
 		name, _ := skill["name"].(string)
 		title, _ := skill["title"].(string)
 		description, _ := skill["description"].(string)
-		if rendered, ok, err := scaffold.RenderRegisteredSkillMarkdownWithCompatibility(name, title, description, "1.0.0", "2025-01-01", "2026-06-10", owner, "stable", "", target.Platforms, compatMatrix); err != nil {
+		today := time.Now().Format("2006-01-02")
+		existingPath := filepath.Join(opts.Root, destination)
+		since := scaffold.ReadExistingSince(existingPath)
+		if since == "" {
+			since = today
+		}
+		if rendered, ok, err := scaffold.RenderRegisteredSkillMarkdownWithCompatibility(name, title, description, "1.0.0", since, today, owner, "stable", "", target.Platforms, compatMatrix); err != nil {
 			return err
 		} else if ok {
 			if slashCommand {
@@ -187,7 +194,13 @@ func RenderFilesWithOptions(config *models.BakeConfig, target *models.TargetConf
 			return nil
 		}
 
-		extra := map[string]any{"skill": skill, "invocation_prefix": invocationPrefix, "slash_command": slashCommand}
+		extra := map[string]any{
+			"skill":             skill,
+			"invocation_prefix": invocationPrefix,
+			"slash_command":     slashCommand,
+			"since":             since,
+			"last_modified":     today,
+		}
 		return add(platform, template, destination, extra)
 	}
 

@@ -26,41 +26,41 @@ skill_sources:
       - windsurf
   skills:
     - name: requirements-analyst
-      description: "Decompose requirements into unambiguous, testable acceptance criteria; surface security, compliance, and privacy obligations before design begins."
+      description: "Analyze requirements, user stories, acceptance criteria, constraints, risks, and open questions before implementation."
     - name: cost-based-planner
-      description: "Estimate and track effort, cost drivers, and scope trade-offs; produce budget-aware implementation plans with explicit risk and uncertainty."
+      description: "Plan coding work with minimal context, relevant file selection, risk awareness, rollback, and validation strategy."
     - name: architecture-reviewer
-      description: "Evaluate module boundaries, coupling, dependency direction, API contracts, and security-by-design properties of architectural changes."
+      description: "Review architecture, module boundaries, interfaces, coupling, scalability, data flows, and technical risks."
     - name: threat-modeler
-      description: "Perform STRIDE threat modeling to produce a threat register, attack-surface map, and prioritized control recommendations."
+      description: "Identify assets, trust boundaries, abuse cases, attack paths, threats, and required security controls."
     - name: safe-implementer
-      description: "Implement requested changes minimally and safely with test coverage, validated inputs, no secrets, and a documented rollback path."
+      description: "Create or modify code, tests, configuration, and project files safely with real file changes."
     - name: test-strategy-engineer
-      description: "Design a test strategy covering unit, integration, contract, security, and edge-case tests with CI gate configuration and flaky-test mitigation."
+      description: "Design and generate unit, integration, regression, security, and end-to-end test strategies."
     - name: verification-reviewer
-      description: "Verify that implementation satisfies acceptance criteria; produce a validation evidence summary with pass, conditional pass, or block recommendation."
+      description: "Review diffs, validate acceptance criteria, inspect test results, and find missed requirements."
     - name: security-reviewer
-      description: "Review code changes for injection, AuthZ bypass, SSRF, path traversal, unsafe logging, insecure defaults, and OWASP Top 10 risks."
+      description: "Review code, CI/CD, configuration, permissions, dependencies, input validation, and DevSecOps risks."
     - name: secrets-reviewer
-      description: "Detect secrets, credentials, and tokens in code, configuration, CI/CD pipelines, and git history; produce rotation, revocation, and prevention plans."
+      description: "Detect and prevent exposure of secrets, tokens, credentials, private keys, CI variables, and sensitive logs."
     - name: dependency-supply-chain-reviewer
-      description: "Review dependencies for CVEs, license conflicts, lockfile gaps, SBOM coverage, provenance, and supply-chain attack vectors."
+      description: "Review dependencies, lockfiles, package managers, container images, actions, and supply-chain risks."
     - name: ci-cd-reviewer
-      description: "Review CI/CD pipelines for token permissions, cache poisoning, artifact integrity, runner trust, and deployment gate risks."
+      description: "Review CI/CD pipelines, runners, permissions, artifacts, caches, deployment gates, and token exposure."
     - name: iac-gitops-reviewer
-      description: "Review Terraform, Kubernetes, Helm, and GitOps configurations for IAM/RBAC least privilege, drift, network exposure, and rollback gaps."
+      description: "Review Terraform, Kubernetes, Helm, Kustomize, GitOps reconciliation, promotion, and environment safety."
     - name: compliance-governance-reviewer
-      description: "Map controls to audit evidence, assess segregation of duties, identify policy exceptions, and produce an audit-ready evidence package."
+      description: "Review governance controls such as CODEOWNERS, branch protection, approvals, auditability, and policy compliance."
     - name: release-readiness-reviewer
-      description: "Assess release readiness with go/no-go recommendation covering test status, security findings, rollback, feature flags, and monitoring coverage."
+      description: "Assess release readiness, rollback, migrations, feature flags, monitoring, documentation, and breaking changes."
     - name: observability-reviewer
-      description: "Review logging, metrics, SLOs/SLIs, alerting, distributed tracing, correlation IDs, cardinality, and runbook coverage for operational readiness."
+      description: "Review logging, metrics, tracing, health checks, alerts, dashboards, runbooks, and operational readiness."
     - name: incident-postmortem-assistant
-      description: "Support structured incident triage, timeline reconstruction, root cause analysis, severity classification, corrective actions, and blameless postmortem production."
+      description: "Support incident analysis, timeline creation, root cause analysis, impact assessment, corrective actions, and follow-up issues."
     - name: documentation-maintainer
-      description: "Create and update README quickstart guides, ADRs, setup guides, API docs, runbooks, changelogs, and release notes for accuracy and completeness."
+      description: "Create and update README files, ADRs, setup guides, API docs, runbooks, and operational documentation."
     - name: universal-skill-creator
-      description: "Generate new domain-specific, production-ready SKILL.md files with complete anti-patterns, compatibility metadata, and changelog — never generic copy-paste templates."
+      description: "Create, adapt, validate, and optimize reusable agent skills across agentic platforms."
 targets:
   codex:
     description: Codex AGENTS.md and project skills

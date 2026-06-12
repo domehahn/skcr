@@ -1,6 +1,27 @@
 package catalog
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/domehahn/skcr/internal/scaffold"
+)
+
+func TestCoreSkillsMatchSDLCSkillNames(t *testing.T) {
+	sdlc := scaffold.SDLCSkillNames
+	if len(CoreSkills) != len(sdlc) {
+		t.Fatalf("catalog.CoreSkills has %d entries, scaffold.SDLCSkillNames has %d", len(CoreSkills), len(sdlc))
+	}
+	for i, want := range sdlc {
+		if CoreSkills[i] != want {
+			t.Errorf("position %d: catalog.CoreSkills[%d]=%q, scaffold.SDLCSkillNames[%d]=%q", i, i, CoreSkills[i], i, want)
+		}
+	}
+	for _, name := range sdlc {
+		if _, ok := SkillDescriptions[name]; !ok {
+			t.Errorf("catalog.SkillDescriptions missing entry for %q", name)
+		}
+	}
+}
 
 func TestSkillTitleAndDescription(t *testing.T) {
 	if got := SkillTitle("security-reviewer"); got != "Security Reviewer" {
