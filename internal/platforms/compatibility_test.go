@@ -137,6 +137,63 @@ func TestMinVersionsForPreservesMatrixOrder(t *testing.T) {
 	}
 }
 
+func TestValidateEvidenceEntryAllErrorPaths(t *testing.T) {
+	root := t.TempDir()
+
+	// Empty name.
+	if err := ValidateEvidenceEntry(root, CompatibilityEntry{Name: "", MinVersion: "1.0", Status: "verified"}); err == nil {
+		t.Fatal("expected error for empty name")
+	}
+
+	// Empty min_version.
+	if err := ValidateEvidenceEntry(root, CompatibilityEntry{Name: "codex", MinVersion: "", Status: "verified"}); err == nil {
+		t.Fatal("expected error for empty min_version")
+	}
+
+	// unknown min_version with non-unverified status.
+	if err := ValidateEvidenceEntry(root, CompatibilityEntry{Name: "codex", MinVersion: "unknown", Status: "verified"}); err == nil {
+		t.Fatal("expected error for unknown version with verified status")
+	}
+
+	// unknown min_version and unverified status → ok.
+	if err := ValidateEvidenceEntry(root, CompatibilityEntry{Name: "codex", MinVersion: "unknown", Status: "unverified"}); err != nil {
+		t.Fatalf("unknown+unverified should succeed: %v", err)
+	}
+
+	// Concrete version without verified status.
+	if err := ValidateEvidenceEntry(root, CompatibilityEntry{Name: "codex", MinVersion: "1.0", Status: "unverified"}); err == nil {
+		t.Fatal("expected error for concrete version with unverified status")
+	}
+
+	// Evidence file declared but does not exist.
+	if err := ValidateEvidenceEntry(root, CompatibilityEntry{
+		Name: "codex", MinVersion: "1.0", Status: "verified",
+		Evidence: "docs/missing.md", Validated: "2026-06-12",
+	}); err == nil {
+		t.Fatal("expected error for missing evidence file")
+	}
+
+	// Missing validated date.
+	evFile := filepath.Join(root, "ev.md")
+	if err := os.WriteFile(evFile, []byte("# ev\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := ValidateEvidenceEntry(root, CompatibilityEntry{
+		Name: "codex", MinVersion: "1.0", Status: "verified",
+		Evidence: "ev.md",
+	}); err == nil {
+		t.Fatal("expected error for missing validated date")
+	}
+
+	// All valid.
+	if err := ValidateEvidenceEntry(root, CompatibilityEntry{
+		Name: "codex", MinVersion: "1.0", Status: "verified",
+		Evidence: "ev.md", Validated: "2026-06-12",
+	}); err != nil {
+		t.Fatalf("fully valid entry should succeed: %v", err)
+	}
+}
+
 func TestToolCapabilitiesCoverOpenSpecStyleSkillAndCommandSurfaces(t *testing.T) {
 	for _, name := range []string{"codex", "github-copilot", "kiro", "junie", "gemini-cli", "antigravity", "cline", "amazon-q", "qoder", "qwen"} {
 		capability, ok := CapabilityFor(name)

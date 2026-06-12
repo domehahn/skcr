@@ -192,6 +192,270 @@ func TestChangedAndBumpAllChanged(t *testing.T) {
 	}
 }
 
+func TestSyncArtifacts(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := scaffold.WriteSkill(scaffold.SkillOptions{
+		Name:      "secure-code-review",
+		OutputDir: dir,
+		Version:   "1.0.0",
+		Owner:     "platform-engineering",
+		Platforms: []string{"codex"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	skillDir := filepath.Join(dir, "secure-code-review")
+
+	// Diverge VERSION and skill.yaml from SKILL.md.
+	if err := os.WriteFile(filepath.Join(skillDir, "VERSION"), []byte("9.9.9\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "skill.yaml"), []byte("name: secure-code-review\nversion: 9.9.9\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	info, err := SyncArtifacts(skillDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Version != "1.0.0" {
+		t.Fatalf("SyncArtifacts returned wrong version: %q", info.Version)
+	}
+
+	version, err := os.ReadFile(filepath.Join(skillDir, "VERSION"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(string(version)) != "1.0.0" {
+		t.Fatalf("VERSION not synced: %q", version)
+	}
+
+	got, ok, err := skillYAMLVersion(filepath.Join(skillDir, "skill.yaml"))
+	if err != nil || !ok || got != "1.0.0" {
+		t.Fatalf("skill.yaml not synced: %q ok=%v err=%v", got, ok, err)
+	}
+
+	changelog, err := os.ReadFile(filepath.Join(skillDir, "CHANGELOG.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(changelog), "1.0.0") {
+		t.Fatalf("CHANGELOG.md not synced: %s", changelog)
+	}
+}
+
+func TestReleaseBundleFor(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := scaffold.WriteSkill(scaffold.SkillOptions{
+		Name:      "secure-code-review",
+		OutputDir: dir,
+		Version:   "1.0.0",
+		Owner:     "platform-engineering",
+		Platforms: []string{"codex"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	skillDir := filepath.Join(dir, "secure-code-review")
+
+	bundle, err := ReleaseBundleFor(skillDir, "", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(bundle.Checks) == 0 {
+		t.Fatal("expected at least one check entry")
+	}
+	if len(bundle.Changelog) == 0 {
+		t.Fatal("expected at least one changelog entry")
+	}
+	if !strings.Contains(bundle.ReleaseNotes, "# Release Notes") {
+		t.Fatalf("unexpected release notes: %q", bundle.ReleaseNotes)
+	}
+	if bundle.Changed != nil {
+		t.Fatal("includeChanged=false should not populate Changed")
+	}
+
+	// With a since date that excludes entries: notes should still have header.
+	bundle2, err := ReleaseBundleFor(skillDir, "9999-01-01", false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(bundle2.ReleaseNotes, "# Release Notes") {
+		t.Fatalf("expected header in filtered notes: %q", bundle2.ReleaseNotes)
+	}
+}
+
+func TestEnsureChangelogEntry(t *testing.T) {
+	cases := []struct {
+		name    string
+		input   string
+		version string
+		date    string
+		change  string
+		check   string
+	}{
+		{
+			name:    "empty file",
+			input:   "",
+			version: "1.0.0", date: "2026-06-12", change: "Initial release",
+			check: "## 1.0.0 - 2026-06-12",
+		},
+		{
+			name:    "existing entry same version",
+			input:   "# Changelog\n\n## 1.0.0 - 2026-06-12\n\n- Initial release\n\n",
+			version: "1.0.0", date: "2026-06-12", change: "Initial release",
+			check: "# Changelog",
+		},
+		{
+			name:    "prepends new version",
+			input:   "# Changelog\n\n## 1.0.0 - 2026-06-10\n\n- Old entry\n\n",
+			version: "1.1.0", date: "2026-06-12", change: "New feature",
+			check: "## 1.1.0 - 2026-06-12",
+		},
+		{
+			name:    "replaces same version with new date",
+			input:   "# Changelog\n\n## 1.0.0 - 2026-06-10\n\n- Old entry\n\n",
+			version: "1.0.0", date: "2026-06-12", change: "Updated entry",
+			check: "## 1.0.0 - 2026-06-12",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			out := ensureChangelogEntry(tc.input, tc.version, tc.date, tc.change)
+			if !strings.Contains(out, tc.check) {
+				t.Fatalf("expected %q in output:\n%s", tc.check, out)
+			}
+		})
+	}
+}
+
+func TestVersionFileVersion(t *testing.T) {
+	dir := t.TempDir()
+
+	// Missing file → false, no error.
+	got, ok, err := versionFileVersion(filepath.Join(dir, "VERSION"))
+	if err != nil || ok {
+		t.Fatalf("missing file: got=%q ok=%v err=%v", got, ok, err)
+	}
+
+	// Present file with trailing newline.
+	if err := os.WriteFile(filepath.Join(dir, "VERSION"), []byte("1.2.3\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, ok, err = versionFileVersion(filepath.Join(dir, "VERSION"))
+	if err != nil || !ok || got != "1.2.3" {
+		t.Fatalf("present file: got=%q ok=%v err=%v", got, ok, err)
+	}
+}
+
+func TestSkillYAMLVersion(t *testing.T) {
+	dir := t.TempDir()
+
+	// Missing file → false, no error.
+	got, ok, err := skillYAMLVersion(filepath.Join(dir, "skill.yaml"))
+	if err != nil || ok {
+		t.Fatalf("missing file: got=%q ok=%v err=%v", got, ok, err)
+	}
+
+	// Valid YAML with version field.
+	if err := os.WriteFile(filepath.Join(dir, "skill.yaml"), []byte("name: my-skill\nversion: 2.3.4\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, ok, err = skillYAMLVersion(filepath.Join(dir, "skill.yaml"))
+	if err != nil || !ok || got != "2.3.4" {
+		t.Fatalf("valid yaml: got=%q ok=%v err=%v", got, ok, err)
+	}
+
+	// YAML without version field returns empty string.
+	if err := os.WriteFile(filepath.Join(dir, "skill.yaml"), []byte("name: my-skill\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, ok, err = skillYAMLVersion(filepath.Join(dir, "skill.yaml"))
+	if err != nil || !ok || got != "" {
+		t.Fatalf("no version field: got=%q ok=%v err=%v", got, ok, err)
+	}
+}
+
+func TestSamePath(t *testing.T) {
+	dir := t.TempDir()
+	if !samePath(dir, dir) {
+		t.Fatal("same dir should be equal")
+	}
+	if samePath(dir, filepath.Join(dir, "other")) {
+		t.Fatal("different paths should not be equal")
+	}
+	// Trailing slash should still match.
+	if !samePath(dir+"/", dir) {
+		t.Fatal("trailing slash variant should be equal")
+	}
+}
+
+func TestNearestSkillFile(t *testing.T) {
+	root := t.TempDir()
+
+	// Create .agents/skills/my-skill/SKILL.md
+	skillDir := filepath.Join(root, ".agents", "skills", "my-skill")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("---\nname: my-skill\n---\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// A file inside the skill dir resolves to the skill's SKILL.md.
+	got := nearestSkillFile(root, ".agents/skills/my-skill/tests/README.md")
+	want := ".agents/skills/my-skill/SKILL.md"
+	if got != want {
+		t.Fatalf("nearestSkillFile(.../tests/README.md) = %q, want %q", got, want)
+	}
+
+	// The SKILL.md itself.
+	got = nearestSkillFile(root, ".agents/skills/my-skill/SKILL.md")
+	if got != want {
+		t.Fatalf("nearestSkillFile(SKILL.md itself) = %q, want %q", got, want)
+	}
+
+	// A path with no SKILL.md ancestor returns empty string.
+	got = nearestSkillFile(root, "some/unrelated/file.txt")
+	if got != "" {
+		t.Fatalf("unrelated path: expected empty, got %q", got)
+	}
+}
+
+func TestNormalizeRepoRelPath(t *testing.T) {
+	root := t.TempDir()
+
+	// Only the dot-prefixed directory exists — function should prepend the dot.
+	dotDir := filepath.Join(root, ".agents", "skills", "my-skill")
+	if err := os.MkdirAll(dotDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	got := normalizeRepoRelPath(root, "agents/skills/my-skill")
+	if got != ".agents/skills/my-skill" {
+		t.Fatalf("dot-prefix path: got %q", got)
+	}
+
+	// Path already has dot prefix → returned as-is regardless.
+	got = normalizeRepoRelPath(root, ".agents/skills/my-skill")
+	if got != ".agents/skills/my-skill" {
+		t.Fatalf("already-dotted path: got %q", got)
+	}
+
+	// Non-existent path with no dot variant → returned as-is.
+	got = normalizeRepoRelPath(root, "nonexistent/path")
+	if got != "nonexistent/path" {
+		t.Fatalf("nonexistent path: got %q", got)
+	}
+
+	// File exists at exact path (no dot) → returned as-is.
+	regularDir := filepath.Join(root, "skills", "plain-skill")
+	if err := os.MkdirAll(regularDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	got = normalizeRepoRelPath(root, "skills/plain-skill")
+	if got != "skills/plain-skill" {
+		t.Fatalf("existing non-dot path: got %q", got)
+	}
+}
+
 func runGit(t *testing.T, dir string, args ...string) {
 	t.Helper()
 	cmd := exec.Command("git", args...)

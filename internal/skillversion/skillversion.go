@@ -563,14 +563,8 @@ func prependChangelogIfExists(path, version, date, change string) error {
 	return os.WriteFile(path, []byte(updated), 0o644)
 }
 
-func syncChangelogIfExists(path, version, date, change string) error {
-	content, err := os.ReadFile(path)
-	if err != nil {
-		return nil
-	}
-	updated := ensureChangelogEntry(string(content), version, date, change)
-	return os.WriteFile(path, []byte(updated), 0o644)
-}
+// syncChangelogIfExists is an alias for prependChangelogIfExists.
+var syncChangelogIfExists = prependChangelogIfExists
 
 func ensureChangelogEntry(content, version, date, change string) string {
 	entry := fmt.Sprintf("## %s - %s\n\n- %s\n\n", version, date, change)

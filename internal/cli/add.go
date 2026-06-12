@@ -8,8 +8,24 @@ import (
 
 	"github.com/domehahn/sklib/spec"
 	"github.com/domehahn/skcr/internal/bake"
+	"github.com/domehahn/skcr/internal/catalog"
+	"github.com/domehahn/skcr/internal/scaffold"
 	"github.com/spf13/cobra"
 )
+
+// sdlcSkillSet is a O(1) lookup set built once from the canonical SDLC skill list.
+var sdlcSkillSet = func() map[string]struct{} {
+	m := make(map[string]struct{}, len(scaffold.SDLCSkillNames))
+	for _, n := range scaffold.SDLCSkillNames {
+		m[n] = struct{}{}
+	}
+	return m
+}()
+
+func isSDLCSkill(name string) bool {
+	_, ok := sdlcSkillSet[name]
+	return ok
+}
 
 func newAddCommand() *cobra.Command {
 	cmd := &cobra.Command{
@@ -77,6 +93,11 @@ func newAddSkillCommand() *cobra.Command {
 			if len(added) == 0 {
 				fmt.Printf("Skill %q is already present in all targets.\n", name)
 				return nil
+			}
+
+			if isSDLCSkill(name) {
+				desc := catalog.SkillDescription(name)
+				fmt.Printf("Hint: %q is a built-in SDLC skill — %s\n       Use `skcr scaffold skills` to generate all standard skills at once.\n", name, desc)
 			}
 
 			if err := cliDumpBakeFile(cfg, filepath.Join(absTarget, "agentic.bake.yaml")); err != nil {

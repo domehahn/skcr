@@ -353,6 +353,75 @@ func similarity(a, b string) float64 {
 	return float64(inter) / float64(union)
 }
 
+func TestRenderRegisteredSkillMarkdownPublicAPI(t *testing.T) {
+	rendered, ok, err := RenderRegisteredSkillMarkdown(
+		"security-reviewer",
+		"Security Reviewer",
+		"Review code for security issues.",
+		testVersion, testSince, testLastModified,
+		"platform-engineering",
+		"experimental",
+		"MIT",
+		[]string{"codex", "claude-code"},
+	)
+	if err != nil {
+		t.Fatalf("RenderRegisteredSkillMarkdown error: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected ok=true for known SDLC skill")
+	}
+	for _, want := range []string{
+		"security-reviewer",
+		testSince,
+		testLastModified,
+		testVersion,
+		"experimental",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Errorf("rendered missing %q", want)
+		}
+	}
+}
+
+func TestRenderRegisteredSkillMarkdownUnknown(t *testing.T) {
+	_, ok, err := RenderRegisteredSkillMarkdown(
+		"no-such-skill", "No Such Skill", "", testVersion, testSince, testLastModified,
+		"owner", "experimental", "MIT", []string{"codex"},
+	)
+	if err != nil {
+		t.Fatalf("unexpected error for unknown skill: %v", err)
+	}
+	if ok {
+		t.Fatal("expected ok=false for unregistered skill")
+	}
+}
+
+func TestRenderRegisteredSkillMarkdownWithCompatibility(t *testing.T) {
+	minPlatforms := []platforms.CompatibilityEntry{
+		{Name: "codex", MinVersion: "1.0", Status: "verified"},
+	}
+	rendered, ok, err := RenderRegisteredSkillMarkdownWithCompatibility(
+		"security-reviewer",
+		"Security Reviewer",
+		"Review code for security issues.",
+		testVersion, testSince, testLastModified,
+		"platform-engineering",
+		"experimental",
+		"MIT",
+		[]string{"codex"},
+		minPlatforms,
+	)
+	if err != nil {
+		t.Fatalf("RenderRegisteredSkillMarkdownWithCompatibility error: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected ok=true for known SDLC skill")
+	}
+	if !strings.Contains(rendered, "codex") {
+		t.Error("rendered missing platform codex")
+	}
+}
+
 func wordSet(s string) map[string]struct{} {
 	out := map[string]struct{}{}
 	for _, w := range strings.Fields(s) {

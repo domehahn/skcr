@@ -11,6 +11,7 @@ import (
 	"github.com/domehahn/skcr/internal/validator"
 	"github.com/domehahn/sklib/spec"
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 )
 
 type doctorFinding struct {
@@ -97,21 +98,33 @@ func newDoctorCommand() *cobra.Command {
 				}
 
 				skillMD := filepath.Join(skillDir, "SKILL.md")
-				if data, err := os.ReadFile(skillMD); err != nil {
+				skillMDContent, readErr := os.ReadFile(skillMD)
+				if readErr != nil {
 					add("error", "skills", fmt.Sprintf("%s/%s/SKILL.md missing", agentsBase, name))
 				} else {
-					if err := checkSkillMDFrontmatter(string(data)); err != "" {
+					if err := checkSkillMDFrontmatter(string(skillMDContent)); err != "" {
 						add("warn", "skills", fmt.Sprintf("%s/%s/SKILL.md: %s", agentsBase, name, err))
 					} else {
 						add("ok", "skills", fmt.Sprintf("%s/%s/SKILL.md valid", agentsBase, name))
 					}
-					for _, warning := range validator.ValidateSkillWarnings(string(data)) {
+					for _, warning := range validator.ValidateSkillWarnings(string(skillMDContent)) {
 						add("warn", "compat", fmt.Sprintf("%s/%s/SKILL.md: %s", agentsBase, name, warning))
+					}
+					if fm, ok := parseFrontmatterDates(string(skillMDContent)); ok {
+						if fm.Since > fm.LastModified {
+							add("error", "dates", fmt.Sprintf("%s/%s/SKILL.md: since (%s) is later than last_modified (%s)", agentsBase, name, fm.Since, fm.LastModified))
+						}
 					}
 				}
 
-				if _, err := os.ReadFile(filepath.Join(skillDir, "skill.yaml")); err != nil {
+				if yamlData, err := os.ReadFile(filepath.Join(skillDir, "skill.yaml")); err != nil {
 					add("error", "skills", fmt.Sprintf("%s/%s/skill.yaml missing", agentsBase, name))
+				} else if readErr == nil {
+					if fm, ok := parseFrontmatterDates(string(skillMDContent)); ok && fm.Version != "" {
+						if yamlVersion := extractYAMLStringKey(string(yamlData), "version"); yamlVersion != "" && yamlVersion != fm.Version {
+							add("error", "skills", fmt.Sprintf("%s/%s/skill.yaml version %q does not match SKILL.md version %q", agentsBase, name, yamlVersion, fm.Version))
+						}
+					}
 				}
 
 				versionData, err := os.ReadFile(filepath.Join(skillDir, "VERSION"))
@@ -210,4 +223,39 @@ func doctorExitCode(findings []doctorFinding) error {
 
 func checkSkillMDFrontmatter(content string) string {
 	return validator.ValidateSkillMetadata(content)
+}
+
+type frontmatterDates struct {
+	Version      string `yaml:"version"`
+	Since        string `yaml:"since"`
+	LastModified string `yaml:"last_modified"`
+}
+
+// extractYAMLStringKey returns the string value of a top-level YAML key without
+// a full unmarshal — sufficient for reading "version:" from skill.yaml.
+func extractYAMLStringKey(content, key string) string {
+	for _, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, key+":") {
+			val := strings.TrimSpace(strings.TrimPrefix(trimmed, key+":"))
+			return strings.Trim(val, `"'`)
+		}
+	}
+	return ""
+}
+
+func parseFrontmatterDates(content string) (frontmatterDates, bool) {
+	if !strings.HasPrefix(content, "---\n") {
+		return frontmatterDates{}, false
+	}
+	end := strings.Index(content[4:], "\n---")
+	if end < 0 {
+		return frontmatterDates{}, false
+	}
+	raw := content[4 : 4+end]
+	var fm frontmatterDates
+	if err := yaml.Unmarshal([]byte(raw), &fm); err != nil {
+		return frontmatterDates{}, false
+	}
+	return fm, true
 }

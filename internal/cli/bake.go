@@ -237,6 +237,13 @@ func newBakeCommand() *cobra.Command {
 					}
 				}
 
+				if warns := validateRenderedSkillDates(files); len(warns) > 0 {
+					fmt.Fprintln(os.Stderr, "\nWarning: date invariant violations in rendered skills (since > last_modified):")
+					for _, w := range warns {
+						fmt.Fprintf(os.Stderr, "  ! %s\n", w)
+					}
+				}
+
 				fmt.Println("\nDry run only. Use --write to write files.")
 				return nil
 			}
@@ -249,6 +256,13 @@ func newBakeCommand() *cobra.Command {
 				if created > 0 || skipped > 0 {
 					fmt.Printf("Skill sources: %d created, %d skipped (existing files preserved)\n", created, skipped)
 				}
+			}
+
+			if errs := validateRenderedSkillDates(files); len(errs) > 0 {
+				for _, e := range errs {
+					fmt.Fprintf(os.Stderr, "error: %s\n", e)
+				}
+				return fmt.Errorf("bake aborted: %d date invariant violation(s) in rendered skills", len(errs))
 			}
 
 			for _, rendered := range files {
@@ -294,6 +308,22 @@ func newBakeCommand() *cobra.Command {
 	cmd.Flags().StringVar(&platform, "platform", "", "Render only the selected canonical platform")
 
 	return cmd
+}
+
+// validateRenderedSkillDates checks that no rendered SKILL.md has since > last_modified.
+func validateRenderedSkillDates(files []models.RenderedFile) []string {
+	var errs []string
+	for _, f := range files {
+		if filepath.Base(f.Destination) != "SKILL.md" || f.Content == "" {
+			continue
+		}
+		if fm, ok := parseFrontmatterDates(f.Content); ok {
+			if fm.Since != "" && fm.LastModified != "" && fm.Since > fm.LastModified {
+				errs = append(errs, fmt.Sprintf("%s: since (%s) is later than last_modified (%s)", f.Destination, fm.Since, fm.LastModified))
+			}
+		}
+	}
+	return errs
 }
 
 func syncRenderedSkillArtifacts(root string, files []models.RenderedFile) error {

@@ -161,3 +161,47 @@ func TestWriteSkillSafeInvalidOptions(t *testing.T) {
 		t.Fatal("expected error for invalid name")
 	}
 }
+
+func TestReadExistingSince(t *testing.T) {
+	dir := t.TempDir()
+	skillMD := filepath.Join(dir, "SKILL.md")
+
+	// Missing file → empty.
+	if got := ReadExistingSince(skillMD); got != "" {
+		t.Fatalf("missing file: expected empty, got %q", got)
+	}
+
+	// Placeholder value → empty.
+	if err := os.WriteFile(skillMD, []byte("---\nsince: \"YYYY-MM-DD\"\n---\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := ReadExistingSince(skillMD); got != "" {
+		t.Fatalf("placeholder value: expected empty, got %q", got)
+	}
+
+	// Valid date returns it.
+	if err := os.WriteFile(skillMD, []byte("---\nsince: \"2025-03-15\"\n---\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := ReadExistingSince(skillMD); got != "2025-03-15" {
+		t.Fatalf("valid date: expected 2025-03-15, got %q", got)
+	}
+
+	// Value without quotes also works.
+	if err := os.WriteFile(skillMD, []byte("---\nsince: 2024-01-01\n---\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := ReadExistingSince(skillMD); got != "2024-01-01" {
+		t.Fatalf("unquoted date: expected 2024-01-01, got %q", got)
+	}
+
+	// Preserved across a WriteSkill rebuild: write skill, read its since, write again.
+	opts := SkillOptions{Name: "preserved-since", OutputDir: dir, Since: "2024-06-01", Platforms: []string{"codex"}}
+	if _, err := WriteSkill(opts); err != nil {
+		t.Fatal(err)
+	}
+	existing := ReadExistingSince(filepath.Join(dir, "preserved-since", "SKILL.md"))
+	if existing != "2024-06-01" {
+		t.Fatalf("since not written: got %q", existing)
+	}
+}
