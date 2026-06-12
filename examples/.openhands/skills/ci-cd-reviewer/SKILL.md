@@ -2,7 +2,7 @@
 name: ci-cd-reviewer
 description: Review CI/CD pipelines, runners, permissions, artifacts, caches, deployment gates, and token exposure.
 version: "1.1.0"
-since: "2025-01-01"
+since: "2026-06-10"
 last_modified: "2026-06-10"
 authors:
   - platform-engineering

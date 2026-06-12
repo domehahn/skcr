@@ -2,7 +2,7 @@
 name: documentation-maintainer
 description: Create and update README files, ADRs, setup guides, API docs, runbooks, and operational documentation.
 version: "1.1.0"
-since: "2025-01-01"
+since: "2026-06-10"
 last_modified: "2026-06-10"
 authors:
   - platform-engineering

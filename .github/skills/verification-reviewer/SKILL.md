@@ -2,7 +2,7 @@
 name: verification-reviewer
 description: Review diffs, validate acceptance criteria, inspect test results, and find missed requirements.
 version: "1.1.0"
-since: "2025-01-01"
+since: "2026-06-10"
 last_modified: "2026-06-10"
 authors:
   - platform-engineering

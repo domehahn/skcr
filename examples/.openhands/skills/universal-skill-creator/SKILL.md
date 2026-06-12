@@ -2,7 +2,7 @@
 name: universal-skill-creator
 description: Create, adapt, validate, and optimize reusable agent skills across agentic platforms.
 version: "1.2.0"
-since: "2025-01-01"
+since: "2026-06-10"
 last_modified: "2026-06-10"
 authors:
   - platform-engineering
@@ -107,7 +107,7 @@ Every skill created by this skill MUST apply this versioning schema. Do not crea
 name: <skill-name>
 description: <one-line description>
 version: "0.1.0"
-since: "YYYY-MM-DD"
+since: "2026-06-10"
 last_modified: "YYYY-MM-DD"
 authors:
   - <team-or-person>

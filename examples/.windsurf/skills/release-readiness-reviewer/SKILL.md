@@ -2,7 +2,7 @@
 name: release-readiness-reviewer
 description: Assess release readiness, rollback, migrations, feature flags, monitoring, documentation, and breaking changes.
 version: "1.1.0"
-since: "2025-01-01"
+since: "2026-06-10"
 last_modified: "2026-06-10"
 authors:
   - platform-engineering

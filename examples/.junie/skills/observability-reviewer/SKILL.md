@@ -2,7 +2,7 @@
 name: observability-reviewer
 description: Review logging, metrics, tracing, health checks, alerts, dashboards, runbooks, and operational readiness.
 version: "1.1.0"
-since: "2025-01-01"
+since: "2026-06-10"
 last_modified: "2026-06-10"
 authors:
   - platform-engineering
