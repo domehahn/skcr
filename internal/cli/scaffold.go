@@ -34,18 +34,21 @@ func newScaffoldSkillCommand() *cobra.Command {
 	var license string
 	var force bool
 	var dryRun bool
+	var addToBakefile bool
+	var bakeTarget string
 
 	cmd := &cobra.Command{
 		Use:   "skill <name>",
 		Short: "Scaffold a versionable AI agent skill",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			name := args[0]
 			absOutput, err := cliAbsPathScaffold(outputDir)
 			if err != nil {
 				return err
 			}
 			files, err := cliWriteSkill(scaffold.SkillOptions{
-				Name:        args[0],
+				Name:        name,
 				OutputDir:   absOutput,
 				Version:     version,
 				Description: description,
@@ -58,9 +61,9 @@ func newScaffoldSkillCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			skillPath := filepath.Join(outputDir, args[0])
+			skillPath := filepath.Join(outputDir, name)
 			if dryRun {
-				fmt.Printf("Skill scaffold plan: %s\n", args[0])
+				fmt.Printf("Skill scaffold plan: %s\n", name)
 				for _, file := range files {
 					fmt.Println("  create", file.Path)
 				}
@@ -68,6 +71,52 @@ func newScaffoldSkillCommand() *cobra.Command {
 				return nil
 			}
 			fmt.Printf("Created %s/\n", skillPath)
+
+			if addToBakefile {
+				bakePath := filepath.Join(bakeTarget, "agentic.bake.yaml")
+				cfg, loadErr := cliLoadBakeFile(bakePath)
+				if loadErr != nil {
+					fmt.Fprintf(cmd.ErrOrStderr(), "Warning: could not load bakefile to register skill: %v\n", loadErr)
+				} else {
+					for _, t := range cfg.Targets {
+						if t == nil {
+							continue
+						}
+						found := false
+						for _, s := range t.Skills {
+							if s == name {
+								found = true
+								break
+							}
+						}
+						if !found {
+							t.Skills = append(t.Skills, name)
+						}
+					}
+					if cfg.SkillSources != nil {
+						found := false
+						for _, sd := range cfg.SkillSources.Skills {
+							if sd.Name == name {
+								found = true
+								break
+							}
+						}
+						if !found {
+							cfg.SkillSources.Skills = append(cfg.SkillSources.Skills, models.SkillSourceDefinition{
+								Name:        name,
+								Description: description,
+								Owner:       owner,
+							})
+						}
+					}
+					if dumpErr := cliDumpBakeFile(cfg, bakePath); dumpErr != nil {
+						fmt.Fprintf(cmd.ErrOrStderr(), "Warning: could not update bakefile: %v\n", dumpErr)
+					} else {
+						fmt.Printf("Registered %q in %s\n", name, bakePath)
+					}
+				}
+			}
+
 			fmt.Printf("\nNext steps:\n")
 			fmt.Printf("  skpm validate %s\n", skillPath)
 			fmt.Printf("  skpm package %s\n", skillPath)
@@ -84,6 +133,8 @@ func newScaffoldSkillCommand() *cobra.Command {
 	cmd.Flags().StringVar(&license, "license", "MIT", "Skill license")
 	cmd.Flags().BoolVar(&force, "force", false, "Overwrite existing scaffold files")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview files without writing")
+	cmd.Flags().BoolVar(&addToBakefile, "add", false, "Register the skill in all bakefile targets and skill_sources")
+	cmd.Flags().StringVar(&bakeTarget, "bakefile-dir", ".", "Directory containing agentic.bake.yaml (used with --add)")
 	return cmd
 }
 
@@ -179,7 +230,7 @@ func skillDefToScaffoldOpts(def models.SkillSourceDefinition, ss *models.SkillSo
 		Force:     force,
 	}
 	// Apply definition fields, falling back to defaults.
-	opts.Version = firstNonEmpty(def.Version, ss.Defaults.Version, "0.1.0")
+	opts.Version = firstNonEmpty(def.InitialVersion, ss.Defaults.InitialVersion, "0.1.0")
 	opts.Owner = firstNonEmpty(def.Owner, ss.Defaults.Owner)
 	opts.License = firstNonEmpty(def.License, ss.Defaults.License, "MIT")
 	opts.Description = def.Description

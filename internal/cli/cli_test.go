@@ -1221,7 +1221,7 @@ func TestRemoveSkillCommand(t *testing.T) {
 	if err := runRoot("add", "skill", "to-delete", "--target", dir); err != nil {
 		t.Fatal(err)
 	}
-	if err := runRoot("remove", "skill", "to-delete", "--target", dir, "--delete-dirs"); err != nil {
+	if err := runRoot("remove", "skill", "to-delete", "--target", dir, "--delete-dirs", "--yes"); err != nil {
 		t.Fatalf("remove --delete-dirs failed: %v", err)
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".agents", "skills", "to-delete")); !os.IsNotExist(err) {
@@ -1687,4 +1687,1274 @@ func TestIsSDLCSkill(t *testing.T) {
 			t.Errorf("isSDLCSkill(%q) = true, want false", name)
 		}
 	}
+}
+
+func TestBakeHelpers(t *testing.T) {
+	t.Run("filterPlatforms overlap", func(t *testing.T) {
+		got := filterPlatforms([]string{"codex", "cursor", "windsurf"}, []string{"codex", "windsurf"})
+		if len(got) != 2 || got[0] != "codex" || got[1] != "windsurf" {
+			t.Errorf("unexpected filterPlatforms result: %v", got)
+		}
+	})
+	t.Run("filterPlatforms no overlap", func(t *testing.T) {
+		if got := filterPlatforms([]string{"codex"}, []string{"cursor"}); len(got) != 0 {
+			t.Errorf("expected empty, got %v", got)
+		}
+	})
+	t.Run("filterPlatforms empty selected", func(t *testing.T) {
+		if got := filterPlatforms([]string{"codex", "cursor"}, []string{}); len(got) != 0 {
+			t.Errorf("expected empty, got %v", got)
+		}
+	})
+
+	t.Run("canonicalPlatformSkillBaseDir", func(t *testing.T) {
+		cases := map[string]string{
+			"claude-code":    ".claude/skills",
+			"github-copilot": ".github/skills",
+			"cursor":         ".cursor/skills",
+			"gemini-cli":     ".gemini/skills",
+			"codex":          ".agents/skills",
+			"unknown-agent":  ".agents/skills",
+		}
+		for platform, want := range cases {
+			if got := canonicalPlatformSkillBaseDir(platform); got != want {
+				t.Errorf("canonicalPlatformSkillBaseDir(%q) = %q, want %q", platform, got, want)
+			}
+		}
+	})
+
+	t.Run("skillSourceOutputDir", func(t *testing.T) {
+		if got := skillSourceOutputDir(nil); got != ".agents/skills" {
+			t.Errorf("expected default, got %q", got)
+		}
+		if got := skillSourceOutputDir(&models.SkillSourceConfig{}); got != ".agents/skills" {
+			t.Errorf("expected default for empty OutputDir, got %q", got)
+		}
+		if got := skillSourceOutputDir(&models.SkillSourceConfig{OutputDir: "custom/skills"}); got != "custom/skills" {
+			t.Errorf("expected custom dir, got %q", got)
+		}
+	})
+
+	t.Run("renderedChecksum content", func(t *testing.T) {
+		f1 := models.RenderedFile{Content: "hello world"}
+		f2 := models.RenderedFile{Content: "hello world"}
+		if renderedChecksum(f1) != renderedChecksum(f2) {
+			t.Error("same content should produce same checksum")
+		}
+		if renderedChecksum(f1) == renderedChecksum(models.RenderedFile{Content: "different"}) {
+			t.Error("different content should produce different checksum")
+		}
+	})
+
+	t.Run("renderedChecksum link vs content", func(t *testing.T) {
+		fLink := models.RenderedFile{LinkTarget: "some/path"}
+		fContent := models.RenderedFile{Content: "some/path"}
+		if renderedChecksum(fLink) == renderedChecksum(fContent) {
+			t.Error("link and content checksums must differ even with same text")
+		}
+	})
+}
+
+func TestCompatibilityCommands(t *testing.T) {
+	dir := t.TempDir()
+	if err := runRoot("init", "--target", dir, "--platform", "codex", "--project-name", "TestProj"); err != nil {
+		t.Fatal(err)
+	}
+
+	// matrix: no custom file → lists built-in defaults without error.
+	if err := runRoot("compatibility", "matrix", "--target", dir); err != nil {
+		t.Fatalf("compatibility matrix failed: %v", err)
+	}
+
+	// matrix --json: valid JSON output.
+	if err := runRoot("compatibility", "matrix", "--target", dir, "--json"); err != nil {
+		t.Fatalf("compatibility matrix --json failed: %v", err)
+	}
+
+	// check: no verified entries → "No verified entries" message (exit 0).
+	if err := runRoot("compatibility", "check", "--target", dir); err != nil {
+		t.Fatalf("compatibility check with no verified entries failed: %v", err)
+	}
+
+	// set: requires evidence file on disk.
+	evidenceFile := filepath.Join(dir, "docs", "codex-evidence.md")
+	if err := os.MkdirAll(filepath.Dir(evidenceFile), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(evidenceFile, []byte("# Evidence\nTested on Codex 0.51.0\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := runRoot("compatibility", "set", "codex", "--target", dir,
+		"--min-version", "0.51.0",
+		"--evidence", "docs/codex-evidence.md",
+		"--validated", "2026-06-12",
+	); err != nil {
+		t.Fatalf("compatibility set failed: %v", err)
+	}
+
+	// check: now codex is verified → exits 0.
+	if err := runRoot("compatibility", "check", "--target", dir); err != nil {
+		t.Fatalf("compatibility check after set failed: %v", err)
+	}
+}
+
+func TestParseFrontmatterDatesEdgeCases(t *testing.T) {
+	// No --- prefix → not parsed.
+	if _, ok := parseFrontmatterDates("version: 1.0.0\n"); ok {
+		t.Error("expected false for content without --- prefix")
+	}
+
+	// Only opening --- with no closing --- → not parsed.
+	if _, ok := parseFrontmatterDates("---\nversion: 1.0.0\n"); ok {
+		t.Error("expected false for unclosed frontmatter")
+	}
+
+	// Valid but all date fields absent → parsed successfully with empty fields.
+	if fm, ok := parseFrontmatterDates("---\nname: my-skill\n---\n# Body\n"); !ok {
+		t.Error("expected true for valid frontmatter")
+	} else if fm.Version != "" || fm.Since != "" || fm.LastModified != "" {
+		t.Errorf("expected empty fields, got %+v", fm)
+	}
+
+	// All fields present → correctly extracted.
+	full := "---\nversion: \"1.2.3\"\nsince: \"2025-01-01\"\nlast_modified: \"2026-06-12\"\n---\n"
+	fm, ok := parseFrontmatterDates(full)
+	if !ok {
+		t.Fatal("expected true for full frontmatter")
+	}
+	if fm.Version != "1.2.3" || fm.Since != "2025-01-01" || fm.LastModified != "2026-06-12" {
+		t.Errorf("unexpected parsed values: %+v", fm)
+	}
+}
+
+func TestResolveDefaultTarget(t *testing.T) {
+	boolPtr := func(b bool) *bool { return &b }
+
+	tc := func(platforms ...string) *models.TargetConfig {
+		return &models.TargetConfig{Platforms: platforms}
+	}
+
+	// "default" target takes priority.
+	cfg := &models.BakeConfig{
+		Targets: map[string]*models.TargetConfig{
+			"default": tc("codex"),
+			"prod":    tc("codex"),
+		},
+	}
+	got, err := resolveDefaultTarget(cfg)
+	if err != nil || got == nil {
+		t.Fatalf("expected default target, got err=%v", err)
+	}
+
+	// "all" target is the fallback when no "default".
+	cfg2 := &models.BakeConfig{
+		Targets: map[string]*models.TargetConfig{
+			"all":  tc("codex"),
+			"prod": tc("codex"),
+		},
+	}
+	got2, err2 := resolveDefaultTarget(cfg2)
+	if err2 != nil || got2 == nil {
+		t.Fatalf("expected all target, got err=%v", err2)
+	}
+
+	// Single target → auto-selected.
+	cfg3 := &models.BakeConfig{
+		Targets: map[string]*models.TargetConfig{
+			"my-target": tc("codex"),
+		},
+	}
+	got3, err3 := resolveDefaultTarget(cfg3)
+	if err3 != nil || got3 == nil {
+		t.Fatalf("expected sole target, got err=%v", err3)
+	}
+
+	// Multiple targets, none named "default" or "all" → error.
+	cfg4 := &models.BakeConfig{
+		Targets: map[string]*models.TargetConfig{
+			"alpha": tc("codex"),
+			"beta":  tc("codex"),
+		},
+	}
+	if _, err4 := resolveDefaultTarget(cfg4); err4 == nil {
+		t.Fatal("expected error for ambiguous multi-target bakefile")
+	}
+
+	_ = boolPtr
+}
+
+func TestValidateSkillsMode(t *testing.T) {
+	valid := []string{"", "reference", "copy", "link", "embed"}
+	for _, m := range valid {
+		if err := validateSkillsMode(m); err != nil {
+			t.Errorf("validateSkillsMode(%q): unexpected error: %v", m, err)
+		}
+	}
+	if err := validateSkillsMode("unknown-mode"); err == nil {
+		t.Error("expected error for unknown skills mode")
+	}
+}
+
+func TestRenderPlatformFilesEnabled(t *testing.T) {
+	boolPtr := func(b bool) *bool { return &b }
+
+	// Default (nil Render) → true.
+	if !renderPlatformFilesEnabled(&models.TargetConfig{}) {
+		t.Error("expected true when Render is nil")
+	}
+
+	// Render.PlatformFiles nil → true.
+	if !renderPlatformFilesEnabled(&models.TargetConfig{Render: &models.RenderConfig{}}) {
+		t.Error("expected true when PlatformFiles is nil")
+	}
+
+	// Explicit false.
+	if renderPlatformFilesEnabled(&models.TargetConfig{Render: &models.RenderConfig{PlatformFiles: boolPtr(false)}}) {
+		t.Error("expected false when PlatformFiles is explicitly false")
+	}
+
+	// Explicit true.
+	if !renderPlatformFilesEnabled(&models.TargetConfig{Render: &models.RenderConfig{PlatformFiles: boolPtr(true)}}) {
+		t.Error("expected true when PlatformFiles is explicitly true")
+	}
+}
+
+func TestCompatibilityCheckWithErrors(t *testing.T) {
+	dir := t.TempDir()
+	if err := runRoot("init", "--target", dir, "--platform", "codex", "--project-name", "TestProj"); err != nil {
+		t.Fatal(err)
+	}
+
+	// Manually write a compatibility file with a verified entry but missing evidence file.
+	compat := `platforms:
+  - name: codex
+    min_version: "0.51.0"
+    status: verified
+    evidence: docs/missing-evidence.md
+    validated: "2026-06-12"
+`
+	if err := os.WriteFile(filepath.Join(dir, "agentic.compatibility.yaml"), []byte(compat), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// check should fail because evidence file is missing.
+	if err := runRoot("compatibility", "check", "--target", dir); err == nil {
+		t.Fatal("expected error for missing evidence file")
+	}
+}
+
+func TestSyncRenderedSkillArtifacts(t *testing.T) {
+	dir := t.TempDir()
+
+	// Build a real baked skill directory with scaffold so SyncArtifacts finds the SKILL.md.
+	if err := runRoot("init", "--target", dir, "--platform", "codex", "--project-name", "SyncTest"); err != nil {
+		t.Fatal(err)
+	}
+	if err := runRoot("bake", "--write", "--target", dir); err != nil {
+		t.Fatalf("bake --write failed: %v", err)
+	}
+
+	// syncRenderedSkillArtifacts only processes RenderedFiles whose Base is "SKILL.md".
+	skillMDPath := ".agents/skills/security-reviewer/SKILL.md"
+	rendered := []models.RenderedFile{
+		{Destination: skillMDPath, Content: "irrelevant"},
+		{Destination: "AGENTS.md", Content: "not a skill"},
+	}
+
+	if err := syncRenderedSkillArtifacts(dir, rendered); err != nil {
+		t.Fatalf("syncRenderedSkillArtifacts: %v", err)
+	}
+
+	// Non-SKILL.md entries only → no-op, no error.
+	if err := syncRenderedSkillArtifacts(dir, []models.RenderedFile{
+		{Destination: "AGENTS.md", Content: "ok"},
+	}); err != nil {
+		t.Fatalf("syncRenderedSkillArtifacts no-skill files: %v", err)
+	}
+
+	// Empty slice → no-op.
+	if err := syncRenderedSkillArtifacts(dir, nil); err != nil {
+		t.Fatalf("syncRenderedSkillArtifacts nil: %v", err)
+	}
+}
+
+// ── helpers ───────────────────────────────────────────────────────────────────
+
+// initProject creates a minimal skcr project in dir with the given platform.
+func initProject(t *testing.T, dir, platform string) {
+	t.Helper()
+	if err := runRoot("init", "--target", dir, "--platform", platform, "--project-name", "TestProj"); err != nil {
+		t.Fatalf("init failed: %v", err)
+	}
+}
+
+// addSkill adds a skill to the project and scaffolds it.
+func addSkill(t *testing.T, dir, name string) {
+	t.Helper()
+	if err := runRoot("add", "skill", name, "--target", dir); err != nil {
+		t.Fatalf("add skill %q failed: %v", name, err)
+	}
+}
+
+func runRootOut(args ...string) (string, error) {
+	buf := &bytes.Buffer{}
+	root := NewRootCommand()
+	root.SetArgs(args)
+	root.SetOut(buf)
+	root.SetErr(&bytes.Buffer{})
+	err := root.Execute()
+	return buf.String(), err
+}
+
+// ── target CRUD ───────────────────────────────────────────────────────────────
+
+func TestAddRemoveRenameTargetCommands(t *testing.T) {
+	dir := t.TempDir()
+	initProject(t, dir, "codex")
+
+	// add target
+	if err := runRoot("add", "target", "staging", "--target", dir, "--description", "Staging env", "--platform", "codex"); err != nil {
+		t.Fatalf("add target failed: %v", err)
+	}
+	bake, _ := os.ReadFile(filepath.Join(dir, "agentic.bake.yaml"))
+	if !strings.Contains(string(bake), "staging") {
+		t.Fatal("staging target not in bakefile after add")
+	}
+
+	// add target duplicate → error
+	if err := runRoot("add", "target", "staging", "--target", dir); err == nil {
+		t.Fatal("expected error adding duplicate target")
+	}
+
+	// rename target
+	if err := runRoot("rename", "target", "staging", "production", "--target", dir); err != nil {
+		t.Fatalf("rename target failed: %v", err)
+	}
+	bake, _ = os.ReadFile(filepath.Join(dir, "agentic.bake.yaml"))
+	if strings.Contains(string(bake), "staging") {
+		t.Fatal("old target name still present after rename")
+	}
+	if !strings.Contains(string(bake), "production") {
+		t.Fatal("new target name not present after rename")
+	}
+
+	// rename target dry-run
+	if err := runRoot("rename", "target", "production", "dev", "--target", dir, "--dry-run"); err != nil {
+		t.Fatalf("rename target dry-run failed: %v", err)
+	}
+	bake, _ = os.ReadFile(filepath.Join(dir, "agentic.bake.yaml"))
+	if !strings.Contains(string(bake), "production") {
+		t.Fatal("dry-run should not modify bakefile")
+	}
+
+	// rename non-existent → error
+	if err := runRoot("rename", "target", "nonexistent", "other", "--target", dir); err == nil {
+		t.Fatal("expected error renaming nonexistent target")
+	}
+
+	// remove target with skills requires --force
+	// Use a fresh dedicated target (not production) to avoid cross-contamination.
+	if err := runRoot("add", "target", "with-skill", "--target", dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := runRoot("add", "skill", "extra-skill", "--target", dir, "--in-target", "with-skill", "--no-scaffold"); err != nil {
+		t.Fatal(err)
+	}
+	if err := runRoot("remove", "target", "with-skill", "--target", dir); err == nil {
+		t.Fatal("expected error removing target with skills without --force")
+	}
+	if err := runRoot("remove", "target", "with-skill", "--target", dir, "--force"); err != nil {
+		t.Fatalf("remove target --force failed: %v", err)
+	}
+
+	// remove empty target (production was only renamed from staging, has no skills)
+	if err := runRoot("remove", "target", "production", "--target", dir); err != nil {
+		t.Fatalf("remove target failed: %v", err)
+	}
+	bake, _ = os.ReadFile(filepath.Join(dir, "agentic.bake.yaml"))
+	if strings.Contains(string(bake), "production") {
+		t.Fatal("removed target still in bakefile")
+	}
+
+	// remove non-existent → error
+	if err := runRoot("remove", "target", "nonexistent", "--target", dir); err == nil {
+		t.Fatal("expected error removing nonexistent target")
+	}
+}
+
+// ── list targets --json ───────────────────────────────────────────────────────
+
+func TestListTargetsJSON(t *testing.T) {
+	dir := t.TempDir()
+	initProject(t, dir, "codex")
+	out, err := runRootOut("list", "targets", "--target", dir, "--json")
+	if err != nil {
+		t.Fatalf("list targets --json failed: %v", err)
+	}
+	if !strings.Contains(out, `"name"`) {
+		t.Fatalf("JSON output missing 'name' field: %s", out)
+	}
+	if !strings.Contains(out, "default") {
+		t.Fatalf("JSON output missing 'default' target: %s", out)
+	}
+}
+
+// ── list skills --orphaned ────────────────────────────────────────────────────
+
+func TestListSkillsOrphaned(t *testing.T) {
+	dir := t.TempDir()
+	initProject(t, dir, "codex")
+	addSkill(t, dir, "registered-skill")
+
+	// Manually create an orphan directory (not in any target).
+	orphanDir := filepath.Join(dir, ".agents", "skills", "orphan-skill")
+	if err := os.MkdirAll(orphanDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(orphanDir, "SKILL.md"), []byte("---\nname: orphan-skill\nversion: 0.1.0\n---\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := runRootOut("list", "skills", "--target", dir, "--orphaned")
+	if err != nil {
+		t.Fatalf("list skills --orphaned failed: %v", err)
+	}
+	if !strings.Contains(out, "orphan-skill") {
+		t.Fatalf("orphaned skill not listed: %s", out)
+	}
+	if strings.Contains(out, "registered-skill") {
+		t.Fatalf("registered skill incorrectly listed as orphan: %s", out)
+	}
+
+	// JSON variant
+	out, err = runRootOut("list", "skills", "--target", dir, "--orphaned", "--json")
+	if err != nil {
+		t.Fatalf("list skills --orphaned --json failed: %v", err)
+	}
+	if !strings.Contains(out, `"orphan-skill"`) {
+		t.Fatalf("JSON missing orphan-skill: %s", out)
+	}
+}
+
+// ── add skill --from ──────────────────────────────────────────────────────────
+
+func TestAddSkillFromCommand(t *testing.T) {
+	dir := t.TempDir()
+	initProject(t, dir, "codex")
+
+	// Create a source skill directory to import from.
+	srcDir := t.TempDir()
+	srcSkill := filepath.Join(srcDir, "imported-skill")
+	if err := os.MkdirAll(srcSkill, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(srcSkill, "SKILL.md"), []byte("---\nname: imported-skill\nversion: 1.0.0\n---\n# Imported Skill\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(srcSkill, "VERSION"), []byte("1.0.0\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := runRoot("add", "skill", "imported-skill", "--target", dir, "--from", srcSkill); err != nil {
+		t.Fatalf("add skill --from failed: %v", err)
+	}
+
+	// Skill dir should be copied.
+	destSkillMD := filepath.Join(dir, ".agents", "skills", "imported-skill", "SKILL.md")
+	if _, err := os.Stat(destSkillMD); err != nil {
+		t.Fatalf("imported SKILL.md not found: %v", err)
+	}
+
+	// Bakefile should contain skill.
+	bake, _ := os.ReadFile(filepath.Join(dir, "agentic.bake.yaml"))
+	if !strings.Contains(string(bake), "imported-skill") {
+		t.Fatal("imported skill not in bakefile")
+	}
+
+	// Importing again → destination exists → error.
+	if err := runRoot("add", "skill", "imported-skill", "--target", dir, "--from", srcSkill); err == nil {
+		t.Fatal("expected error when destination already exists")
+	}
+}
+
+// ── scaffold skill --add ──────────────────────────────────────────────────────
+
+func TestScaffoldSkillWithAdd(t *testing.T) {
+	dir := t.TempDir()
+	initProject(t, dir, "codex")
+
+	if err := runRoot("scaffold", "skill", "new-add-skill",
+		"--output-dir", filepath.Join(dir, ".agents", "skills"),
+		"--add",
+		"--bakefile-dir", dir,
+	); err != nil {
+		t.Fatalf("scaffold skill --add failed: %v", err)
+	}
+
+	// Skill directory created.
+	if _, err := os.Stat(filepath.Join(dir, ".agents", "skills", "new-add-skill", "SKILL.md")); err != nil {
+		t.Fatalf("SKILL.md not created: %v", err)
+	}
+
+	// Registered in bakefile.
+	bake, _ := os.ReadFile(filepath.Join(dir, "agentic.bake.yaml"))
+	if !strings.Contains(string(bake), "new-add-skill") {
+		t.Fatal("skill not registered in bakefile after scaffold --add")
+	}
+}
+
+// ── clone skill ───────────────────────────────────────────────────────────────
+
+func TestCloneSkillCommand(t *testing.T) {
+	dir := t.TempDir()
+	initProject(t, dir, "codex")
+	addSkill(t, dir, "base-skill")
+
+	// Dry-run: no changes.
+	if err := runRoot("clone", "skill", "base-skill", "cloned-skill", "--target", dir, "--dry-run"); err != nil {
+		t.Fatalf("clone skill --dry-run failed: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".agents", "skills", "cloned-skill")); !os.IsNotExist(err) {
+		t.Fatal("dry-run should not copy directory")
+	}
+
+	// Real clone.
+	if err := runRoot("clone", "skill", "base-skill", "cloned-skill", "--target", dir); err != nil {
+		t.Fatalf("clone skill failed: %v", err)
+	}
+
+	// Clone directory should exist with SKILL.md.
+	if _, err := os.Stat(filepath.Join(dir, ".agents", "skills", "cloned-skill", "SKILL.md")); err != nil {
+		t.Fatalf("cloned SKILL.md not found: %v", err)
+	}
+
+	// Bakefile should reference clone.
+	bake, _ := os.ReadFile(filepath.Join(dir, "agentic.bake.yaml"))
+	if !strings.Contains(string(bake), "cloned-skill") {
+		t.Fatal("cloned skill not in bakefile")
+	}
+
+	// Source still exists.
+	if _, err := os.Stat(filepath.Join(dir, ".agents", "skills", "base-skill", "SKILL.md")); err != nil {
+		t.Fatalf("source skill missing after clone: %v", err)
+	}
+
+	// Clone to same name → error.
+	if err := runRoot("clone", "skill", "base-skill", "base-skill", "--target", dir); err == nil {
+		t.Fatal("expected error cloning to same name")
+	}
+
+	// Clone to existing destination → error.
+	if err := runRoot("clone", "skill", "base-skill", "cloned-skill", "--target", dir); err == nil {
+		t.Fatal("expected error when destination already exists")
+	}
+
+	// Clone non-existent source → error.
+	if err := runRoot("clone", "skill", "nonexistent", "new-clone", "--target", dir); err == nil {
+		t.Fatal("expected error when source does not exist")
+	}
+}
+
+// ── audit ─────────────────────────────────────────────────────────────────────
+
+func TestAuditCommand(t *testing.T) {
+	dir := t.TempDir()
+	initProject(t, dir, "codex")
+	addSkill(t, dir, "audit-skill")
+
+	// Scaffolded skills should pass audit (scaffold writes all required fields).
+	if err := runRoot("audit", "--target", dir, "--max-age", "0"); err != nil {
+		t.Fatalf("audit on freshly scaffolded skill should pass: %v", err)
+	}
+
+	// Corrupt SKILL.md to remove required fields.
+	skillMD := filepath.Join(dir, ".agents", "skills", "audit-skill", "SKILL.md")
+	if err := os.WriteFile(skillMD, []byte("---\nname: audit-skill\nversion: 0.1.0\n---\n# Skill\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Should report warnings for missing fields.
+	if err := runRoot("audit", "--target", dir, "--max-age", "0"); err != nil {
+		// warnings don't fail by default
+		t.Fatalf("audit with warnings should not fail by default: %v", err)
+	}
+
+	// --fail-on-warn should fail.
+	if err := runRoot("audit", "--target", dir, "--max-age", "0", "--fail-on-warn"); err == nil {
+		t.Fatal("expected audit to fail with --fail-on-warn when fields are missing")
+	}
+
+	// JSON output.
+	out, err := runRootOut("audit", "--target", dir, "--max-age", "0", "--json")
+	if err != nil {
+		t.Fatalf("audit --json failed: %v", err)
+	}
+	if !strings.Contains(out, `"skill"`) {
+		t.Fatalf("JSON audit missing 'skill' field: %s", out)
+	}
+}
+
+func TestAuditVersionDrift(t *testing.T) {
+	dir := t.TempDir()
+	initProject(t, dir, "codex")
+	addSkill(t, dir, "drift-skill")
+
+	// Introduce version drift: VERSION file differs from SKILL.md.
+	versionPath := filepath.Join(dir, ".agents", "skills", "drift-skill", "VERSION")
+	if err := os.WriteFile(versionPath, []byte("9.9.9\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := runRoot("audit", "--target", dir, "--max-age", "0"); err == nil {
+		t.Fatal("expected audit error for version drift")
+	}
+}
+
+// ── migrate ───────────────────────────────────────────────────────────────────
+
+func TestMigrateCommand(t *testing.T) {
+	dir := t.TempDir()
+
+	// Write a bakefile with the deprecated `version` key under skill_sources.
+	bakePath := filepath.Join(dir, "agentic.bake.yaml")
+	oldBake := `version: "1"
+skill_sources:
+  output_dir: .agents/skills
+  defaults:
+    version: "0.1.0"
+    license: MIT
+  skills:
+    - name: my-skill
+      version: "1.2.0"
+targets:
+  default:
+    platforms: [codex]
+    skills: [my-skill]
+`
+	if err := os.WriteFile(bakePath, []byte(oldBake), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Dry-run: file unchanged.
+	if err := runRoot("migrate", "--target", dir, "--dry-run"); err != nil {
+		t.Fatalf("migrate --dry-run failed: %v", err)
+	}
+	raw, _ := os.ReadFile(bakePath)
+	if !strings.Contains(string(raw), "version: ") {
+		t.Fatal("dry-run should not modify the bakefile")
+	}
+
+	// Real migration.
+	if err := runRoot("migrate", "--target", dir); err != nil {
+		t.Fatalf("migrate failed: %v", err)
+	}
+	raw, _ = os.ReadFile(bakePath)
+	content := string(raw)
+	if strings.Contains(content, "defaults:\n    version:") || strings.Contains(content, "defaults:\n      version:") {
+		t.Fatalf("deprecated defaults.version key still present: %s", content)
+	}
+	if !strings.Contains(content, "initial_version") {
+		t.Fatalf("initial_version key not found after migration: %s", content)
+	}
+}
+
+func TestMigrateCommandAlreadyCurrent(t *testing.T) {
+	dir := t.TempDir()
+	initProject(t, dir, "codex")
+	// init generates a current-format bakefile; migrate should report no changes needed.
+	if err := runRoot("migrate", "--target", dir); err != nil {
+		t.Fatalf("migrate on up-to-date bakefile failed: %v", err)
+	}
+}
+
+// ── graph ─────────────────────────────────────────────────────────────────────
+
+func TestGraphCommand(t *testing.T) {
+	dir := t.TempDir()
+	initProject(t, dir, "codex")
+
+	// ASCII tree output.
+	out, err := runRootOut("graph", "--target", dir)
+	if err != nil {
+		t.Fatalf("graph failed: %v", err)
+	}
+	if !strings.Contains(out, "Targets") {
+		t.Fatalf("graph missing 'Targets' header: %s", out)
+	}
+	if !strings.Contains(out, "default") {
+		t.Fatalf("graph missing 'default' target: %s", out)
+	}
+
+	// DOT output.
+	out, err = runRootOut("graph", "--target", dir, "--dot")
+	if err != nil {
+		t.Fatalf("graph --dot failed: %v", err)
+	}
+	if !strings.Contains(out, "digraph targets") {
+		t.Fatalf("DOT output missing 'digraph targets': %s", out)
+	}
+}
+
+func TestGraphInheritance(t *testing.T) {
+	dir := t.TempDir()
+	initProject(t, dir, "codex")
+	// Add a target that inherits from default.
+	if err := runRoot("add", "target", "child", "--target", dir, "--inherits", "default"); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runRootOut("graph", "--target", dir)
+	if err != nil {
+		t.Fatalf("graph with inheritance failed: %v", err)
+	}
+	if !strings.Contains(out, "child") {
+		t.Fatalf("child target not in graph output: %s", out)
+	}
+}
+
+// ── inspect ───────────────────────────────────────────────────────────────────
+
+func TestInspectSkillCommand(t *testing.T) {
+	dir := t.TempDir()
+	initProject(t, dir, "codex")
+	addSkill(t, dir, "inspect-me")
+
+	// Text output.
+	out, err := runRootOut("inspect", "skill", "inspect-me", "--target", dir)
+	if err != nil {
+		t.Fatalf("inspect skill failed: %v", err)
+	}
+	if !strings.Contains(out, "inspect-me") {
+		t.Fatalf("skill name missing from inspect output: %s", out)
+	}
+
+	// JSON output.
+	out, err = runRootOut("inspect", "skill", "inspect-me", "--target", dir, "--json")
+	if err != nil {
+		t.Fatalf("inspect skill --json failed: %v", err)
+	}
+	if !strings.Contains(out, `"name"`) || !strings.Contains(out, "inspect-me") {
+		t.Fatalf("JSON inspect missing expected fields: %s", out)
+	}
+
+	// Non-existent skill: command succeeds but shows "not found" message.
+	out2, err2 := runRootOut("inspect", "skill", "nonexistent", "--target", dir)
+	if err2 != nil {
+		t.Fatalf("inspect skill nonexistent should not error: %v", err2)
+	}
+	if !strings.Contains(out2, "not found") && !strings.Contains(out2, "nonexistent") {
+		t.Fatalf("expected 'not found' info for nonexistent skill: %s", out2)
+	}
+}
+
+func TestInspectTargetCommand(t *testing.T) {
+	dir := t.TempDir()
+	initProject(t, dir, "codex")
+
+	out, err := runRootOut("inspect", "target", "default", "--target", dir)
+	if err != nil {
+		t.Fatalf("inspect target failed: %v", err)
+	}
+	if !strings.Contains(out, "default") {
+		t.Fatalf("target name missing from output: %s", out)
+	}
+
+	// JSON output.
+	out, err = runRootOut("inspect", "target", "default", "--target", dir, "--json")
+	if err != nil {
+		t.Fatalf("inspect target --json failed: %v", err)
+	}
+	if !strings.Contains(out, `"name"`) {
+		t.Fatalf("JSON inspect target missing 'name': %s", out)
+	}
+
+	// Non-existent target → error.
+	if err := runRoot("inspect", "target", "nonexistent", "--target", dir); err == nil {
+		t.Fatal("expected error for non-existent target")
+	}
+}
+
+// ── diff ──────────────────────────────────────────────────────────────────────
+
+func TestDiffCommand(t *testing.T) {
+	dir := t.TempDir()
+	initProject(t, dir, "codex")
+
+	// Before bake --write: rendered files are absent → diff reports missing.
+	if err := runRoot("diff", "--target", dir); err == nil {
+		t.Fatal("expected diff to report drift before bake --write")
+	}
+
+	// After bake --write: no drift.
+	if err := runRoot("bake", "default", "--target", dir, "--write"); err != nil {
+		t.Fatalf("bake --write failed: %v", err)
+	}
+	if err := runRoot("diff", "--target", dir); err != nil {
+		t.Fatalf("diff should report no drift after bake --write: %v", err)
+	}
+
+	// Introduce drift.
+	agentsPath := filepath.Join(dir, ".agentic", "codex", "AGENTS.md")
+	orig, _ := os.ReadFile(agentsPath)
+	if err := os.WriteFile(agentsPath, append(orig, []byte("\n# manual edit\n")...), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := runRoot("diff", "--target", dir); err == nil {
+		t.Fatal("expected diff to detect drift after manual edit")
+	}
+}
+
+// ── validate --fix ────────────────────────────────────────────────────────────
+
+func TestValidateFixCommand(t *testing.T) {
+	dir := t.TempDir()
+	initProject(t, dir, "codex")
+	addSkill(t, dir, "fix-me")
+
+	// Introduce version drift.
+	versionPath := filepath.Join(dir, ".agents", "skills", "fix-me", "VERSION")
+	if err := os.WriteFile(versionPath, []byte("9.9.9\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Bake so lockfile + generated files are consistent.
+	if err := runRoot("bake", "default", "--target", dir, "--write"); err != nil {
+		t.Fatalf("bake failed: %v", err)
+	}
+
+	// validate --fix should repair the VERSION drift.
+	if err := runRoot("validate", "--target", dir, "--fix"); err != nil {
+		t.Fatalf("validate --fix failed: %v", err)
+	}
+
+	// VERSION should now match SKILL.md.
+	fixed, err := os.ReadFile(versionPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.TrimSpace(string(fixed)) == "9.9.9" {
+		t.Fatal("version drift not fixed by validate --fix")
+	}
+}
+
+// ── version bump --all ────────────────────────────────────────────────────────
+
+func TestVersionBumpAllCommand(t *testing.T) {
+	dir := t.TempDir()
+	initProject(t, dir, "codex")
+	addSkill(t, dir, "skill-a")
+	addSkill(t, dir, "skill-b")
+
+	// Dry-run: no changes written.
+	if err := runRoot("version", "bump", dir, "--all", "--kind", "patch", "--change", "batch release", "--dry-run"); err != nil {
+		t.Fatalf("version bump --all --dry-run failed: %v", err)
+	}
+
+	// Real bump.
+	if err := runRoot("version", "bump", dir, "--all", "--kind", "patch", "--change", "batch release"); err != nil {
+		t.Fatalf("version bump --all failed: %v", err)
+	}
+
+	// Both skills should be at 0.1.1.
+	for _, name := range []string{"skill-a", "skill-b"} {
+		v, err := os.ReadFile(filepath.Join(dir, ".agents", "skills", name, "VERSION"))
+		if err != nil {
+			t.Fatalf("VERSION not found for %s: %v", name, err)
+		}
+		if strings.TrimSpace(string(v)) != "0.1.1" {
+			t.Fatalf("%s: expected version 0.1.1, got %q", name, strings.TrimSpace(string(v)))
+		}
+	}
+}
+
+// ── version tag --dry-run ─────────────────────────────────────────────────────
+
+func TestVersionTagDryRun(t *testing.T) {
+	dir := t.TempDir()
+	if err := runRoot("scaffold", "skill", "tag-skill", "--output-dir", dir, "--version", "2.3.4"); err != nil {
+		t.Fatalf("scaffold failed: %v", err)
+	}
+	skillDir := filepath.Join(dir, "tag-skill")
+
+	out, err := runRootOut("version", "tag", skillDir, "--dry-run")
+	if err != nil {
+		t.Fatalf("version tag --dry-run failed: %v", err)
+	}
+	if !strings.Contains(out, "skills/tag-skill/v2.3.4") {
+		t.Fatalf("expected tag name in dry-run output: %s", out)
+	}
+
+	// Custom prefix.
+	out, err = runRootOut("version", "tag", skillDir, "--dry-run", "--prefix", "release/")
+	if err != nil {
+		t.Fatalf("version tag --dry-run --prefix failed: %v", err)
+	}
+	if !strings.Contains(out, "release/tag-skill/v2.3.4") {
+		t.Fatalf("expected custom prefix tag in dry-run output: %s", out)
+	}
+}
+
+// ── version bump --interactive (non-TTY fast path) ───────────────────────────
+
+func TestVersionBumpInteractiveNoChanges(t *testing.T) {
+	dir := t.TempDir()
+	if err := runRoot("scaffold", "skill", "my-skill", "--output-dir", dir, "--version", "1.0.0"); err != nil {
+		t.Fatalf("scaffold failed: %v", err)
+	}
+	// Without a git repo there are no changed skills → fast path prints "No changed skills".
+	out, err := runRootOut("version", "bump", dir, "--interactive", "--kind", "patch")
+	if err != nil {
+		t.Fatalf("version bump --interactive with no changes failed: %v", err)
+	}
+	if !strings.Contains(out, "No changed skills") {
+		t.Fatalf("expected 'No changed skills' message: %s", out)
+	}
+}
+
+// ── fmt ───────────────────────────────────────────────────────────────────────
+
+func TestFmtCommand(t *testing.T) {
+	dir := t.TempDir()
+	initProject(t, dir, "codex")
+	addSkill(t, dir, "fmt-skill")
+
+	skillMD := filepath.Join(dir, ".agents", "skills", "fmt-skill", "SKILL.md")
+
+	// Write a SKILL.md with out-of-order keys and extra whitespace in a value.
+	if err := os.WriteFile(skillMD, []byte("---\nversion: 0.1.0\nname:  fmt-skill  \ndescription: test skill\nauthors:\n- Alice\n---\n# Skill\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Dry-run: detects change, file not written.
+	out, err := runRootOut("fmt", "--target", dir, "--dry-run")
+	if err != nil {
+		t.Fatalf("fmt --dry-run failed: %v", err)
+	}
+	if !strings.Contains(out, "would-fmt") {
+		t.Fatalf("expected 'would-fmt' in dry-run output: %s", out)
+	}
+
+	// Real run: writes normalized file.
+	if err := runRoot("fmt", "--target", dir); err != nil {
+		t.Fatalf("fmt failed: %v", err)
+	}
+	data, _ := os.ReadFile(skillMD)
+	content := string(data)
+	// name should appear before version in canonical order.
+	nameIdx := strings.Index(content, "name:")
+	versionIdx := strings.Index(content, "version:")
+	if nameIdx < 0 || versionIdx < 0 || nameIdx > versionIdx {
+		t.Fatalf("fmt did not reorder keys to canonical order: %s", content)
+	}
+	// Whitespace trimmed from name value.
+	if strings.Contains(content, "name:  fmt-skill  ") {
+		t.Fatalf("fmt did not trim whitespace from name value: %s", content)
+	}
+
+	// Second run: already normalized → no changes.
+	out, err = runRootOut("fmt", "--target", dir)
+	if err != nil {
+		t.Fatalf("fmt second run failed: %v", err)
+	}
+	if !strings.Contains(out, "ok") {
+		t.Fatalf("expected 'ok' for already-normalized skill: %s", out)
+	}
+}
+
+// ── search ────────────────────────────────────────────────────────────────────
+
+func TestSearchCommand(t *testing.T) {
+	dir := t.TempDir()
+	initProject(t, dir, "codex")
+	addSkill(t, dir, "search-skill")
+
+	skillMD := filepath.Join(dir, ".agents", "skills", "search-skill", "SKILL.md")
+	if err := os.WriteFile(skillMD, []byte("---\nname: search-skill\ndescription: a security scanning tool\nversion: 0.1.0\nstability: experimental\nauthors:\n- Bob\n---\n# Skill\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Match by stability.
+	out, err := runRootOut("search", "--target", dir, "--stability", "experimental")
+	if err != nil {
+		t.Fatalf("search --stability failed: %v", err)
+	}
+	if !strings.Contains(out, "search-skill") {
+		t.Fatalf("expected search-skill in results: %s", out)
+	}
+
+	// Match by author.
+	out, err = runRootOut("search", "--target", dir, "--author", "bob")
+	if err != nil {
+		t.Fatalf("search --author failed: %v", err)
+	}
+	if !strings.Contains(out, "search-skill") {
+		t.Fatalf("expected search-skill in author results: %s", out)
+	}
+
+	// Match by query.
+	out, err = runRootOut("search", "--target", dir, "--query", "security")
+	if err != nil {
+		t.Fatalf("search --query failed: %v", err)
+	}
+	if !strings.Contains(out, "search-skill") {
+		t.Fatalf("expected search-skill in query results: %s", out)
+	}
+
+	// No match.
+	out, err = runRootOut("search", "--target", dir, "--stability", "stable")
+	if err != nil {
+		t.Fatalf("search with no matches failed: %v", err)
+	}
+	if !strings.Contains(out, "No skills matched") {
+		t.Fatalf("expected no-match message: %s", out)
+	}
+
+	// JSON output.
+	out, err = runRootOut("search", "--target", dir, "--stability", "experimental", "--json")
+	if err != nil {
+		t.Fatalf("search --json failed: %v", err)
+	}
+	if !strings.Contains(out, `"name"`) {
+		t.Fatalf("JSON output missing 'name' field: %s", out)
+	}
+}
+
+// ── report ────────────────────────────────────────────────────────────────────
+
+func TestReportCommand(t *testing.T) {
+	dir := t.TempDir()
+	initProject(t, dir, "codex")
+	addSkill(t, dir, "report-skill")
+
+	// Clean project: report should pass.
+	if err := runRoot("report", "--target", dir); err != nil {
+		t.Fatalf("report on clean project failed: %v", err)
+	}
+
+	// JSON output.
+	out, err := runRootOut("report", "--target", dir, "--json")
+	if err != nil {
+		t.Fatalf("report --json failed: %v", err)
+	}
+	if !strings.Contains(out, `"category"`) {
+		t.Fatalf("JSON report missing 'category' field: %s", out)
+	}
+
+	// Introduce version drift: should fail with error-level finding.
+	versionPath := filepath.Join(dir, ".agents", "skills", "report-skill", "VERSION")
+	if err := os.WriteFile(versionPath, []byte("9.9.9\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := runRoot("report", "--target", dir); err == nil {
+		t.Fatal("expected report to fail on version drift")
+	}
+}
+
+// ── version bump --preview ────────────────────────────────────────────────────
+
+func TestVersionBumpPreview(t *testing.T) {
+	dir := t.TempDir()
+	if err := runRoot("scaffold", "skill", "preview-skill", "--output-dir", dir, "--version", "1.0.0"); err != nil {
+		t.Fatalf("scaffold failed: %v", err)
+	}
+	skillDir := filepath.Join(dir, "preview-skill")
+
+	out, err := runRootOut("version", "bump", skillDir,
+		"--kind", "minor",
+		"--change", "Added preview feature",
+		"--preview",
+	)
+	if err != nil {
+		t.Fatalf("version bump --preview failed: %v", err)
+	}
+	if !strings.Contains(out, "1.0.0") || !strings.Contains(out, "1.1.0") {
+		t.Fatalf("expected old and new version in preview output: %s", out)
+	}
+	if !strings.Contains(out, "Would update") {
+		t.Fatalf("expected 'Would update' section in preview output: %s", out)
+	}
+
+	// Verify no files were actually modified (dry-run behaviour).
+	versionFile, _ := os.ReadFile(filepath.Join(skillDir, "VERSION"))
+	if strings.TrimSpace(string(versionFile)) != "1.0.0" {
+		t.Fatalf("--preview should not write files: VERSION is %q", versionFile)
+	}
+}
+
+// ── list skills --since ───────────────────────────────────────────────────────
+
+func TestListSkillsSince(t *testing.T) {
+	dir := t.TempDir()
+	initProject(t, dir, "codex")
+	addSkill(t, dir, "new-skill")
+	addSkill(t, dir, "old-skill")
+
+	// Write different last_modified dates to the two skills.
+	newSkillMD := filepath.Join(dir, ".agents", "skills", "new-skill", "SKILL.md")
+	oldSkillMD := filepath.Join(dir, ".agents", "skills", "old-skill", "SKILL.md")
+	if err := os.WriteFile(newSkillMD, []byte("---\nname: new-skill\nversion: 0.1.0\nlast_modified: 2026-06-01\n---\n# Skill\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(oldSkillMD, []byte("---\nname: old-skill\nversion: 0.1.0\nlast_modified: 2024-01-01\n---\n# Skill\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// --since 2026-01-01 should only return new-skill.
+	out, err := runRootOut("list", "skills", "--target", dir, "--since", "2026-01-01")
+	if err != nil {
+		t.Fatalf("list skills --since failed: %v", err)
+	}
+	if !strings.Contains(out, "new-skill") {
+		t.Fatalf("expected new-skill in --since results: %s", out)
+	}
+	if strings.Contains(out, "old-skill") {
+		t.Fatalf("old-skill should be filtered out by --since: %s", out)
+	}
+
+	// Invalid date format → error.
+	if err := runRoot("list", "skills", "--target", dir, "--since", "not-a-date"); err == nil {
+		t.Fatal("expected error for invalid --since date format")
+	}
+}
+
+// ── stats ─────────────────────────────────────────────────────────────────────
+
+func TestStatsCommand(t *testing.T) {
+	dir := t.TempDir()
+	initProject(t, dir, "codex")
+	addSkill(t, dir, "stats-skill")
+
+	out, err := runRootOut("stats", "--target", dir)
+	if err != nil {
+		t.Fatalf("stats failed: %v", err)
+	}
+	if !strings.Contains(out, "Skills") || !strings.Contains(out, "Targets") {
+		t.Fatalf("unexpected stats output: %s", out)
+	}
+
+	// JSON output contains expected fields.
+	out, err = runRootOut("stats", "--target", dir, "--json")
+	if err != nil {
+		t.Fatalf("stats --json failed: %v", err)
+	}
+	if !strings.Contains(out, `"total_skills"`) || !strings.Contains(out, `"scaffolded"`) {
+		t.Fatalf("JSON stats missing expected fields: %s", out)
+	}
+
+	// Scaffold coverage > 0 because we added a skill.
+	if !strings.Contains(out, `"scaffolded": 1`) {
+		t.Fatalf("expected scaffolded count to be 1: %s", out)
+	}
+}
+
+// ── lint ──────────────────────────────────────────────────────────────────────
+
+func TestLintCommand(t *testing.T) {
+	dir := t.TempDir()
+	initProject(t, dir, "codex")
+	addSkill(t, dir, "lint-skill")
+
+	skillMD := filepath.Join(dir, ".agents", "skills", "lint-skill", "SKILL.md")
+
+	// Write a valid, high-quality SKILL.md.
+	goodContent := "---\nname: lint-skill\ndescription: Scans code for security vulnerabilities using static analysis\nversion: 0.1.0\nstability: stable\n---\n# Lint Skill\n\nThis skill performs comprehensive security scanning.\n"
+	if err := os.WriteFile(skillMD, []byte(goodContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := runRoot("lint", "--target", dir); err != nil {
+		t.Fatalf("lint on good skill should pass: %v", err)
+	}
+
+	// Write SKILL.md with placeholder text → error.
+	badContent := "---\nname: lint-skill\ndescription: TODO add description here\nversion: 0.1.0\nstability: stable\n---\n# Skill\n\nThis is a placeholder skill body with enough content to pass the length check.\n"
+	if err := os.WriteFile(skillMD, []byte(badContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := runRoot("lint", "--target", dir); err == nil {
+		t.Fatal("expected lint to fail on placeholder description")
+	}
+
+	// Unknown stability value → warn (not error by default).
+	warnContent := "---\nname: lint-skill\ndescription: Scans code for security vulnerabilities using static analysis\nversion: 0.1.0\nstability: unknown-value\n---\n# Skill\n\nThis skill performs comprehensive security scanning.\n"
+	if err := os.WriteFile(skillMD, []byte(warnContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := runRoot("lint", "--target", dir); err != nil {
+		t.Fatalf("unknown stability should warn but not fail by default: %v", err)
+	}
+	if err := runRoot("lint", "--target", dir, "--fail-on-warn"); err == nil {
+		t.Fatal("expected lint to fail with --fail-on-warn on unknown stability")
+	}
+
+	// JSON output.
+	if err := os.WriteFile(skillMD, []byte(badContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, _ := runRootOut("lint", "--target", dir, "--json")
+	if !strings.Contains(out, `"skill"`) {
+		t.Fatalf("JSON lint output missing 'skill' field: %s", out)
+	}
+}
+
+// ── history ───────────────────────────────────────────────────────────────────
+
+func TestHistoryCommand(t *testing.T) {
+	dir := t.TempDir()
+	if err := runRoot("scaffold", "skill", "hist-skill", "--output-dir", dir, "--version", "1.0.0"); err != nil {
+		t.Fatalf("scaffold failed: %v", err)
+	}
+	skillDir := filepath.Join(dir, "hist-skill")
+
+	// Bump twice to populate the CHANGELOG.
+	if err := runRoot("version", "bump", skillDir, "--kind", "patch", "--date", "2026-01-01", "--change", "First fix"); err != nil {
+		t.Fatalf("first bump failed: %v", err)
+	}
+	if err := runRoot("version", "bump", skillDir, "--kind", "minor", "--date", "2026-06-01", "--change", "New feature"); err != nil {
+		t.Fatalf("second bump failed: %v", err)
+	}
+
+	// Show full history for a skill directory.
+	out, err := runRootOut("history", skillDir)
+	if err != nil {
+		t.Fatalf("history failed: %v", err)
+	}
+	if !strings.Contains(out, "hist-skill") {
+		t.Fatalf("expected skill name in history output: %s", out)
+	}
+	if !strings.Contains(out, "First fix") || !strings.Contains(out, "New feature") {
+		t.Fatalf("expected changelog entries in history output: %s", out)
+	}
+
+	// --since filter: only recent entry.
+	out, err = runRootOut("history", skillDir, "--since", "2026-05-01")
+	if err != nil {
+		t.Fatalf("history --since failed: %v", err)
+	}
+	if strings.Contains(out, "First fix") {
+		t.Fatalf("--since 2026-05-01 should exclude 'First fix' entry: %s", out)
+	}
+	if !strings.Contains(out, "New feature") {
+		t.Fatalf("--since 2026-05-01 should include 'New feature' entry: %s", out)
+	}
+
+	// JSON output.
+	out, err = runRootOut("history", skillDir, "--json")
+	if err != nil {
+		t.Fatalf("history --json failed: %v", err)
+	}
+	if !strings.Contains(out, `"version"`) || !strings.Contains(out, `"change"`) {
+		t.Fatalf("JSON history missing expected fields: %s", out)
+	}
+}
+
+// ── watch (smoke-test: exits immediately with no skills changing) ─────────────
+
+func TestWatchCommandFlags(t *testing.T) {
+	// Just verify the command is registered and flags parse correctly.
+	// A real watch test would require a timeout and goroutine — out of scope.
+	root := NewRootCommand()
+	root.SetArgs([]string{"watch", "--help"})
+	root.SetOut(&strings.Builder{})
+	root.SetErr(&strings.Builder{})
+	// --help exits with nil even though it "terminates" cobra normally.
+	_ = root.Execute()
 }

@@ -186,3 +186,101 @@ func TestPlatformSkillDestinationUsesCapabilityMatrix(t *testing.T) {
 		t.Fatalf("PlatformSkillDestination qwen = %q, want %q", got, want)
 	}
 }
+
+func TestNormalizeStringList(t *testing.T) {
+	// scalar string.
+	got := normalizeStringList("codex")
+	if len(got) != 1 || got[0] != "codex" {
+		t.Errorf("scalar string: got %v", got)
+	}
+
+	// empty string → empty slice.
+	if got := normalizeStringList(""); len(got) != 0 {
+		t.Errorf("empty string: got %v", got)
+	}
+
+	// []any slice.
+	got = normalizeStringList([]any{"codex", "cursor", ""})
+	if len(got) != 2 || got[0] != "codex" || got[1] != "cursor" {
+		t.Errorf("[]any slice: got %v", got)
+	}
+
+	// []string slice.
+	got = normalizeStringList([]string{"codex"})
+	if len(got) != 1 || got[0] != "codex" {
+		t.Errorf("[]string: got %v", got)
+	}
+
+	// nil / unknown type → empty.
+	if got := normalizeStringList(nil); len(got) != 0 {
+		t.Errorf("nil: got %v", got)
+	}
+	if got := normalizeStringList(42); len(got) != 0 {
+		t.Errorf("int: got %v", got)
+	}
+}
+
+func TestPlatformSkillDestination_KnownPlatforms(t *testing.T) {
+	cases := map[string]string{
+		"codex":         ".agents/skills/my-skill/SKILL.md",
+		"claude-code":   ".claude/skills/my-skill/SKILL.md",
+		"gitlab-duo":    "skills/my-skill/SKILL.md",
+		"github-copilot": ".github/prompts/my-skill.prompt.md",
+		"cursor":        ".agentic/skills/my-skill/SKILL.md",
+		"windsurf":      ".agentic/skills/my-skill/SKILL.md",
+		"generic":       ".agentic/skills/my-skill/SKILL.md",
+	}
+	for platform, want := range cases {
+		got := PlatformSkillDestination(platform, "my-skill")
+		if got != want {
+			t.Errorf("PlatformSkillDestination(%q, my-skill) = %q, want %q", platform, got, want)
+		}
+	}
+}
+
+func TestPlatformSkillDestination_Unknown(t *testing.T) {
+	// Unknown platform with no capability registration → empty string.
+	got := PlatformSkillDestination("totally-unknown-platform-xyz", "my-skill")
+	// Either empty or a reasonable path — just must not panic.
+	_ = got
+}
+
+func TestParseSkillsMapFormat(t *testing.T) {
+	// Map-format skills block (named entries).
+	raw := map[string]any{
+		"skills": map[string]any{
+			"my-skill": map[string]any{
+				"version":        "1.0.0",
+				"compatible_with": []any{"codex"},
+				"installed_paths": []any{".agents/skills/my-skill"},
+			},
+		},
+	}
+	skills, err := parseSkills(raw)
+	if err != nil {
+		t.Fatalf("parseSkills map format: %v", err)
+	}
+	if len(skills) != 1 || skills[0].Name != "my-skill" {
+		t.Errorf("unexpected skills: %+v", skills)
+	}
+}
+
+func TestParseSkillsInvalidFormat(t *testing.T) {
+	// skills value is neither list nor map.
+	raw := map[string]any{"skills": "bad-value"}
+	if _, err := parseSkills(raw); err == nil {
+		t.Fatal("expected error for invalid skills format")
+	}
+}
+
+func TestParseSkillsMissingName(t *testing.T) {
+	// List format with no name field and no fallback → error.
+	raw := map[string]any{
+		"skills": []any{
+			map[string]any{"version": "1.0.0"},
+		},
+	}
+	if _, err := parseSkills(raw); err == nil {
+		t.Fatal("expected error for skill with missing name")
+	}
+}

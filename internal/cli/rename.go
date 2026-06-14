@@ -16,6 +16,69 @@ func newRenameCommand() *cobra.Command {
 		Short: "Rename resources in the bakefile and on disk",
 	}
 	cmd.AddCommand(newRenameSkillCommand())
+	cmd.AddCommand(newRenameTargetCommand())
+	return cmd
+}
+
+func newRenameTargetCommand() *cobra.Command {
+	var repoPath string
+	var dryRun bool
+
+	cmd := &cobra.Command{
+		Use:               "target <old-name> <new-name>",
+		Short:             "Rename a target in the bakefile",
+		Args:              cobra.ExactArgs(2),
+		ValidArgsFunction: completeBakeTargets,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			oldName, newName := args[0], args[1]
+			if oldName == newName {
+				return fmt.Errorf("old and new name are identical")
+			}
+
+			absTarget, err := filepath.Abs(repoPath)
+			if err != nil {
+				return err
+			}
+
+			cfg, err := cliLoadBakeFile(filepath.Join(absTarget, "agentic.bake.yaml"))
+			if err != nil {
+				return err
+			}
+
+			t, exists := cfg.Targets[oldName]
+			if !exists {
+				return fmt.Errorf("target %q not found in bakefile", oldName)
+			}
+			if _, conflict := cfg.Targets[newName]; conflict {
+				return fmt.Errorf("target %q already exists in bakefile", newName)
+			}
+
+			// Fix inherits references in all other targets.
+			for _, other := range cfg.Targets {
+				for i, inh := range other.Inherits {
+					if inh == oldName {
+						other.Inherits[i] = newName
+					}
+				}
+			}
+
+			delete(cfg.Targets, oldName)
+			cfg.Targets[newName] = t
+
+			if dryRun {
+				fmt.Printf("Would rename target %q → %q\n", oldName, newName)
+				return nil
+			}
+			if err := cliDumpBakeFile(cfg, filepath.Join(absTarget, "agentic.bake.yaml")); err != nil {
+				return err
+			}
+			fmt.Printf("Renamed target %q → %q in agentic.bake.yaml\n", oldName, newName)
+			return nil
+		},
+	}
+
+	cmd.Flags().StringVarP(&repoPath, "target", "t", ".", "Repository path")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview without writing")
 	return cmd
 }
 
@@ -71,6 +134,15 @@ func newRenameSkillCommand() *cobra.Command {
 
 			if len(renamedInTargets) == 0 {
 				return fmt.Errorf("skill %q not found in any target", oldName)
+			}
+
+			if cfg.SkillSources != nil {
+				for i, sd := range cfg.SkillSources.Skills {
+					if sd.Name == oldName {
+						cfg.SkillSources.Skills[i].Name = newName
+						break
+					}
+				}
 			}
 
 			if !dryRun {

@@ -54,6 +54,30 @@ func newDoctorCommand() *cobra.Command {
 			}
 			add("ok", "bakefile", "agentic.bake.yaml is valid")
 
+			// ── skill_sources migration check ─────────────────────────────────────
+			if rawBytes, readErr := os.ReadFile(bakePath); readErr == nil {
+				raw := map[string]any{}
+				if yaml.Unmarshal(rawBytes, &raw) == nil {
+					if ss, ok := raw["skill_sources"].(map[string]any); ok {
+						if defaults, ok := ss["defaults"].(map[string]any); ok {
+							if _, hasOldKey := defaults["version"]; hasOldKey {
+								add("warn", "bakefile", "skill_sources.defaults contains deprecated key 'version' — rename to 'initial_version'")
+							}
+						}
+						if skills, ok := ss["skills"].([]any); ok {
+							for i, s := range skills {
+								if sm, ok := s.(map[string]any); ok {
+									if _, hasOldKey := sm["version"]; hasOldKey {
+										name, _ := sm["name"].(string)
+										add("warn", "bakefile", fmt.Sprintf("skill_sources.skills[%d] (%s): deprecated key 'version' — rename to 'initial_version'", i, name))
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+
 			// ── Targets ──────────────────────────────────────────────────────────
 			if len(cfg.Targets) == 0 {
 				add("error", "targets", "no targets defined in bakefile")
@@ -89,7 +113,7 @@ func newDoctorCommand() *cobra.Command {
 				add("warn", "skills", "no skills defined in any target")
 			}
 
-			const agentsBase = ".agents/skills"
+			agentsBase := skillSourceOutputDir(cfg.SkillSources)
 			for _, name := range skillNames {
 				skillDir := filepath.Join(absTarget, agentsBase, name)
 				if _, statErr := cliStatBake(skillDir); os.IsNotExist(statErr) {
@@ -134,6 +158,28 @@ func newDoctorCommand() *cobra.Command {
 					v := strings.TrimSpace(string(versionData))
 					if !spec.IsSemVer(strings.TrimPrefix(v, "v")) {
 						add("error", "skills", fmt.Sprintf("%s/%s/VERSION %q is not valid semver", agentsBase, name, v))
+					}
+				}
+			}
+
+			// ── skill_sources orphan check ────────────────────────────────────────
+			if cfg.SkillSources != nil && len(cfg.SkillSources.Skills) > 0 {
+				targetSkillSet := map[string]struct{}{}
+				for _, t := range cfg.Targets {
+					for _, s := range t.Skills {
+						targetSkillSet[s] = struct{}{}
+					}
+				}
+				sourceSkillSet := map[string]struct{}{}
+				for _, sd := range cfg.SkillSources.Skills {
+					sourceSkillSet[sd.Name] = struct{}{}
+					if _, inTarget := targetSkillSet[sd.Name]; !inTarget {
+						add("warn", "skill_sources", fmt.Sprintf("skill %q is in skill_sources.skills but not in any target — add via: skcr add skill %s", sd.Name, sd.Name))
+					}
+				}
+				for _, s := range skillNames {
+					if _, inSource := sourceSkillSet[s]; !inSource {
+						add("warn", "skill_sources", fmt.Sprintf("skill %q is in a target but not in skill_sources.skills — add via: skcr add skill %s", s, s))
 					}
 				}
 			}

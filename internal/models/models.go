@@ -99,7 +99,7 @@ type SkillIntegrationConfig struct {
 }
 
 type SkillSourceDefaults struct {
-	Version        string   `yaml:"version,omitempty"`
+	InitialVersion string   `yaml:"initial_version,omitempty"`
 	Owner          string   `yaml:"owner,omitempty"`
 	License        string   `yaml:"license,omitempty"`
 	CompatibleWith []string `yaml:"compatible_with,omitempty"`
@@ -108,7 +108,7 @@ type SkillSourceDefaults struct {
 
 type SkillSourceDefinition struct {
 	Name           string   `yaml:"name"`
-	Version        string   `yaml:"version,omitempty"`
+	InitialVersion string   `yaml:"initial_version,omitempty"`
 	Description    string   `yaml:"description,omitempty"`
 	Owner          string   `yaml:"owner,omitempty"`
 	License        string   `yaml:"license,omitempty"`

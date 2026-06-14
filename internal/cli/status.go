@@ -1,6 +1,7 @@
 package cli
 
 import (
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,6 +13,7 @@ import (
 
 func newStatusCommand() *cobra.Command {
 	var target string
+	var jsonOut bool
 
 	cmd := &cobra.Command{
 		Use:   "status",
@@ -32,8 +34,8 @@ func newStatusCommand() *cobra.Command {
 				return err
 			}
 
-			// Collect unique platform dirs in a stable order (agents first).
-			const agentsBase = ".agents/skills"
+			// Collect unique platform dirs in a stable order (canonical source first).
+			agentsBase := skillSourceOutputDir(cfg.SkillSources)
 			dirSeen := map[string]struct{}{}
 			dirs := []string{agentsBase}
 			dirSeen[agentsBase] = struct{}{}
@@ -65,38 +67,62 @@ func newStatusCommand() *cobra.Command {
 
 			// Print header.
 			const nameWidth = 32
+			const verWidth = 10
 			const colWidth = 16
-			header := fmt.Sprintf("%-*s", nameWidth, "Skill")
+			header := fmt.Sprintf("%-*s  %-*s", nameWidth, "Skill", verWidth, "Version")
 			for _, d := range dirs {
 				header += fmt.Sprintf("  %-*s", colWidth, shortDirLabel(d))
 			}
 			fmt.Println(header)
 			fmt.Println(strings.Repeat("─", len(header)))
 
+			type skillStatus struct {
+				Name    string            `json:"name"`
+				Version string            `json:"version"`
+				Dirs    map[string]string `json:"dirs"`
+			}
+
+			var rows []skillStatus
 			inSync, outOfSync, missing := 0, 0, 0
 			for _, s := range skills {
 				canonicalPath := filepath.Join(absTarget, agentsBase, s, "SKILL.md")
 				canonicalData, _ := os.ReadFile(canonicalPath)
 
-				row := fmt.Sprintf("%-*s", nameWidth, s)
+				ver := "-"
+				if fm, ok := parseFrontmatterDates(string(canonicalData)); ok && fm.Version != "" {
+					ver = fm.Version
+				}
+
+				dirStatus := map[string]string{}
+				row := fmt.Sprintf("%-*s  %-*s", nameWidth, s, verWidth, ver)
 				for _, d := range dirs {
 					skillMD := filepath.Join(absTarget, d, s, "SKILL.md")
 					data, statErr := os.ReadFile(skillMD)
-					var cell string
+					var cell, cellJSON string
 					switch {
 					case os.IsNotExist(statErr):
-						cell = "✗"
+						cell, cellJSON = "✗", "missing"
 						missing++
 					case d == agentsBase || string(data) == string(canonicalData):
-						cell = "✓"
+						cell, cellJSON = "✓", "ok"
 						inSync++
 					default:
-						cell = "~" // differs from canonical — run skcr sync
+						cell, cellJSON = "~", "differs"
 						outOfSync++
 					}
 					row += fmt.Sprintf("  %-*s", colWidth, cell)
+					dirStatus[d] = cellJSON
 				}
-				fmt.Println(row)
+				rows = append(rows, skillStatus{Name: s, Version: ver, Dirs: dirStatus})
+				if !jsonOut {
+					fmt.Println(row)
+				}
+			}
+
+			if jsonOut {
+				enc := json.NewEncoder(cmd.OutOrStdout())
+				enc.SetIndent("", "  ")
+				return enc.Encode(rows)
 			}
 
 			fmt.Println()
@@ -113,6 +139,7 @@ func newStatusCommand() *cobra.Command {
 	}
 
 	cmd.Flags().StringVarP(&target, "target", "t", ".", "Repository path")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "Print JSON output")
 	return cmd
 }
 

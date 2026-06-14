@@ -598,3 +598,305 @@ skills:
 		t.Fatalf("expected no errors for valid skill install, got %v", errs)
 	}
 }
+
+func TestRenderedChecksum(t *testing.T) {
+	f1 := models.RenderedFile{Destination: "AGENTS.md", Content: "hello"}
+	f2 := models.RenderedFile{Destination: "AGENTS.md", Content: "hello"}
+	if renderedChecksum(f1) != renderedChecksum(f2) {
+		t.Error("same content should produce same checksum")
+	}
+
+	f3 := models.RenderedFile{Destination: "AGENTS.md", Content: "other"}
+	if renderedChecksum(f1) == renderedChecksum(f3) {
+		t.Error("different content should produce different checksum")
+	}
+
+	fLink := models.RenderedFile{Destination: "AGENTS.md", LinkTarget: "target/path", Content: ""}
+	fContent := models.RenderedFile{Destination: "AGENTS.md", Content: "target/path"}
+	if renderedChecksum(fLink) == renderedChecksum(fContent) {
+		t.Error("link and content with same text should produce different checksums")
+	}
+}
+
+func TestFilterPlatforms(t *testing.T) {
+	cases := []struct {
+		current, selected, want []string
+	}{
+		{[]string{"codex", "cursor"}, []string{"codex"}, []string{"codex"}},
+		{[]string{"codex", "cursor"}, []string{}, []string{}},
+		{[]string{}, []string{"codex"}, []string{}},
+		{[]string{"codex", "cursor"}, []string{"codex", "cursor"}, []string{"codex", "cursor"}},
+		{[]string{"codex"}, []string{"windsurf"}, []string{}},
+	}
+	for _, tc := range cases {
+		got := filterPlatforms(tc.current, tc.selected)
+		if len(got) != len(tc.want) {
+			t.Errorf("filterPlatforms(%v, %v) = %v, want %v", tc.current, tc.selected, got, tc.want)
+			continue
+		}
+		for i := range got {
+			if got[i] != tc.want[i] {
+				t.Errorf("filterPlatforms result[%d] = %q, want %q", i, got[i], tc.want[i])
+			}
+		}
+	}
+}
+
+func TestIsSkillMarkdownPath(t *testing.T) {
+	cases := []struct {
+		path string
+		want bool
+	}{
+		{".agents/skills/my-skill/SKILL.md", true},
+		{".claude/skills/my-skill/SKILL.md", true},
+		{"skills/my-skill/SKILL.md", true},
+		{"AGENTS.md", false},
+		{"SKILL.md", false},
+		{".agents/skills/SKILL.md", false},
+		{"foo/bar/SKILL.md", false},
+	}
+	for _, tc := range cases {
+		got := isSkillMarkdownPath(tc.path)
+		if got != tc.want {
+			t.Errorf("isSkillMarkdownPath(%q) = %v, want %v", tc.path, got, tc.want)
+		}
+	}
+}
+
+func TestValidateSkillMetadataForName(t *testing.T) {
+	valid := validSkillFixture()
+
+	// Valid with correct name.
+	if msg := validateSkillMetadataForName(valid, "test-skill"); msg != "" {
+		t.Errorf("expected empty msg for valid skill+name, got: %s", msg)
+	}
+
+	// Name mismatch.
+	if msg := validateSkillMetadataForName(valid, "other-skill"); !strings.Contains(msg, "name does not match") {
+		t.Errorf("expected name mismatch error, got: %s", msg)
+	}
+
+	// No frontmatter.
+	if msg := validateSkillMetadataForName("# No frontmatter\n", ""); !strings.Contains(msg, "frontmatter") {
+		t.Errorf("expected frontmatter error, got: %s", msg)
+	}
+
+	// Empty expectedName → name match skipped.
+	if msg := validateSkillMetadataForName(valid, ""); msg != "" {
+		t.Errorf("expected empty msg when expectedName is empty, got: %s", msg)
+	}
+
+	// Invalid YAML body → error.
+	if msg := validateSkillMetadataForName("---\n: bad: [\n---\n# body", ""); !strings.Contains(msg, "invalid YAML") {
+		t.Errorf("expected invalid YAML error, got: %s", msg)
+	}
+}
+
+func TestSkillMetadataBaseDirs(t *testing.T) {
+	// Nil config → returns built-in defaults.
+	dirs := skillMetadataBaseDirs(nil)
+	if len(dirs) == 0 {
+		t.Fatal("expected non-empty dirs for nil config")
+	}
+	found := false
+	for _, d := range dirs {
+		if d == ".agents/skills" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Error("expected .agents/skills in default dirs")
+	}
+
+	// Config with custom OutputDir → included.
+	cfg := &models.BakeConfig{
+		SkillSources: &models.SkillSourceConfig{OutputDir: "custom/skills"},
+	}
+	dirs2 := skillMetadataBaseDirs(cfg)
+	customFound := false
+	for _, d := range dirs2 {
+		if d == "custom/skills" {
+			customFound = true
+			break
+		}
+	}
+	if !customFound {
+		t.Errorf("expected custom/skills in dirs, got: %v", dirs2)
+	}
+
+	// Dirs are sorted and deduplicated.
+	for i := 1; i < len(dirs2); i++ {
+		if dirs2[i] < dirs2[i-1] {
+			t.Errorf("dirs not sorted: %v", dirs2)
+			break
+		}
+		if dirs2[i] == dirs2[i-1] {
+			t.Errorf("dirs contain duplicate %q: %v", dirs2[i], dirs2)
+			break
+		}
+	}
+}
+
+func TestValidateGeneratedStateStaleAndLockMismatch(t *testing.T) {
+	dir := t.TempDir()
+
+	// Write a lockfile that has a managed file not in the expected set ("stale").
+	staleLock := `version: "1"
+target: default
+managed_files:
+  - path: stale-file.md
+    platform: codex
+    source: ""
+    checksum: sha256:aabbcc
+`
+	if err := os.WriteFile(filepath.Join(dir, ".agentic-template.lock"), []byte(staleLock), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Write the stale file to disk so it exists.
+	if err := os.WriteFile(filepath.Join(dir, "stale-file.md"), []byte("content"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	errs := validateGeneratedState(dir, nil)
+	found := false
+	for _, e := range errs {
+		if strings.Contains(e, "Stale generated file") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected 'Stale generated file' error for lock entry not in expected set, got: %v", errs)
+	}
+
+	// Generated file in lock but missing on disk → "Generated file from lock is missing".
+	goneFile := "gone-file.md"
+	goneLock := `version: "1"
+target: default
+managed_files:
+  - path: gone-file.md
+    platform: codex
+    source: ""
+    checksum: sha256:aabbcc
+`
+	if err := os.WriteFile(filepath.Join(dir, ".agentic-template.lock"), []byte(goneLock), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_ = os.Remove(filepath.Join(dir, goneFile))
+	errs2 := validateGeneratedState(dir, nil)
+	found2 := false
+	for _, e := range errs2 {
+		if strings.Contains(e, "Generated file from lock is missing") {
+			found2 = true
+			break
+		}
+	}
+	if !found2 {
+		t.Errorf("expected 'Generated file from lock is missing' error, got: %v", errs2)
+	}
+}
+
+func TestValidateGeneratedStateLockChecksumMismatch(t *testing.T) {
+	dir := t.TempDir()
+
+	content := "expected content"
+	if err := os.WriteFile(filepath.Join(dir, "file.md"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Lock entry has wrong checksum (doesn't match renderedChecksum(file)).
+	mismatchLock := `version: "1"
+target: default
+managed_files:
+  - path: file.md
+    platform: codex
+    source: ""
+    checksum: sha256:000000wrongchecksum
+`
+	if err := os.WriteFile(filepath.Join(dir, ".agentic-template.lock"), []byte(mismatchLock), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	rf := models.RenderedFile{Platform: "codex", Destination: "file.md", Content: content}
+	errs := validateGeneratedState(dir, []models.RenderedFile{rf})
+	found := false
+	for _, e := range errs {
+		if strings.Contains(e, "Lockfile checksum mismatch") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected 'Lockfile checksum mismatch' error, got: %v", errs)
+	}
+}
+
+func TestValidateProjectWithOptions_PlatformFilter(t *testing.T) {
+	dir := t.TempDir()
+	bakePath := filepath.Join(dir, "agentic.bake.yaml")
+	bakeContent := `version: "1"
+targets:
+  default:
+    platforms:
+      - codex
+`
+	if err := os.WriteFile(bakePath, []byte(bakeContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// Call with opts.Platform set → exercises the filterPlatforms path.
+	_, err := ValidateProjectWithOptions(dir, Options{Platform: "codex"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestValidateProjectWithOptions_UnsupportedPlatform(t *testing.T) {
+	dir := t.TempDir()
+	bakePath := filepath.Join(dir, "agentic.bake.yaml")
+	bakeContent := `version: "1"
+targets:
+  default:
+    platforms:
+      - unsupported-platform-xyz
+`
+	if err := os.WriteFile(bakePath, []byte(bakeContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	errs, err := ValidateProjectWithOptions(dir, Options{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	found := false
+	for _, e := range errs {
+		if strings.Contains(e, "unsupported platform") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected unsupported platform error, got: %v", errs)
+	}
+}
+
+func TestValidateProjectWithOptions_SkillsMode(t *testing.T) {
+	dir := t.TempDir()
+	bakePath := filepath.Join(dir, "agentic.bake.yaml")
+	bakeContent := `version: "1"
+targets:
+  default:
+    platforms:
+      - codex
+skills:
+  source: agent-skills.lock
+  mode: append
+`
+	if err := os.WriteFile(bakePath, []byte(bakeContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	// opts.Skills = true with missing lock → error appended but no hard failure.
+	errs, err := ValidateProjectWithOptions(dir, Options{Skills: true})
+	if err != nil {
+		t.Fatalf("unexpected hard error: %v", err)
+	}
+	_ = errs // errors expected for missing lock/rendered files
+}

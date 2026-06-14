@@ -188,7 +188,7 @@ func TestLoadBakeFileWithSkillSources(t *testing.T) {
 skill_sources:
   output_dir: custom-skills
   defaults:
-    version: 0.2.0
+    initial_version: 0.2.0
     owner: team-a
     license: Apache-2.0
     compatible_with:
@@ -218,8 +218,8 @@ targets:
 	if cfg.SkillSources.OutputDir != "custom-skills" {
 		t.Fatalf("unexpected output_dir: %q", cfg.SkillSources.OutputDir)
 	}
-	if cfg.SkillSources.Defaults.Version != "0.2.0" {
-		t.Fatalf("unexpected defaults version: %q", cfg.SkillSources.Defaults.Version)
+	if cfg.SkillSources.Defaults.InitialVersion != "0.2.0" {
+		t.Fatalf("unexpected defaults version: %q", cfg.SkillSources.Defaults.InitialVersion)
 	}
 	// Aliases should be normalized: gitlab -> gitlab-duo, claude -> claude-code.
 	for _, p := range cfg.SkillSources.Defaults.CompatibleWith {
@@ -264,8 +264,8 @@ targets:
 	if cfg.SkillSources.OutputDir != ".agents/skills" {
 		t.Fatalf("expected default output_dir '.agents/skills', got %q", cfg.SkillSources.OutputDir)
 	}
-	if cfg.SkillSources.Defaults.Version != "0.1.0" {
-		t.Fatalf("expected default version '0.1.0', got %q", cfg.SkillSources.Defaults.Version)
+	if cfg.SkillSources.Defaults.InitialVersion != "0.1.0" {
+		t.Fatalf("expected default version '0.1.0', got %q", cfg.SkillSources.Defaults.InitialVersion)
 	}
 	if cfg.SkillSources.Defaults.License != "MIT" {
 		t.Fatalf("expected default license 'MIT', got %q", cfg.SkillSources.Defaults.License)
@@ -302,8 +302,8 @@ func TestBuildInitialConfigHasSkillSources(t *testing.T) {
 	if cfg.SkillSources == nil {
 		t.Fatal("expected skill_sources block in generated config")
 	}
-	if cfg.SkillSources.Defaults.Version != "0.1.0" {
-		t.Fatalf("expected default version '0.1.0', got %q", cfg.SkillSources.Defaults.Version)
+	if cfg.SkillSources.Defaults.InitialVersion != "0.1.0" {
+		t.Fatalf("expected default version '0.1.0', got %q", cfg.SkillSources.Defaults.InitialVersion)
 	}
 	if cfg.SkillSources.Defaults.Owner != "team-x" {
 		t.Fatalf("expected owner 'team-x', got %q", cfg.SkillSources.Defaults.Owner)

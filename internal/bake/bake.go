@@ -104,8 +104,8 @@ func normalizeSkillSourceConfig(cfg *models.BakeConfig) {
 	if ss.OutputDir == "" {
 		ss.OutputDir = ".agents/skills"
 	}
-	if ss.Defaults.Version == "" {
-		ss.Defaults.Version = "0.1.0"
+	if ss.Defaults.InitialVersion == "" {
+		ss.Defaults.InitialVersion = "0.1.0"
 	}
 	if ss.Defaults.License == "" {
 		ss.Defaults.License = "MIT"
@@ -400,7 +400,7 @@ func BuildInitialConfig(
 		Variables: variables,
 		SkillSources: &models.SkillSourceConfig{
 			Defaults: models.SkillSourceDefaults{
-				Version:        "0.1.0",
+				InitialVersion: "0.1.0",
 				Owner:          ownerTeam,
 				License:        "MIT",
 				CompatibleWith: defaultPlatforms,

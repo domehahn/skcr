@@ -37,7 +37,7 @@ run "skcr bake --write" first to create them.`,
 				return err
 			}
 
-			const sourceBase = ".agents/skills"
+			sourceBase := skillSourceOutputDir(cfg.SkillSources)
 			dirSeen := map[string]struct{}{sourceBase: {}}
 			var destDirs []string
 			for _, p := range resolved.Platforms {

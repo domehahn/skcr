@@ -86,3 +86,72 @@ func TestAllConcretePlatformsExcludesAllAndIncludesExtendedTools(t *testing.T) {
 		}
 	}
 }
+
+func TestNormalizePlatforms_Dedup(t *testing.T) {
+	got, err := NormalizePlatforms([]string{"codex", "codex", "cursor"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) != 2 {
+		t.Errorf("expected 2 unique platforms, got %d: %v", len(got), got)
+	}
+}
+
+func TestNormalizePlatforms_Invalid(t *testing.T) {
+	if _, err := NormalizePlatforms([]string{"codex", "not-a-platform-xyz"}); err == nil {
+		t.Fatal("expected error for unsupported platform")
+	}
+}
+
+func TestNormalizePlatforms_All(t *testing.T) {
+	got, err := NormalizePlatforms([]string{"all"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) == 0 {
+		t.Fatal("expected multiple platforms from 'all' expansion")
+	}
+	// Codex must be included.
+	found := false
+	for _, p := range got {
+		if p == "codex" {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected codex in 'all' expansion, got %v", got)
+	}
+}
+
+func TestNormalizePlatforms_AllDedup(t *testing.T) {
+	// Passing "all" twice must not produce duplicates.
+	got, err := NormalizePlatforms([]string{"all", "all"})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	seen := map[string]struct{}{}
+	for _, p := range got {
+		if _, dup := seen[p]; dup {
+			t.Errorf("duplicate platform %q after all+all expansion", p)
+		}
+		seen[p] = struct{}{}
+	}
+}
+
+func TestNormalizePlatforms_Empty(t *testing.T) {
+	got, err := NormalizePlatforms([]string{})
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if len(got) != 0 {
+		t.Errorf("expected empty slice, got %v", got)
+	}
+}
+
+func TestParsePlatforms_Empty(t *testing.T) {
+	got, err := ParsePlatforms("")
+	if err != nil || len(got) != 0 {
+		t.Errorf("ParsePlatforms('') = %v, %v", got, err)
+	}
+}

@@ -465,3 +465,422 @@ func runGit(t *testing.T, dir string, args ...string) {
 		t.Fatalf("git %v failed: %v\n%s", args, err, out)
 	}
 }
+
+func TestNextVersion(t *testing.T) {
+	cases := []struct {
+		current string
+		kind    BumpKind
+		want    string
+		wantErr bool
+	}{
+		{"1.2.3", BumpPatch, "1.2.4", false},
+		{"1.2.3", BumpMinor, "1.3.0", false},
+		{"1.2.3", BumpMajor, "2.0.0", false},
+		{"1.2.3", "", "1.2.4", false},
+		{"0.0.1", BumpPatch, "0.0.2", false},
+		{"0.9.9", BumpMinor, "0.10.0", false},
+		{"9.9.9", BumpMajor, "10.0.0", false},
+		{"not-semver", BumpPatch, "", true},
+		{"1.2", BumpPatch, "", true},
+		{"1.2.3", "unsupported", "", true},
+		{"1.x.3", BumpPatch, "", true},
+	}
+	for _, tc := range cases {
+		got, err := nextVersion(tc.current, tc.kind)
+		if tc.wantErr {
+			if err == nil {
+				t.Errorf("nextVersion(%q, %q): expected error, got %q", tc.current, tc.kind, got)
+			}
+		} else {
+			if err != nil {
+				t.Errorf("nextVersion(%q, %q): unexpected error: %v", tc.current, tc.kind, err)
+			} else if got != tc.want {
+				t.Errorf("nextVersion(%q, %q) = %q, want %q", tc.current, tc.kind, got, tc.want)
+			}
+		}
+	}
+}
+
+func TestChangedNoGit(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := Changed(dir); err == nil {
+		t.Fatal("Changed in non-git dir should return error")
+	}
+}
+
+func TestBumpAllChangedNoGit(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := BumpAllChanged(dir, BumpOptions{}); err == nil {
+		t.Fatal("BumpAllChanged in non-git dir should return error")
+	}
+}
+
+func TestSplitFrontmatter(t *testing.T) {
+	// Valid frontmatter.
+	content := "---\nname: my-skill\nversion: \"1.0.0\"\n---\n# Body\n"
+	fm, body, ok := splitFrontmatter(content)
+	if !ok {
+		t.Fatal("expected ok=true for valid frontmatter")
+	}
+	if fm == "" {
+		t.Error("expected non-empty frontmatter")
+	}
+	if body != "# Body\n" {
+		t.Errorf("unexpected body: %q", body)
+	}
+
+	// No --- prefix.
+	if _, _, ok := splitFrontmatter("name: my-skill\n"); ok {
+		t.Error("expected ok=false for content without --- prefix")
+	}
+
+	// No closing ---.
+	if _, _, ok := splitFrontmatter("---\nname: my-skill\n"); ok {
+		t.Error("expected ok=false for unclosed frontmatter")
+	}
+
+	// Empty body after ---.
+	_, body2, ok2 := splitFrontmatter("---\nkey: val\n---\n")
+	if !ok2 {
+		t.Error("expected ok=true for frontmatter with empty body")
+	}
+	if body2 != "" {
+		t.Errorf("expected empty body, got %q", body2)
+	}
+}
+
+func TestUpdateSkillMD(t *testing.T) {
+	base := "---\nname: my-skill\ndescription: ok\nversion: \"0.1.0\"\nsince: \"2025-01-01\"\nlast_modified: \"2025-01-01\"\nauthors:\n  - team\nstability: stable\nmin_platform_version:\n  codex: unknown\ndeprecated_since:\nreplaces:\nsupersedes: []\nchangelog:\n  - version: \"0.1.0\"\n    date: \"2025-01-01\"\n    change: \"Initial\"\n---\n\n## Changelog\n\n### 0.1.0 - 2025-01-01\n\n- Initial.\n"
+
+	got, err := updateSkillMD(base, "0.2.0", "2026-06-12", "Add feature X")
+	if err != nil {
+		t.Fatalf("updateSkillMD: %v", err)
+	}
+	if !strings.Contains(got, "0.2.0") {
+		t.Error("updated SKILL.md should contain new version")
+	}
+	if !strings.Contains(got, "Add feature X") {
+		t.Error("updated SKILL.md should contain new changelog entry")
+	}
+
+	// No frontmatter → error.
+	if _, err := updateSkillMD("no frontmatter here", "0.2.0", "2026-06-12", "X"); err == nil {
+		t.Error("expected error for content without frontmatter")
+	}
+}
+
+func TestUpdateTextFileIfExists(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "VERSION")
+
+	// File does not exist → no error, no-op.
+	if err := updateTextFileIfExists(path, "1.0.0"); err != nil {
+		t.Fatalf("updateTextFileIfExists on missing file: %v", err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Error("file should not be created if it did not exist")
+	}
+
+	// File exists → updated.
+	if err := os.WriteFile(path, []byte("0.1.0"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := updateTextFileIfExists(path, "0.2.0"); err != nil {
+		t.Fatalf("updateTextFileIfExists on existing file: %v", err)
+	}
+	data, _ := os.ReadFile(path)
+	if string(data) != "0.2.0" {
+		t.Errorf("expected %q, got %q", "0.2.0", string(data))
+	}
+}
+
+func TestUpdateSkillYAMLIfExists(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "skill.yaml")
+
+	// File does not exist → no error.
+	if err := updateSkillYAMLIfExists(path, "1.0.0"); err != nil {
+		t.Fatalf("updateSkillYAMLIfExists on missing file: %v", err)
+	}
+
+	// Write skill.yaml with a version field.
+	if err := os.WriteFile(path, []byte("name: my-skill\nversion: \"0.1.0\"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := updateSkillYAMLIfExists(path, "0.2.0"); err != nil {
+		t.Fatalf("updateSkillYAMLIfExists: %v", err)
+	}
+	data, _ := os.ReadFile(path)
+	if !strings.Contains(string(data), "0.2.0") {
+		t.Errorf("version not updated in skill.yaml: %s", string(data))
+	}
+}
+
+func TestSkillFiles(t *testing.T) {
+	dir := t.TempDir()
+
+	// Direct SKILL.md path.
+	skillMD := filepath.Join(dir, "SKILL.md")
+	if err := os.WriteFile(skillMD, []byte("# Skill"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	files, err := skillFiles(skillMD)
+	if err != nil || len(files) != 1 || files[0] != skillMD {
+		t.Errorf("skillFiles(SKILL.md path): got %v, err=%v", files, err)
+	}
+
+	// Directory with SKILL.md.
+	skillDir := filepath.Join(dir, "my-skill")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte("# Skill"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	files, err = skillFiles(skillDir)
+	if err != nil || len(files) != 1 {
+		t.Errorf("skillFiles(dir with SKILL.md): got %v, err=%v", files, err)
+	}
+
+	// Non-existent path → error.
+	if _, err := skillFiles(filepath.Join(dir, "nonexistent")); err == nil {
+		t.Error("expected error for nonexistent path")
+	}
+
+	// Regular file (not SKILL.md) → error.
+	notSkill := filepath.Join(dir, "README.md")
+	if err := os.WriteFile(notSkill, []byte("# Readme"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := skillFiles(notSkill); err == nil {
+		t.Error("expected error for non-SKILL.md file path")
+	}
+}
+
+func TestChangelogFromDir(t *testing.T) {
+	dir := t.TempDir()
+	skillDir := filepath.Join(dir, "my-skill")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	skillMD := filepath.Join(skillDir, "SKILL.md")
+
+	// Directory with SKILL.md that has no frontmatter → no entries (skipped).
+	if err := os.WriteFile(skillMD, []byte("# My Skill\n\nNo frontmatter.\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	entries, err := Changelog(skillDir)
+	if err != nil {
+		t.Fatalf("Changelog on no-frontmatter skill: %v", err)
+	}
+	if len(entries) != 0 {
+		t.Errorf("expected 0 entries for skill without frontmatter, got %d", len(entries))
+	}
+
+	// Non-existent path → error.
+	if _, err := Changelog(filepath.Join(dir, "nonexistent")); err == nil {
+		t.Fatal("expected error for nonexistent path")
+	}
+}
+
+func TestParseInfoWithErrors(t *testing.T) {
+	// Valid frontmatter structure but invalid skill content (missing required sections).
+	// parseInfo should collect validation errors without returning a hard error.
+	content := "---\nname: bad-skill\ndescription: \"\"\nversion: \"1.0.0\"\nsince: \"2025-01-01\"\nlast_modified: \"2026-06-12\"\nauthors:\n  - team\nstability: stable\nmin_platform_version:\n  codex: unknown\ndeprecated_since:\nreplaces:\nsupersedes: []\nchangelog:\n  - version: \"1.0.0\"\n    date: \"2026-06-12\"\n    change: \"Initial\"\n---\n\n# Bad Skill\n"
+	info, err := parseInfo("/tmp/SKILL.md", content)
+	if err != nil {
+		t.Fatalf("parseInfo should not error for structurally valid frontmatter: %v", err)
+	}
+	if len(info.Errors) == 0 {
+		t.Error("expected validation errors to be recorded in info.Errors")
+	}
+}
+
+func TestArtifactConsistencyErrors(t *testing.T) {
+	dir := t.TempDir()
+	skillDir := filepath.Join(dir, "my-skill")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	skillMD := filepath.Join(skillDir, "SKILL.md")
+
+	// Empty version → no errors.
+	errs := artifactConsistencyErrors(skillMD, "")
+	if len(errs) != 0 {
+		t.Errorf("expected no errors for empty version, got %v", errs)
+	}
+
+	// VERSION with wrong version → error.
+	if err := os.WriteFile(filepath.Join(skillDir, "VERSION"), []byte("0.9.0\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	errs = artifactConsistencyErrors(skillMD, "1.0.0")
+	found := false
+	for _, e := range errs {
+		if strings.Contains(e, "VERSION") {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Errorf("expected VERSION mismatch error, got %v", errs)
+	}
+
+	// skill.yaml with wrong version → error.
+	if err := os.WriteFile(filepath.Join(skillDir, "skill.yaml"), []byte("name: my-skill\nversion: 0.9.0\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	errs = artifactConsistencyErrors(skillMD, "1.0.0")
+	foundYAML := false
+	for _, e := range errs {
+		if strings.Contains(e, "skill.yaml") {
+			foundYAML = true
+			break
+		}
+	}
+	if !foundYAML {
+		t.Errorf("expected skill.yaml mismatch error, got %v", errs)
+	}
+
+	// Matching versions → no errors.
+	if err := os.WriteFile(filepath.Join(skillDir, "VERSION"), []byte("1.0.0\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(skillDir, "skill.yaml"), []byte("name: my-skill\nversion: 1.0.0\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if errs := artifactConsistencyErrors(skillMD, "1.0.0"); len(errs) != 0 {
+		t.Errorf("expected no errors for matching versions, got %v", errs)
+	}
+}
+
+func TestSkillFilesRecursiveWalk(t *testing.T) {
+	dir := t.TempDir()
+
+	// Create subdirectories, each with a SKILL.md — no top-level SKILL.md.
+	for _, sub := range []string{"skill-a", "skill-b"} {
+		subDir := filepath.Join(dir, sub)
+		if err := os.MkdirAll(subDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(subDir, "SKILL.md"), []byte("# "+sub), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	files, err := skillFiles(dir)
+	if err != nil {
+		t.Fatalf("skillFiles recursive walk: unexpected error: %v", err)
+	}
+	if len(files) != 2 {
+		t.Errorf("expected 2 SKILL.md files from recursive walk, got %d: %v", len(files), files)
+	}
+	for _, f := range files {
+		if filepath.Base(f) != "SKILL.md" {
+			t.Errorf("unexpected file in result: %s", f)
+		}
+	}
+}
+
+func TestSyncArtifactsNoChangelog(t *testing.T) {
+	dir := t.TempDir()
+	// Scaffold a skill without changelog entries.
+	_, err := scaffold.WriteSkill(scaffold.SkillOptions{
+		Name:      "sync-no-changelog",
+		OutputDir: dir,
+		Version:   "1.0.0",
+		Owner:     "team",
+		Platforms: []string{"codex"},
+	})
+	if err != nil {
+		t.Fatalf("WriteSkill: %v", err)
+	}
+	skillDir := filepath.Join(dir, "sync-no-changelog")
+
+	// Remove changelog entries from SKILL.md so the no-changelog branch is taken.
+	skillMDPath := filepath.Join(skillDir, "SKILL.md")
+	content, err := os.ReadFile(skillMDPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Strip the changelog section entirely.
+	text := string(content)
+	if idx := strings.Index(text, "changelog:"); idx != -1 {
+		// Keep everything up to (not including) the changelog key.
+		end := strings.Index(text[idx:], "\n---")
+		if end == -1 {
+			end = len(text) - idx
+		}
+		text = text[:idx] + "changelog: []\n" + text[idx+end:]
+	}
+	if err := os.WriteFile(skillMDPath, []byte(text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	info, err := SyncArtifacts(skillDir)
+	if err != nil {
+		t.Fatalf("SyncArtifacts with no changelog: %v", err)
+	}
+	if info.Version == "" {
+		t.Error("expected non-empty version after SyncArtifacts")
+	}
+}
+
+func TestReleaseBundleFor_NonExistentPath(t *testing.T) {
+	_, err := ReleaseBundleFor(filepath.Join(t.TempDir(), "nonexistent"), "", false)
+	if err == nil {
+		t.Error("expected error for non-existent path in ReleaseBundleFor")
+	}
+}
+
+func TestReleaseBundleFor_NoEntriesSinceDate(t *testing.T) {
+	dir := t.TempDir()
+	_, err := scaffold.WriteSkill(scaffold.SkillOptions{
+		Name:      "release-skill",
+		OutputDir: dir,
+		Version:   "1.0.0",
+		Owner:     "team",
+		Platforms: []string{"codex"},
+	})
+	if err != nil {
+		t.Fatalf("WriteSkill: %v", err)
+	}
+	skillDir := filepath.Join(dir, "release-skill")
+
+	// Use a far-future date so no changelog entries are included.
+	bundle, err := ReleaseBundleFor(skillDir, "9999-01-01", false)
+	if err != nil {
+		t.Fatalf("ReleaseBundleFor: %v", err)
+	}
+	// ReleaseNotes should contain the header but no skill entries.
+	if !strings.HasPrefix(bundle.ReleaseNotes, "# Release Notes") {
+		t.Errorf("expected Release Notes header, got: %q", bundle.ReleaseNotes)
+	}
+	// No skill version lines expected when since is in the future.
+	if strings.Contains(bundle.ReleaseNotes, "## release-skill") {
+		t.Error("expected no skill entries in notes for far-future since date")
+	}
+}
+
+func TestReleaseBundleFor_IncludeChanged_NoGit(t *testing.T) {
+	dir := t.TempDir()
+	_, err := scaffold.WriteSkill(scaffold.SkillOptions{
+		Name:      "git-skill",
+		OutputDir: dir,
+		Version:   "1.0.0",
+		Owner:     "team",
+		Platforms: []string{"codex"},
+	})
+	if err != nil {
+		t.Fatalf("WriteSkill: %v", err)
+	}
+	// includeChanged = true in a non-git dir: Changed() error is silently ignored.
+	bundle, err := ReleaseBundleFor(filepath.Join(dir, "git-skill"), "", true)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Changed is nil/empty when not in a git repo.
+	if bundle.Changed != nil {
+		t.Logf("changed: %v (non-nil is ok, git may be present)", bundle.Changed)
+	}
+}

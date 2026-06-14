@@ -62,7 +62,7 @@ By default the YAML frontmatter is stripped; use --keep-frontmatter to retain it
 				return fmt.Errorf("no skills to export")
 			}
 
-			const agentsBase = ".agents/skills"
+			agentsBase := skillSourceOutputDir(cfg.SkillSources)
 			var sections []string
 			exported, missing := 0, 0
 
