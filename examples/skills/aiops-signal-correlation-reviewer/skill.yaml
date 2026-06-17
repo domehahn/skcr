@@ -1,0 +1,21 @@
+name: aiops-signal-correlation-reviewer
+version: 1.1.0
+description: Assess correlation of logs, metrics, traces, events, and incidents to reduce noise, improve root-cause analysis, and lower alert fatigue.
+owners:
+    - platform-engineering
+license: MIT
+entrypoint: SKILL.md
+compatible_with:
+    - codex
+    - claude-code
+    - github-copilot
+    - gitlab-duo
+    - opencode
+    - openhands
+    - ollama
+    - cursor
+    - roo-code
+    - kiro
+    - junie
+    - gemini-cli
+    - windsurf

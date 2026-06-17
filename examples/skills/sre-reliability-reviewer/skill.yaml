@@ -1,0 +1,21 @@
+name: sre-reliability-reviewer
+version: 1.1.0
+description: Assess SLOs, SLIs, error budgets, capacity, degradation, timeouts, retries, circuit breakers, load shedding, and operational risks.
+owners:
+    - platform-engineering
+license: MIT
+entrypoint: SKILL.md
+compatible_with:
+    - codex
+    - claude-code
+    - github-copilot
+    - gitlab-duo
+    - opencode
+    - openhands
+    - ollama
+    - cursor
+    - roo-code
+    - kiro
+    - junie
+    - gemini-cli
+    - windsurf

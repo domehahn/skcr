@@ -1,0 +1,21 @@
+name: resilience-reviewer
+version: 1.1.0
+description: Review timeouts, retries, circuit breakers, failover, backpressure, degraded modes, and resilience behavior.
+owners:
+    - platform-engineering
+license: MIT
+entrypoint: SKILL.md
+compatible_with:
+    - codex
+    - claude-code
+    - github-copilot
+    - gitlab-duo
+    - opencode
+    - openhands
+    - ollama
+    - cursor
+    - roo-code
+    - kiro
+    - junie
+    - gemini-cli
+    - windsurf

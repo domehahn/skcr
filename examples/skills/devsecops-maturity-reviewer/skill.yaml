@@ -1,0 +1,21 @@
+name: devsecops-maturity-reviewer
+version: 1.1.0
+description: Assess maturity across plan, code, build, test, release, deploy, and operate with automation, security gates, ownership, and feedback loops.
+owners:
+    - platform-engineering
+license: MIT
+entrypoint: SKILL.md
+compatible_with:
+    - codex
+    - claude-code
+    - github-copilot
+    - gitlab-duo
+    - opencode
+    - openhands
+    - ollama
+    - cursor
+    - roo-code
+    - kiro
+    - junie
+    - gemini-cli
+    - windsurf

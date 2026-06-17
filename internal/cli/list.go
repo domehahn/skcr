@@ -1,6 +1,11 @@
 package cli
 
-import "github.com/spf13/cobra"
+import (
+	"fmt"
+
+	"github.com/domehahn/skcr/internal/catalog"
+	"github.com/spf13/cobra"
+)
 
 func newListCommand() *cobra.Command {
 	cmd := &cobra.Command{
@@ -9,6 +14,7 @@ func newListCommand() *cobra.Command {
 	}
 	cmd.AddCommand(newListSkillsCommand())
 	cmd.AddCommand(newListTargetsSubCommand())
+	cmd.AddCommand(newListCategoriesCommand())
 	return cmd
 }
 
@@ -17,4 +23,16 @@ func newListTargetsSubCommand() *cobra.Command {
 	cmd := newListTargetsCommand()
 	cmd.Use = "targets"
 	return cmd
+}
+
+func newListCategoriesCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:   "categories",
+		Short: "List built-in skill categories",
+		Run: func(cmd *cobra.Command, args []string) {
+			for _, category := range catalog.CategoryNames() {
+				fmt.Fprintf(cmd.OutOrStdout(), "%-28s  %d skill(s)\n", category, len(catalog.SkillCategories[category]))
+			}
+		},
+	}
 }

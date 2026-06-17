@@ -2,7 +2,9 @@
 
 ## SDLC / DevSecOps Skill Library
 
-The built-in SDLC and DevSecOps skill library is registered as inline Go templates. The current production-ready library contains:
+The built-in SDLC and DevSecOps skill library is registered as inline Go templates. The current production-ready library contains the core SDLC skills plus DORA/regulatory/audit, documentation/evidence, DevSecOps, CloudOps/PlatformOps, AIOps/MLOps/LLMOps, and additional security/governance reviewers.
+
+Core SDLC skills:
 
 - `requirements-analyst`
 - `cost-based-planner`
@@ -22,6 +24,15 @@ The built-in SDLC and DevSecOps skill library is registered as inline Go templat
 - `incident-postmortem-assistant`
 - `documentation-maintainer`
 - `universal-skill-creator`
+
+Extended review skills:
+
+- DORA / Regulatory / Audit: `dora-readiness-reviewer`, `ict-risk-management-reviewer`, `ict-third-party-risk-reviewer`, `ict-incident-reporting-reviewer`, `operational-resilience-tester`, `audit-evidence-reviewer`, `control-mapping-reviewer`, `outsourcing-exit-strategy-reviewer`
+- Documentation & Evidence: `documentation-governance-reviewer`, `runbook-playbook-maintainer`, `architecture-decision-recorder`, `audit-traceability-maintainer`, `policy-documentation-maintainer`, `evidence-package-creator`
+- DevSecOps: `devsecops-maturity-reviewer`, `pipeline-security-architect`, `software-supply-chain-architect`, `policy-as-code-engineer`, `secure-developer-platform-reviewer`, `vulnerability-management-coordinator`
+- CloudOps / PlatformOps: `cloud-landing-zone-reviewer`, `cloud-governance-reviewer`, `finops-reviewer`, `sre-reliability-reviewer`, `kubernetes-platform-reviewer`, `gitops-operations-reviewer`
+- AIOps / MLOps / LLMOps: `aiops-signal-correlation-reviewer`, `alert-quality-reviewer`, `auto-remediation-reviewer`, `mlops-governance-reviewer`, `llmops-security-reviewer`, `ai-change-risk-reviewer`
+- Security & Compliance: `privacy-data-protection-reviewer`, `api-contract-reviewer`, `secure-design-reviewer`, `policy-as-code-reviewer`, `container-security-reviewer`, `identity-access-reviewer`, `risk-acceptance-reviewer`, `secure-code-reviewer`, `performance-scalability-reviewer`, `migration-change-reviewer`, `sbom-vulnerability-management-reviewer`, `developer-experience-reviewer`, `resilience-reviewer`, `backup-restore-reviewer`
 
 ## Framework-Ready
 

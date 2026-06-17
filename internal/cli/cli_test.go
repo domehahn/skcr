@@ -138,6 +138,30 @@ func TestCompatibilityCommandsAndBakeUseEvidence(t *testing.T) {
 	}
 }
 
+func TestBakeCategoryFilter(t *testing.T) {
+	dir := t.TempDir()
+	bakefile := `version: "1"
+targets:
+  default:
+    platforms: [codex]
+    skills: [security-reviewer]
+`
+	if err := os.WriteFile(filepath.Join(dir, "agentic.bake.yaml"), []byte(bakefile), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := runRoot("bake", "default", "--target", dir, "--category", "dora", "--write"); err != nil {
+		t.Fatalf("bake --category failed: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(dir, ".agents", "skills", "dora-readiness-reviewer", "SKILL.md")); err != nil {
+		t.Fatalf("expected DORA skill to be generated: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".agents", "skills", "security-reviewer", "SKILL.md")); !os.IsNotExist(err) {
+		t.Fatalf("security-reviewer should not be generated when category filter is active, err=%v", err)
+	}
+}
+
 func TestApplyBuildInfo(t *testing.T) {
 	origV, origC, origD := Version, Commit, Date
 	t.Cleanup(func() {

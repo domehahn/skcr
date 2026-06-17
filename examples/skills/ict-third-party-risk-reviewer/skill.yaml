@@ -1,0 +1,21 @@
+name: ict-third-party-risk-reviewer
+version: 1.1.0
+description: Review cloud, SaaS, outsourcing, subcontractors, contracts, exit strategies, concentration risks, and DORA information-register readiness.
+owners:
+    - platform-engineering
+license: MIT
+entrypoint: SKILL.md
+compatible_with:
+    - codex
+    - claude-code
+    - github-copilot
+    - gitlab-duo
+    - opencode
+    - openhands
+    - ollama
+    - cursor
+    - roo-code
+    - kiro
+    - junie
+    - gemini-cli
+    - windsurf

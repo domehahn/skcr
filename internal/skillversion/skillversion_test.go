@@ -16,6 +16,7 @@ func TestBumpSynchronizesSkillArtifacts(t *testing.T) {
 		Name:      "secure-code-review",
 		OutputDir: dir,
 		Version:   "1.0.0",
+		Since:     "2026-06-10",
 		Owner:     "platform-engineering",
 		Platforms: []string{"codex"},
 	})
@@ -26,11 +27,11 @@ func TestBumpSynchronizesSkillArtifacts(t *testing.T) {
 		t.Fatal("expected scaffold files")
 	}
 	skillDir := filepath.Join(dir, "secure-code-review")
-	info, err := Bump(skillDir, BumpMinor, "2026-06-12", "Add production-ready version lifecycle")
+	info, err := Bump(skillDir, BumpMinor, "2026-06-17", "Add production-ready version lifecycle")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if info.Version != "1.1.0" || info.LastModified != "2026-06-12" {
+	if info.Version != "1.1.0" || info.LastModified != "2026-06-17" {
 		t.Fatalf("unexpected bumped info: %#v", info)
 	}
 	for _, path := range []string{"SKILL.md", "VERSION", "skill.yaml", "CHANGELOG.md"} {
@@ -56,7 +57,7 @@ func TestBumpSynchronizesSkillArtifacts(t *testing.T) {
 	if len(entries) == 0 || entries[0].Version != "1.1.0" {
 		t.Fatalf("unexpected changelog: %#v", entries)
 	}
-	notes, err := ReleaseNotes(skillDir, "2026-06-12")
+	notes, err := ReleaseNotes(skillDir, "2026-06-17")
 	if err != nil {
 		t.Fatal(err)
 	}

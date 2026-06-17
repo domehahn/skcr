@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/domehahn/skcr/internal/bake"
+	"github.com/domehahn/skcr/internal/catalog"
 	"github.com/domehahn/skcr/internal/lockfile"
 	"github.com/domehahn/skcr/internal/models"
 	"github.com/domehahn/skcr/internal/renderer"
@@ -45,6 +46,7 @@ func newBakeCommand() *cobra.Command {
 	var skillsFrom string
 	var skillsMode string
 	var platform string
+	var category string
 
 	cmd := &cobra.Command{
 		Use:               "bake [target]",
@@ -90,6 +92,20 @@ func newBakeCommand() *cobra.Command {
 			resolved, err := cliResolveTarget(cfg, targetName)
 			if err != nil {
 				return err
+			}
+			if category != "" {
+				categorySkills, err := catalog.SkillsForCategory(category)
+				if err != nil {
+					return err
+				}
+				resolved.Skills = categorySkills
+				if len(resolved.Profiles) == 0 {
+					resolved.Profiles = []string{}
+				}
+				canonicalCategory, _ := catalog.NormalizeCategory(category)
+				if canonicalCategory != "" && !containsString(resolved.Profiles, canonicalCategory) {
+					resolved.Profiles = append(resolved.Profiles, canonicalCategory)
+				}
 			}
 			if platform != "" {
 				platforms, err := models.ParsePlatforms(platform)
@@ -306,8 +322,18 @@ func newBakeCommand() *cobra.Command {
 	cmd.Flags().StringVar(&skillsFrom, "skills-from", "", "Read skpm locked skills from agent-skills.lock")
 	cmd.Flags().StringVar(&skillsMode, "skills-mode", "", "Skill integration mode: reference, copy, link, embed")
 	cmd.Flags().StringVar(&platform, "platform", "", "Render only the selected canonical platform")
+	cmd.Flags().StringVar(&category, "category", "", "Render only one built-in skill category (for example dora-vait, devsecops, cloudops-platformops)")
 
 	return cmd
+}
+
+func containsString(values []string, needle string) bool {
+	for _, value := range values {
+		if value == needle {
+			return true
+		}
+	}
+	return false
 }
 
 // validateRenderedSkillDates checks that no rendered SKILL.md has since > last_modified.

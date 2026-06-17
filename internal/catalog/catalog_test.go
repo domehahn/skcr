@@ -42,3 +42,33 @@ func TestSkillTitleAndDescription(t *testing.T) {
 		t.Fatalf("unexpected fallback description: %q", unknown)
 	}
 }
+
+func TestSkillCategories(t *testing.T) {
+	names := CategoryNames()
+	if len(names) == 0 {
+		t.Fatal("expected built-in categories")
+	}
+
+	canonical, err := NormalizeCategory("DORA/VAIT")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if canonical != "dora-vait" {
+		t.Fatalf("unexpected category normalization: %q", canonical)
+	}
+
+	skills, err := SkillsForCategory("dora")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(skills) != 8 {
+		t.Fatalf("expected 8 DORA skills, got %d: %#v", len(skills), skills)
+	}
+	if skills[0] != "dora-readiness-reviewer" {
+		t.Fatalf("unexpected first DORA skill: %q", skills[0])
+	}
+
+	if _, err := SkillsForCategory("not-a-category"); err == nil {
+		t.Fatal("expected unknown category error")
+	}
+}

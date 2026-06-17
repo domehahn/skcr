@@ -1,0 +1,21 @@
+name: runbook-playbook-maintainer
+version: 1.1.0
+description: Create and review runbooks, operating instructions, incident playbooks, escalation paths, restart procedures, and checklists.
+owners:
+    - platform-engineering
+license: MIT
+entrypoint: SKILL.md
+compatible_with:
+    - codex
+    - claude-code
+    - github-copilot
+    - gitlab-duo
+    - opencode
+    - openhands
+    - ollama
+    - cursor
+    - roo-code
+    - kiro
+    - junie
+    - gemini-cli
+    - windsurf

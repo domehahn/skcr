@@ -94,7 +94,7 @@ type skillContent struct {
 	AntiPatterns        []string
 }
 
-var SDLCSkillNames = []string{
+var baseSDLCSkillNames = []string{
 	"requirements-analyst",
 	"cost-based-planner",
 	"architecture-reviewer",
@@ -114,6 +114,58 @@ var SDLCSkillNames = []string{
 	"documentation-maintainer",
 	"universal-skill-creator",
 }
+
+var AdditionalSDLCSkillNames = []string{
+	"dora-readiness-reviewer",
+	"ict-risk-management-reviewer",
+	"ict-third-party-risk-reviewer",
+	"ict-incident-reporting-reviewer",
+	"operational-resilience-tester",
+	"audit-evidence-reviewer",
+	"control-mapping-reviewer",
+	"outsourcing-exit-strategy-reviewer",
+	"documentation-governance-reviewer",
+	"runbook-playbook-maintainer",
+	"architecture-decision-recorder",
+	"audit-traceability-maintainer",
+	"policy-documentation-maintainer",
+	"evidence-package-creator",
+	"devsecops-maturity-reviewer",
+	"pipeline-security-architect",
+	"software-supply-chain-architect",
+	"policy-as-code-engineer",
+	"secure-developer-platform-reviewer",
+	"vulnerability-management-coordinator",
+	"cloud-landing-zone-reviewer",
+	"cloud-governance-reviewer",
+	"finops-reviewer",
+	"sre-reliability-reviewer",
+	"kubernetes-platform-reviewer",
+	"gitops-operations-reviewer",
+	"aiops-signal-correlation-reviewer",
+	"alert-quality-reviewer",
+	"auto-remediation-reviewer",
+	"mlops-governance-reviewer",
+	"llmops-security-reviewer",
+	"ai-change-risk-reviewer",
+	"privacy-data-protection-reviewer",
+	"api-contract-reviewer",
+	"secure-design-reviewer",
+	"policy-as-code-reviewer",
+	"container-security-reviewer",
+	"identity-access-reviewer",
+	"risk-acceptance-reviewer",
+	"secure-code-reviewer",
+	"performance-scalability-reviewer",
+	"migration-change-reviewer",
+	"sbom-vulnerability-management-reviewer",
+	"developer-experience-reviewer",
+	"resilience-reviewer",
+	"backup-restore-reviewer",
+}
+
+var SDLCSkillNames = append(append([]string{}, baseSDLCSkillNames...), AdditionalSDLCSkillNames...)
+
 var sharedDevSecOpsGuardrails = []string{
 	"Do not read secrets, `.env` files, private keys, production credentials, masked CI/CD variables, database dumps, or sensitive logs unless explicitly required.",
 	"Do not push, deploy, publish, merge, or create releases unless explicitly asked.",
@@ -946,10 +998,171 @@ var sdlcSkillContent = map[string]skillContent{
 		AntiPatterns:       []string{"Creating a skill by search-and-replace from another skill.", "Using “structured analysis or review” as a trigger.", "Writing finding categories like “missing <skill> evidence”.", "Using generic severity guidance unrelated to domain impact.", "Claiming production-ready because required headings exist.", "Setting concrete platform versions without validation evidence."},
 	},
 }
+
+type additionalSkillSeed struct {
+	Name        string
+	Description string
+	Domain      string
+	Artifacts   []string
+	Risks       []string
+	Signals     []string
+	Outputs     []string
+}
+
+var additionalSkillSeeds = []additionalSkillSeed{
+	{Name: "dora-readiness-reviewer", Description: "Review DORA readiness for ICT risk management, resilience testing, ICT incidents, third-party risk, roles, policies, evidence, and auditability.", Domain: "DORA readiness and ICT auditability", Artifacts: []string{"ICT risk framework", "resilience test plan", "incident procedure", "third-party register", "role matrix", "policy set"}, Risks: []string{"unowned DORA capability", "untested critical function", "missing incident evidence", "outsourcing blind spot", "policy without approval", "audit trail gap"}, Signals: []string{"risk acceptance record", "test protocol", "incident timeline", "contract inventory", "management approval", "evidence package"}, Outputs: []string{"DORA readiness gap list", "auditability matrix", "evidence request list", "policy and role remediation plan", "residual readiness risk summary"}},
+	{Name: "ict-risk-management-reviewer", Description: "Review ICT risks, protection needs, criticality, controls, residual risks, risk treatment, and recurring reassessment.", Domain: "ICT risk management", Artifacts: []string{"asset inventory", "protection needs analysis", "criticality rating", "control catalogue", "risk register", "reassessment schedule"}, Risks: []string{"unrated critical asset", "weak residual risk rationale", "stale risk treatment", "missing control owner", "unsupported protection level", "outdated reassessment"}, Signals: []string{"asset classification", "control test", "risk decision", "treatment task", "owner approval", "review cadence"}, Outputs: []string{"ICT risk findings", "control-to-risk map", "residual risk decision log", "reassessment backlog", "risk treatment recommendation"}},
+	{Name: "ict-third-party-risk-reviewer", Description: "Review cloud, SaaS, outsourcing, subcontractors, contracts, exit strategies, concentration risks, and DORA information-register readiness.", Domain: "ICT third-party risk", Artifacts: []string{"provider inventory", "cloud contract", "SaaS data-flow", "subcontractor list", "exit plan", "information register fields"}, Risks: []string{"unlisted subcontractor", "weak exit clause", "concentration exposure", "missing data location", "untracked outsourcing dependency", "contract evidence gap"}, Signals: []string{"contract clause", "provider assessment", "service criticality", "suboutsourcing notice", "exit-test result", "register update"}, Outputs: []string{"third-party risk report", "DORA register gap list", "exit readiness findings", "concentration risk summary", "contract remediation items"}},
+	{Name: "ict-incident-reporting-reviewer", Description: "Review classification, escalation, documentation, reportability, reporting timelines, responsibilities, templates, and communication chains for ICT incidents.", Domain: "ICT incident reporting", Artifacts: []string{"incident classification matrix", "escalation procedure", "reporting template", "communications tree", "timeline log", "responsibility matrix"}, Risks: []string{"missed reporting threshold", "late escalation", "incomplete incident record", "unclear owner", "template mismatch", "broken communication path"}, Signals: []string{"severity decision", "timestamped escalation", "draft authority report", "contact list", "incident ticket", "post-incident review"}, Outputs: []string{"incident reporting readiness assessment", "classification gap list", "timeline evidence review", "template remediation plan", "communications chain findings"}},
+	{Name: "operational-resilience-tester", Description: "Review backup and restore, failover, disaster recovery, restart procedures, crisis exercises, scenario tests, and lessons learned.", Domain: "operational resilience testing", Artifacts: []string{"backup policy", "restore test log", "failover runbook", "DR plan", "crisis exercise report", "lessons-learned register"}, Risks: []string{"unproven restore", "manual failover bottleneck", "RTO mismatch", "unrehearsed crisis role", "scenario gap", "unclosed lesson"}, Signals: []string{"RPO evidence", "RTO measurement", "failover transcript", "exercise participant record", "defect ticket", "retest proof"}, Outputs: []string{"resilience test findings", "RPO/RTO evidence table", "scenario coverage map", "recovery gap backlog", "lessons-learned closure plan"}},
+	{Name: "audit-evidence-reviewer", Description: "Review evidence, approvals, tickets, logs, test protocols, risk decisions, versioning, and accountable owners.", Domain: "audit evidence quality", Artifacts: []string{"approval record", "ticket trail", "system log", "test protocol", "risk decision", "version history"}, Risks: []string{"orphaned approval", "missing log retention", "unlinked ticket", "unsigned test result", "stale evidence", "unclear accountable owner"}, Signals: []string{"review timestamp", "change reference", "approver identity", "log extract", "test result", "version tag"}, Outputs: []string{"audit evidence quality report", "missing-evidence list", "approval traceability map", "retention risk note", "evidence remediation checklist"}},
+	{Name: "control-mapping-reviewer", Description: "Map technical measures to DORA, VAIT or BAIT migration needs, ISO 27001, BSI, internal policies, or MaRisk review expectations.", Domain: "control mapping", Artifacts: []string{"technical control", "DORA chapter map", "VAIT or BAIT mapping", "ISO 27001 annex", "BSI baseline", "internal policy"}, Risks: []string{"unmapped technical measure", "duplicated control claim", "obsolete VAIT reference", "weak MaRisk linkage", "missing implementation proof", "policy conflict"}, Signals: []string{"control owner", "implementation ticket", "test evidence", "policy clause", "audit note", "exception record"}, Outputs: []string{"control mapping matrix", "framework coverage gap list", "migration notes", "duplicate-control cleanup list", "evidence alignment report"}},
+	{Name: "outsourcing-exit-strategy-reviewer", Description: "Review exit plans, data return, provider transitions, emergency operations, suboutsourcing, cloud dependencies, and business impact.", Domain: "outsourcing exit strategy", Artifacts: []string{"exit plan", "data return clause", "provider transition runbook", "emergency operating model", "suboutsourcing register", "business impact assessment"}, Risks: []string{"unrecoverable data", "provider lock-in", "untested transition", "critical suboutsourcing dependency", "cloud portability gap", "understated business impact"}, Signals: []string{"exit test", "data deletion proof", "alternate provider assessment", "critical process map", "contract clause", "transition timeline"}, Outputs: []string{"exit strategy findings", "data return gap list", "provider transition risk register", "business impact summary", "exit test plan"}},
+	{Name: "documentation-governance-reviewer", Description: "Review documentation freshness, ownership, review cycles, approvals, versioning, validity, and traceability.", Domain: "documentation governance", Artifacts: []string{"document inventory", "owner matrix", "review schedule", "approval workflow", "version history", "validity metadata"}, Risks: []string{"stale procedure", "missing owner", "expired review", "unapproved change", "unversioned policy", "broken traceability"}, Signals: []string{"last review date", "approver record", "document status", "change request", "publication location", "source reference"}, Outputs: []string{"documentation governance report", "staleness backlog", "ownership gap list", "approval remediation plan", "traceability findings"}},
+	{Name: "runbook-playbook-maintainer", Description: "Create and review runbooks, operating instructions, incident playbooks, escalation paths, restart procedures, and checklists.", Domain: "runbooks and playbooks", Artifacts: []string{"runbook", "operating instruction", "incident playbook", "escalation path", "restart checklist", "validation step"}, Risks: []string{"missing diagnosis step", "unsafe recovery command", "obsolete contact", "unverified restart", "ambiguous escalation", "checklist gap"}, Signals: []string{"operator dry run", "alert link", "dashboard reference", "ticket example", "rollback step", "post-action verification"}, Outputs: []string{"updated runbook", "playbook gap report", "operator checklist", "escalation correction list", "validation notes"}},
+	{Name: "architecture-decision-recorder", Description: "Create and maintain ADRs with context, decision, alternatives, risks, security impact, compliance relation, and review points.", Domain: "architecture decision records", Artifacts: []string{"ADR", "decision context", "alternative analysis", "risk section", "security impact", "review date"}, Risks: []string{"undocumented decision", "missing alternative", "unowned risk", "security impact omission", "compliance ambiguity", "stale review point"}, Signals: []string{"decision owner", "status marker", "linked issue", "architecture diagram", "control reference", "review trigger"}, Outputs: []string{"ADR draft or update", "decision gap list", "alternative trade-off summary", "security and compliance note", "review schedule"}},
+	{Name: "audit-traceability-maintainer", Description: "Link requirements, controls, implementation, tests, tickets, and evidence into an auditable trace.", Domain: "audit traceability", Artifacts: []string{"requirement", "control", "implementation change", "test case", "ticket", "evidence item"}, Risks: []string{"unlinked requirement", "control without test", "ticket without evidence", "implementation drift", "missing owner", "trace break"}, Signals: []string{"requirement ID", "control ID", "commit reference", "test report", "approval", "evidence link"}, Outputs: []string{"traceability matrix", "broken-link report", "evidence coverage map", "owner action list", "audit trail summary"}},
+	{Name: "policy-documentation-maintainer", Description: "Create and update policies, standards, procedures, and control descriptions.", Domain: "policy documentation", Artifacts: []string{"policy", "standard", "procedure", "control description", "exception process", "approval record"}, Risks: []string{"policy conflict", "missing normative language", "unapproved exception", "unclear applicability", "stale control text", "weak procedure"}, Signals: []string{"policy owner", "effective date", "approval board", "control objective", "exception expiry", "review result"}, Outputs: []string{"policy update", "standard gap list", "procedure correction plan", "control description changes", "approval checklist"}},
+	{Name: "evidence-package-creator", Description: "Create auditable evidence packages from tickets, pipeline results, test reports, approvals, scans, and architecture information.", Domain: "evidence packages", Artifacts: []string{"ticket export", "pipeline result", "test report", "approval", "scan report", "architecture reference"}, Risks: []string{"missing source link", "unverifiable package", "sensitive data exposure", "incomplete scan context", "unapproved change", "timestamp mismatch"}, Signals: []string{"package manifest", "checksum", "redaction note", "reviewer sign-off", "retention location", "source URL"}, Outputs: []string{"evidence package manifest", "collection checklist", "redaction summary", "gap list", "auditor handoff notes"}},
+	{Name: "devsecops-maturity-reviewer", Description: "Assess maturity across plan, code, build, test, release, deploy, and operate: shift left, shield right, automation, security gates, ownership, and feedback loops.", Domain: "DevSecOps maturity", Artifacts: []string{"SDLC workflow", "security gate", "pipeline policy", "ownership model", "feedback loop", "operational metric"}, Risks: []string{"manual security bottleneck", "late vulnerability discovery", "weak gate enforcement", "unclear ownership", "missing runtime feedback", "immature automation"}, Signals: []string{"maturity score", "gate result", "team responsibility", "defect trend", "incident feedback", "improvement roadmap"}, Outputs: []string{"DevSecOps maturity assessment", "capability heatmap", "gap backlog", "ownership recommendations", "target-state roadmap"}},
+	{Name: "pipeline-security-architect", Description: "Design and review secure CI/CD pipelines with isolated runners, minimal rights, OIDC, signed artifacts, protected environments, approval gates, and safe deployments.", Domain: "pipeline security architecture", Artifacts: []string{"workflow file", "runner pool", "OIDC trust policy", "artifact signing step", "protected environment", "approval gate"}, Risks: []string{"overprivileged token", "untrusted runner", "artifact tampering", "environment bypass", "secret sprawl", "unsafe deployment job"}, Signals: []string{"token permission block", "runner isolation evidence", "signature verification", "environment protection", "approval record", "deployment audit log"}, Outputs: []string{"pipeline security design", "CI/CD risk findings", "permission reduction plan", "artifact integrity controls", "deployment gate recommendations"}},
+	{Name: "software-supply-chain-architect", Description: "Review SLSA, provenance, SBOM, signatures, attestations, build integrity, artifact promotion, and trusted builders.", Domain: "software supply chain architecture", Artifacts: []string{"SLSA target", "provenance attestation", "SBOM", "signature", "trusted builder", "artifact promotion rule"}, Risks: []string{"untrusted build", "missing provenance", "unsigned artifact", "SBOM drift", "promotion bypass", "attestation gap"}, Signals: []string{"builder identity", "attestation predicate", "signature verification", "dependency graph", "promotion approval", "artifact digest"}, Outputs: []string{"supply-chain architecture review", "SLSA gap map", "provenance findings", "SBOM and signing plan", "trusted-builder recommendations"}},
+	{Name: "policy-as-code-engineer", Description: "Create and review policies for OPA/Rego, Kyverno, GitLab Policies, Conftest, Checkov, Terraform, Kubernetes, and CI/CD gates.", Domain: "policy-as-code engineering", Artifacts: []string{"Rego policy", "Kyverno rule", "GitLab policy", "Conftest suite", "Checkov check", "CI gate"}, Risks: []string{"overbroad deny rule", "missing test fixture", "policy bypass", "false-positive flood", "unversioned exception", "weak enforcement mode"}, Signals: []string{"policy test", "violation example", "exception record", "enforcement mode", "coverage report", "gate result"}, Outputs: []string{"policy-as-code changes", "test fixture set", "enforcement recommendation", "exception handling notes", "policy rollout plan"}},
+	{Name: "secure-developer-platform-reviewer", Description: "Review Internal Developer Platforms for secure golden paths, self-service with guardrails, templates, permission models, secrets handling, and auditability.", Domain: "secure developer platform", Artifacts: []string{"golden path", "self-service workflow", "template catalog", "permission model", "secrets workflow", "audit log"}, Risks: []string{"unsafe template default", "privilege escalation", "secret leakage", "guardrail bypass", "untracked self-service action", "poor platform adoption"}, Signals: []string{"template scan", "RBAC review", "audit event", "developer feedback", "exception flow", "platform metric"}, Outputs: []string{"platform security review", "golden-path gap list", "guardrail recommendations", "permission model findings", "developer-experience risk notes"}},
+	{Name: "vulnerability-management-coordinator", Description: "Assess CVE triage, prioritization, SLAs, exploitability, asset criticality, exceptions, risk acceptance, and tracking through remediation.", Domain: "vulnerability management coordination", Artifacts: []string{"CVE queue", "asset inventory", "SLA policy", "exploitability assessment", "exception record", "remediation ticket"}, Risks: []string{"missed critical CVE", "SLA breach", "weak risk acceptance", "unowned remediation", "false priority", "stale exception"}, Signals: []string{"EPSS or KEV signal", "asset criticality", "fix version", "owner assignment", "exception expiry", "closure proof"}, Outputs: []string{"vulnerability triage report", "SLA breach list", "risk acceptance review", "remediation tracker", "prioritization recommendation"}},
+	{Name: "cloud-landing-zone-reviewer", Description: "Review accounts or subscriptions, networks, IAM, logging, policies, baselines, guardrails, encryption, tagging, and tenant separation.", Domain: "cloud landing zones", Artifacts: []string{"account structure", "network topology", "IAM baseline", "logging baseline", "policy assignment", "encryption standard"}, Risks: []string{"flat account model", "network exposure", "overprivileged IAM", "missing central logs", "unenforced policy", "tenant isolation gap"}, Signals: []string{"organization policy", "VPC or VNet design", "KMS configuration", "tag policy", "guardrail result", "audit log"}, Outputs: []string{"landing-zone review", "baseline gap list", "IAM and network findings", "logging and encryption recommendations", "tenant separation notes"}},
+	{Name: "cloud-governance-reviewer", Description: "Review naming, tags, ownership, cost centers, allowed services, regions, data classification, policy enforcement, and audit evidence.", Domain: "cloud governance", Artifacts: []string{"naming standard", "tag policy", "ownership register", "cost center map", "allowed-service list", "region policy"}, Risks: []string{"unowned resource", "untagged cost", "forbidden region", "unapproved service", "data classification gap", "policy drift"}, Signals: []string{"resource inventory", "policy compliance report", "tag coverage", "budget owner", "classification label", "audit export"}, Outputs: []string{"cloud governance findings", "tagging backlog", "ownership gap report", "policy enforcement plan", "audit evidence summary"}},
+	{Name: "finops-reviewer", Description: "Review cloud costs, budgets, rightsizing, reserved or committed usage, cost anomalies, showback or chargeback, and cost transparency per team or service.", Domain: "FinOps", Artifacts: []string{"cloud bill", "budget", "rightsizing report", "commitment plan", "anomaly alert", "showback view"}, Risks: []string{"unexplained cost spike", "idle resource waste", "wrong commitment", "missing budget owner", "opaque team spend", "chargeback dispute"}, Signals: []string{"cost allocation tag", "utilization metric", "forecast", "reservation coverage", "anomaly record", "unit cost"}, Outputs: []string{"FinOps review", "savings opportunities", "budget risk list", "rightsizing actions", "showback improvement plan"}},
+	{Name: "sre-reliability-reviewer", Description: "Assess SLOs, SLIs, error budgets, capacity, degradation, timeouts, retries, circuit breakers, load shedding, and operational risks.", Domain: "SRE reliability", Artifacts: []string{"SLO", "SLI query", "error budget", "capacity plan", "degradation mode", "timeout policy"}, Risks: []string{"missing SLO", "bad SLI proxy", "budget burn blind spot", "retry storm", "capacity cliff", "load shedding gap"}, Signals: []string{"burn-rate alert", "latency percentile", "saturation metric", "incident trend", "chaos test result", "runbook"}, Outputs: []string{"reliability findings", "SLO and SLI recommendations", "error-budget analysis", "capacity risk notes", "resilience control backlog"}},
+	{Name: "kubernetes-platform-reviewer", Description: "Review clusters, namespaces, RBAC, NetworkPolicies, Pod Security, admission controllers, resource limits, secrets, ingress, multi-tenancy, and upgrade readiness.", Domain: "Kubernetes platform", Artifacts: []string{"cluster baseline", "namespace model", "RBAC binding", "NetworkPolicy", "Pod Security setting", "admission controller"}, Risks: []string{"cluster-admin sprawl", "namespace escape", "missing network isolation", "privileged pod", "unbounded resource use", "stale cluster version"}, Signals: []string{"kubectl manifest", "policy report", "secret reference", "ingress rule", "resource quota", "upgrade plan"}, Outputs: []string{"Kubernetes platform review", "RBAC and tenancy findings", "policy remediation list", "upgrade readiness notes", "runtime hardening recommendations"}},
+	{Name: "gitops-operations-reviewer", Description: "Review Argo CD or Flux setups, sync policies, drift detection, promotion, rollback, app-of-apps, secrets, cluster access, and deployment governance.", Domain: "GitOps operations", Artifacts: []string{"Argo CD application", "Flux Kustomization", "sync policy", "drift report", "promotion workflow", "rollback procedure"}, Risks: []string{"auto-sync blast radius", "drift ignored", "secret exposure", "cluster credential overreach", "promotion bypass", "rollback gap"}, Signals: []string{"reconciliation log", "health status", "commit signature", "environment branch", "sealed secret", "access audit"}, Outputs: []string{"GitOps operations review", "sync and drift findings", "promotion governance map", "rollback recommendations", "cluster access risk list"}},
+	{Name: "aiops-signal-correlation-reviewer", Description: "Assess correlation of logs, metrics, traces, events, and incidents to reduce noise, improve root-cause analysis, and lower alert fatigue.", Domain: "AIOps signal correlation", Artifacts: []string{"log stream", "metric series", "trace span", "event feed", "incident record", "correlation rule"}, Risks: []string{"alert noise", "missing service context", "weak root-cause hint", "duplicate incident", "bad correlation key", "hidden failure pattern"}, Signals: []string{"correlation ID", "topology map", "incident cluster", "suppression rule", "trace exemplar", "noise ratio"}, Outputs: []string{"signal correlation review", "noise reduction findings", "root-cause context gaps", "deduplication recommendations", "AIOps rollout notes"}},
+	{Name: "alert-quality-reviewer", Description: "Review alerts for actionability, clear symptoms, runbook links, severity, ownership, SLO relation, deduplication, escalation, and auto-remediation suitability.", Domain: "alert quality", Artifacts: []string{"alert rule", "runbook link", "severity model", "owner mapping", "SLO reference", "escalation policy"}, Risks: []string{"non-actionable alert", "missing owner", "severity inflation", "runbook dead link", "duplicate page", "unsafe remediation trigger"}, Signals: []string{"alert firing history", "page volume", "acknowledgement time", "burn-rate link", "dedupe key", "operator feedback"}, Outputs: []string{"alert quality report", "actionability fixes", "severity corrections", "runbook gap list", "auto-remediation suitability notes"}},
+	{Name: "auto-remediation-reviewer", Description: "Review automated repair actions for safe limits, dry runs, approval modes, rollback, audit logs, blast radius, and protection against endless loops.", Domain: "auto-remediation safety", Artifacts: []string{"remediation workflow", "dry-run mode", "approval gate", "rollback action", "audit log", "rate limit"}, Risks: []string{"runaway loop", "wide blast radius", "unsafe automatic change", "missing rollback", "approval bypass", "audit blind spot"}, Signals: []string{"execution history", "safety threshold", "manual override", "change ticket", "rollback result", "loop breaker"}, Outputs: []string{"auto-remediation safety review", "blast-radius findings", "approval and rollback recommendations", "auditability notes", "guardrail backlog"}},
+	{Name: "mlops-governance-reviewer", Description: "Review model versioning, training data, bias, drift, monitoring, approvals, reproducibility, model registry, and deployment gates.", Domain: "MLOps governance", Artifacts: []string{"model registry entry", "training dataset", "feature pipeline", "bias evaluation", "drift monitor", "deployment gate"}, Risks: []string{"unreproducible model", "biased dataset", "silent drift", "unapproved promotion", "missing lineage", "weak rollback"}, Signals: []string{"model version", "dataset hash", "evaluation report", "approval record", "serving metric", "registry transition"}, Outputs: []string{"MLOps governance review", "lineage and reproducibility findings", "bias and drift recommendations", "deployment gate gaps", "model approval notes"}},
+	{Name: "llmops-security-reviewer", Description: "Review GenAI workloads for prompt injection, tool permissions, data exfiltration, RAG sources, sensitive prompt logging, eval sets, guardrails, and model access.", Domain: "LLMOps security", Artifacts: []string{"prompt template", "tool permission", "RAG source", "prompt log", "eval set", "guardrail policy"}, Risks: []string{"prompt injection", "tool abuse", "data exfiltration", "untrusted RAG content", "sensitive prompt logging", "uncontrolled model access"}, Signals: []string{"red-team eval", "retrieval allowlist", "tool audit", "DLP finding", "guardrail result", "access policy"}, Outputs: []string{"LLMOps security review", "prompt-injection findings", "tool-permission recommendations", "RAG source risk notes", "eval and guardrail gaps"}},
+	{Name: "ai-change-risk-reviewer", Description: "Review AI-assisted changes before execution: automation boundaries, human approval, affected-system criticality, and audit evidence.", Domain: "AI-assisted change risk", Artifacts: []string{"AI change proposal", "automation boundary", "approval record", "system criticality", "execution plan", "audit trail"}, Risks: []string{"unapproved autonomous change", "critical-system impact", "ambiguous human oversight", "untracked AI rationale", "unsafe tool use", "missing rollback"}, Signals: []string{"human approval", "change classification", "tool call log", "diff summary", "validation result", "rollback plan"}, Outputs: []string{"AI change risk assessment", "approval gap list", "automation-boundary recommendation", "criticality findings", "audit evidence request"}},
+	{Name: "privacy-data-protection-reviewer", Description: "Review privacy, personal data, data classification, deletion concepts, purpose limitation, GDPR risks, and sensitive-data logging.", Domain: "privacy and data protection", Artifacts: []string{"personal-data inventory", "classification label", "deletion concept", "purpose statement", "DPIA note", "log sample"}, Risks: []string{"personal data overcollection", "purpose creep", "missing deletion path", "sensitive logging", "unlawful retention", "weak data minimization"}, Signals: []string{"data-flow map", "retention setting", "consent or legal basis", "redaction rule", "access log", "privacy review"}, Outputs: []string{"privacy review findings", "data-classification gaps", "deletion and retention actions", "sensitive logging recommendations", "GDPR risk notes"}},
+	{Name: "api-contract-reviewer", Description: "Review REST, GraphQL, OpenAPI, and gRPC contracts, breaking changes, versioning, AuthN/AuthZ, error formats, and compatibility.", Domain: "API contracts", Artifacts: []string{"OpenAPI spec", "GraphQL schema", "gRPC proto", "REST route", "error schema", "version policy"}, Risks: []string{"breaking change", "auth bypass", "incompatible error format", "missing version", "schema drift", "client compatibility gap"}, Signals: []string{"contract test", "schema diff", "consumer fixture", "deprecation note", "auth matrix", "compatibility report"}, Outputs: []string{"API contract review", "breaking-change findings", "versioning recommendations", "auth and error-format notes", "consumer compatibility checklist"}},
+	{Name: "secure-design-reviewer", Description: "Review secure-by-design decisions, least privilege, Zero Trust, tenant separation, secure defaults, and abuse scenarios.", Domain: "secure design", Artifacts: []string{"design proposal", "trust boundary", "permission model", "tenant model", "default configuration", "abuse case"}, Risks: []string{"overtrusted network", "privilege creep", "tenant data leak", "insecure default", "missing abuse case", "weak isolation"}, Signals: []string{"architecture diagram", "threat model", "access decision", "configuration baseline", "data-flow review", "control rationale"}, Outputs: []string{"secure design review", "abuse-case findings", "least-privilege recommendations", "tenant-isolation notes", "secure-default backlog"}},
+	{Name: "policy-as-code-reviewer", Description: "Review GitLab Security Policies, OPA/Rego, Kyverno, Conftest, Sentinel, admission policies, compliance pipelines, and central guardrails.", Domain: "policy-as-code review", Artifacts: []string{"GitLab security policy", "OPA/Rego rule", "Kyverno policy", "Sentinel policy", "admission policy", "compliance pipeline"}, Risks: []string{"policy bypass", "untested deny path", "central guardrail drift", "weak exception process", "pipeline enforcement gap", "noisy violation"}, Signals: []string{"policy test result", "violation fixture", "exception approval", "enforcement mode", "pipeline evidence", "audit event"}, Outputs: []string{"policy-as-code review", "guardrail gap list", "test coverage findings", "exception governance notes", "enforcement recommendations"}},
+	{Name: "container-security-reviewer", Description: "Review Dockerfiles, base images, user rights, capabilities, SBOM, image signing, distroless or slim images, CVEs, and runtime hardening.", Domain: "container security", Artifacts: []string{"Dockerfile", "base image", "runtime user", "Linux capability", "image SBOM", "signature"}, Risks: []string{"root container", "bloated vulnerable image", "unsigned image", "excess capability", "secret in layer", "missing runtime hardening"}, Signals: []string{"image scan", "SBOM digest", "cosign verification", "USER directive", "seccomp profile", "CVE triage"}, Outputs: []string{"container security findings", "base-image recommendations", "runtime hardening checklist", "SBOM and signing gaps", "CVE remediation notes"}},
+	{Name: "identity-access-reviewer", Description: "Review IAM, roles, service accounts, groups, tokens, OIDC federation, GitLab or GitHub permissions, cloud rights, and privilege-escalation paths.", Domain: "identity and access", Artifacts: []string{"IAM policy", "role binding", "service account", "group membership", "OIDC federation", "repository permission"}, Risks: []string{"privilege escalation", "stale access", "overbroad role", "long-lived token", "weak federation trust", "unreviewed group"}, Signals: []string{"access review", "policy simulator", "token age", "assume-role path", "audit log", "permission diff"}, Outputs: []string{"identity access review", "privilege-escalation findings", "least-privilege plan", "token and federation notes", "access cleanup list"}},
+	{Name: "risk-acceptance-reviewer", Description: "Document and assess conscious risk decisions, impact and likelihood, expiry dates, and compensating measures.", Domain: "risk acceptance", Artifacts: []string{"risk acceptance record", "impact assessment", "likelihood assessment", "expiry date", "compensating measure", "approval"}, Risks: []string{"expired acceptance", "unsupported impact", "missing approver", "weak compensating measure", "open-ended exception", "untracked review"}, Signals: []string{"risk owner", "approval timestamp", "review date", "control exception", "residual risk", "closure condition"}, Outputs: []string{"risk acceptance assessment", "expiry and owner gap list", "compensating-control findings", "approval evidence request", "residual risk recommendation"}},
+	{Name: "secure-code-reviewer", Description: "Review code vulnerabilities such as injection, path traversal, SSRF, XSS, deserialization, crypto misuse, and race conditions.", Domain: "secure code review", Artifacts: []string{"source diff", "input parser", "file access path", "HTTP client", "template rendering", "crypto use"}, Risks: []string{"injection", "path traversal", "SSRF", "XSS", "unsafe deserialization", "race condition"}, Signals: []string{"tainted input", "authorization check", "fuzz case", "unit test", "static-analysis warning", "exploitability note"}, Outputs: []string{"secure code findings", "exploitability assessment", "fix guidance", "negative-test recommendations", "residual risk notes"}},
+	{Name: "performance-scalability-reviewer", Description: "Review load behavior, bottlenecks, caching, database access, queue behavior, scaling, timeouts, and resource limits.", Domain: "performance and scalability", Artifacts: []string{"load test", "database query", "cache strategy", "queue consumer", "autoscaling rule", "resource limit"}, Risks: []string{"N+1 query", "cache stampede", "queue backlog", "timeout cascade", "CPU saturation", "scaling bottleneck"}, Signals: []string{"latency percentile", "throughput chart", "query plan", "cache hit rate", "queue depth", "capacity forecast"}, Outputs: []string{"performance review", "bottleneck findings", "scaling recommendations", "timeout and resource notes", "load-test plan"}},
+	{Name: "migration-change-reviewer", Description: "Review database migrations, schema changes, breaking changes, rollback ability, backward compatibility, and zero-downtime deployments.", Domain: "migration and change safety", Artifacts: []string{"database migration", "schema diff", "compatibility plan", "rollback script", "feature flag", "deployment sequence"}, Risks: []string{"irreversible migration", "breaking schema change", "downtime window", "old client incompatibility", "data-loss path", "rollback gap"}, Signals: []string{"expand-contract plan", "migration test", "backup checkpoint", "rollout metric", "dual-write note", "deprecation timeline"}, Outputs: []string{"migration risk review", "rollback readiness findings", "compatibility checklist", "zero-downtime recommendations", "validation plan"}},
+	{Name: "sbom-vulnerability-management-reviewer", Description: "Review SBOM generation, CVE triage, VEX, exception processes, patch SLAs, and the vulnerability lifecycle.", Domain: "SBOM vulnerability management", Artifacts: []string{"SBOM", "CVE report", "VEX document", "exception process", "patch SLA", "vulnerability ticket"}, Risks: []string{"missing component", "untriaged CVE", "invalid VEX claim", "expired exception", "SLA breach", "lifecycle blind spot"}, Signals: []string{"CycloneDX or SPDX file", "scanner output", "reachability note", "fix version", "risk acceptance", "closure evidence"}, Outputs: []string{"SBOM vulnerability review", "CVE triage gap list", "VEX quality findings", "patch SLA report", "lifecycle remediation plan"}},
+	{Name: "developer-experience-reviewer", Description: "Review setup, local development, error messages, Makefiles or scripts, onboarding, tooling consistency, and practicality for teams.", Domain: "developer experience", Artifacts: []string{"setup guide", "local dev script", "Makefile target", "error message", "onboarding doc", "tool version file"}, Risks: []string{"broken setup", "unclear failure", "tool mismatch", "slow feedback loop", "hidden prerequisite", "fragile script"}, Signals: []string{"fresh-clone run", "command output", "developer feedback", "CI parity", "dependency check", "troubleshooting path"}, Outputs: []string{"developer-experience review", "setup friction list", "tooling consistency findings", "onboarding fixes", "feedback-loop recommendations"}},
+	{Name: "resilience-reviewer", Description: "Review timeouts, retries, circuit breakers, failover, backpressure, degraded modes, and resilience behavior.", Domain: "application resilience", Artifacts: []string{"timeout setting", "retry policy", "circuit breaker", "failover design", "backpressure mechanism", "degraded mode"}, Risks: []string{"retry storm", "missing timeout", "failover surprise", "unbounded queue", "no degraded path", "cascading failure"}, Signals: []string{"chaos test", "load-shed metric", "dependency error rate", "fallback log", "SLO impact", "incident history"}, Outputs: []string{"resilience review", "failure-mode findings", "timeout and retry recommendations", "degraded-mode gaps", "resilience test plan"}},
+	{Name: "backup-restore-reviewer", Description: "Review restore tests, RPO/RTO, data integrity, backup protection, recoverability, and disaster recovery.", Domain: "backup and restore", Artifacts: []string{"backup schedule", "restore test", "RPO target", "RTO target", "integrity check", "DR procedure"}, Risks: []string{"untested backup", "corrupt restore", "RPO miss", "RTO miss", "unprotected backup", "DR gap"}, Signals: []string{"restore transcript", "checksum", "retention policy", "immutability setting", "recovery metric", "backup alert"}, Outputs: []string{"backup-restore review", "RPO/RTO evidence table", "data-integrity findings", "backup protection recommendations", "DR remediation plan"}},
+}
+
+func init() {
+	for _, seed := range additionalSkillSeeds {
+		sdlcSkillContent[seed.Name] = generatedAdditionalSkillContent(seed)
+	}
+}
+
+func generatedAdditionalSkillContent(seed additionalSkillSeed) skillContent {
+	artifacts := strings.Join(seed.Artifacts, ", ")
+	risks := strings.Join(seed.Risks, ", ")
+	signals := strings.Join(seed.Signals, ", ")
+	outputs := strings.Join(seed.Outputs, ", ")
+	return skillContent{
+		Purpose: seed.Description + " Treat regulatory, security, and operational references as review and evidence guidance, not legal advice.",
+		When: []string{
+			fmt.Sprintf("%s decisions, controls, or operating practices need independent review.", seed.Domain),
+			fmt.Sprintf("A change affects %s artifacts such as %s.", seed.Domain, artifacts),
+			fmt.Sprintf("The user needs evidence-oriented findings for risks such as %s.", risks),
+			"Audit, security, operations, or platform stakeholders need a concise readiness position.",
+			"Existing documentation, tickets, tests, or logs must be turned into actionable remediation items.",
+		},
+		Operating: []string{
+			fmt.Sprintf("Identify the relevant %s artifacts, owners, systems, environments, and review boundary.", seed.Domain),
+			fmt.Sprintf("Compare the available artifacts against expected signals such as %s.", signals),
+			"Separate confirmed gaps from assumptions, missing evidence, and advisory improvement opportunities.",
+			"Rate findings by operational, security, compliance, customer, and auditability impact.",
+			"Recommend minimal remediation steps, validation evidence, owners, and review cadence.",
+		},
+		ReviewScope: []string{
+			fmt.Sprintf("Primary artifacts: %s.", artifacts),
+			fmt.Sprintf("Risk themes: %s.", risks),
+			fmt.Sprintf("Evidence signals: %s.", signals),
+			"Ownership, approvals, review cadence, exception handling, and residual-risk decisions.",
+			"Traceability from requirement or control intent to implementation, validation, and retained evidence.",
+		},
+		Checklist: []string{
+			fmt.Sprintf("Confirm the review boundary covers the right %s systems, teams, and environments.", seed.Domain),
+			fmt.Sprintf("Inventory and inspect the current %s.", seed.Artifacts[0]),
+			fmt.Sprintf("Check whether %s is current, approved, versioned, and owned.", seed.Artifacts[1]),
+			fmt.Sprintf("Verify that %s has test, ticket, log, or approval support.", seed.Artifacts[2]),
+			fmt.Sprintf("Look for %s and record concrete repository or process evidence.", seed.Risks[0]),
+			fmt.Sprintf("Look for %s and identify affected assets, services, or stakeholders.", seed.Risks[1]),
+			fmt.Sprintf("Look for %s and classify the operational or audit impact.", seed.Risks[2]),
+			fmt.Sprintf("Use %s to validate that the control or practice is operating.", seed.Signals[0]),
+			fmt.Sprintf("Use %s to confirm ownership, timing, and reproducibility.", seed.Signals[1]),
+			fmt.Sprintf("Check exception, risk-acceptance, and expiry handling for %s.", seed.Domain),
+			"Confirm remediation items have owners, due dates, validation steps, and evidence expectations.",
+			"Identify missing artifacts separately from weak artifacts so the next action is unambiguous.",
+			"Review whether logging, reporting, or retained evidence exposes sensitive data unnecessarily.",
+		},
+		DecisionRules: []string{
+			fmt.Sprintf("If %s is missing for a critical service, raise at least a high-severity readiness gap.", seed.Artifacts[0]),
+			fmt.Sprintf("If %s cannot be tied to an owner and approval, treat the outcome as unauditable until corrected.", seed.Signals[1]),
+			fmt.Sprintf("If %s is present but expired or untested, require validation before accepting residual risk.", seed.Artifacts[3]),
+			"If the only support is verbal or chat-only context, request durable ticket, document, log, or test evidence.",
+			"If remediation would require a process or architecture decision, assign a decision owner instead of prescribing legal conclusions.",
+			"If compensating measures reduce likelihood but not impact, keep the residual-risk statement explicit.",
+		},
+		FindingCategories: []string{
+			fmt.Sprintf("Missing or stale %s artifact.", seed.Domain),
+			"Unclear ownership, approval, review cadence, or accountability.",
+			"Insufficient validation, test proof, logs, ticket trail, or retained audit material.",
+			"Unreviewed exception, residual risk, expiry, or compensating measure.",
+			"Policy, architecture, operational, or platform implementation drift.",
+			"Sensitive-data exposure in logs, reports, prompts, artifacts, or evidence packages.",
+		},
+		SeverityGuidance: []string{
+			fmt.Sprintf("Critical: a gap in %s creates immediate outage, data-loss, privilege, regulatory-reporting, or irreversible business risk.", seed.Domain),
+			fmt.Sprintf("High: %s is missing, unowned, untested, or unauditable for a critical service or material change.", seed.Artifacts[0]),
+			fmt.Sprintf("Medium: %s exists but is stale, incomplete, inconsistently enforced, or weakly evidenced.", seed.Artifacts[1]),
+			"Low: wording, metadata, formatting, link freshness, or minor traceability improvements are needed.",
+		},
+		OutputRequirements: []string{
+			fmt.Sprintf("Findings ordered by severity with affected %s artifacts and evidence references.", seed.Domain),
+			fmt.Sprintf("Coverage note for reviewed artifacts: %s.", artifacts),
+			fmt.Sprintf("Risk note covering relevant themes: %s.", risks),
+			fmt.Sprintf("Evidence request list using expected signals: %s.", signals),
+			fmt.Sprintf("Deliverables or updates needed: %s.", outputs),
+			"Residual-risk, assumptions, missing-context, and validation-gap summary.",
+		},
+		AcceptanceCriteria: []string{
+			fmt.Sprintf("Relevant %s artifacts are identified, current, owned, and versioned where applicable.", seed.Domain),
+			"Each high-impact finding includes evidence, impact, likelihood, owner, and remediation guidance.",
+			"Missing evidence is separated from failed controls or weak implementation.",
+			"Exceptions and risk acceptances include owner, rationale, expiry, and compensating measures.",
+			"Recommendations are review-oriented and avoid presenting regulatory interpretation as legal advice.",
+			"Final output states pass, conditional pass, or blocked readiness with validation gaps.",
+		},
+		AntiPatterns: []string{
+			"Treating a policy title or control name as proof that the practice operates effectively.",
+			"Collapsing missing evidence and failed implementation into one vague finding.",
+			"Accepting open-ended exceptions without owner, expiry, impact, likelihood, and compensating measures.",
+			"Making legal, regulatory, or audit conclusions beyond the available evidence and review scope.",
+			"Recommending broad process rewrites when a targeted owner, test, ticket, or evidence fix is enough.",
+			"Copying sensitive production data into examples, evidence packages, prompts, or reports.",
+		},
+	}
+}
+
 var skillBodies = buildSkillBodies()
 
 func buildSkillBodies() map[string]string {
 	bodies := map[string]string{}
+	for _, seed := range additionalSkillSeeds {
+		sdlcSkillContent[seed.Name] = generatedAdditionalSkillContent(seed)
+	}
 	for _, name := range SDLCSkillNames {
 		bodies[name] = buildSkillBody(name, sdlcSkillContent[name])
 	}

@@ -1,0 +1,21 @@
+name: audit-traceability-maintainer
+version: 1.1.0
+description: Link requirements, controls, implementation, tests, tickets, and evidence into an auditable trace.
+owners:
+    - platform-engineering
+license: MIT
+entrypoint: SKILL.md
+compatible_with:
+    - codex
+    - claude-code
+    - github-copilot
+    - gitlab-duo
+    - opencode
+    - openhands
+    - ollama
+    - cursor
+    - roo-code
+    - kiro
+    - junie
+    - gemini-cli
+    - windsurf

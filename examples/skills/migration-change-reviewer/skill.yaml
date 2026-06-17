@@ -1,0 +1,21 @@
+name: migration-change-reviewer
+version: 1.1.0
+description: Review database migrations, schema changes, breaking changes, rollback ability, backward compatibility, and zero-downtime deployments.
+owners:
+    - platform-engineering
+license: MIT
+entrypoint: SKILL.md
+compatible_with:
+    - codex
+    - claude-code
+    - github-copilot
+    - gitlab-duo
+    - opencode
+    - openhands
+    - ollama
+    - cursor
+    - roo-code
+    - kiro
+    - junie
+    - gemini-cli
+    - windsurf

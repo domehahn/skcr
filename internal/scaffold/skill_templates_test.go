@@ -35,6 +35,10 @@ var expectedSDLCSkills = []string{
 	"universal-skill-creator",
 }
 
+func init() {
+	expectedSDLCSkills = append(expectedSDLCSkills, AdditionalSDLCSkillNames...)
+}
+
 var requiredSections = []string{
 	"## Purpose",
 	"## When to use",
@@ -183,7 +187,15 @@ func TestRequiredDomainTerms(t *testing.T) {
 			"changelog",
 			"release notes",
 		},
-		"universal-skill-creator": {"domain-specific", "changelog", "anti-patterns", "compatibility", "generic copy-paste"},
+		"universal-skill-creator":          {"domain-specific", "changelog", "anti-patterns", "compatibility", "generic copy-paste"},
+		"dora-readiness-reviewer":          {"DORA readiness", "ICT risk framework", "third-party register", "auditability", "legal advice"},
+		"ict-third-party-risk-reviewer":    {"provider inventory", "subcontractor", "exit readiness", "DORA register", "concentration risk"},
+		"pipeline-security-architect":      {"OIDC trust policy", "artifact signing", "protected environment", "runner isolation", "deployment gate"},
+		"software-supply-chain-architect":  {"SLSA", "provenance", "SBOM", "trusted builder", "attestation"},
+		"kubernetes-platform-reviewer":     {"NetworkPolicy", "Pod Security", "admission controller", "cluster-admin", "upgrade readiness"},
+		"llmops-security-reviewer":         {"prompt injection", "tool permission", "RAG source", "guardrail", "red-team eval"},
+		"privacy-data-protection-reviewer": {"personal data", "purpose limitation", "GDPR", "sensitive logging", "deletion"},
+		"secure-code-reviewer":             {"injection", "path traversal", "SSRF", "XSS", "race condition"},
 	}
 	for name, terms := range cases {
 		rendered := renderForTest(t, name)

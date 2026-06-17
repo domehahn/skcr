@@ -1,0 +1,21 @@
+name: backup-restore-reviewer
+version: 1.1.0
+description: Review restore tests, RPO/RTO, data integrity, backup protection, recoverability, and disaster recovery.
+owners:
+    - platform-engineering
+license: MIT
+entrypoint: SKILL.md
+compatible_with:
+    - codex
+    - claude-code
+    - github-copilot
+    - gitlab-duo
+    - opencode
+    - openhands
+    - ollama
+    - cursor
+    - roo-code
+    - kiro
+    - junie
+    - gemini-cli
+    - windsurf
