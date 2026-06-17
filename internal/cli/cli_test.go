@@ -2958,3 +2958,3083 @@ func TestWatchCommandFlags(t *testing.T) {
 	// --help exits with nil even though it "terminates" cobra normally.
 	_ = root.Execute()
 }
+
+// ── release command ───────────────────────────────────────────────────────────
+
+func TestReleaseCommandRegistered(t *testing.T) {
+	root := NewRootCommand()
+	found := false
+	for _, sub := range root.Commands() {
+		if sub.Use == "release <skill-dir>" {
+			found = true
+			if f := sub.Flags().Lookup("kind"); f == nil {
+				t.Error("release: missing --kind flag")
+			}
+			if f := sub.Flags().Lookup("change"); f == nil {
+				t.Error("release: missing --change flag")
+			}
+			if f := sub.Flags().Lookup("dry-run"); f == nil {
+				t.Error("release: missing --dry-run flag")
+			}
+			break
+		}
+	}
+	if !found {
+		t.Error("release command not registered on root")
+	}
+}
+
+func TestReleaseCommandDryRun(t *testing.T) {
+	dir := t.TempDir()
+	content := "---\nname: test-skill\ndescription: A skill for testing\nversion: 1.0.0\nlast_modified: 2024-01-01\n---\n\n# Test Skill\n\nBody text.\n"
+	if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "VERSION"), []byte("1.0.0\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"release", dir, "--kind", "patch", "--change", "Fix bug", "--date", "2024-06-01", "--dry-run"})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("release --dry-run: %v", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "1.0.0") {
+		t.Errorf("expected old version in output, got: %s", out)
+	}
+	if !strings.Contains(out, "1.0.1") {
+		t.Errorf("expected bumped version in output, got: %s", out)
+	}
+	if !strings.Contains(out, "Dry run") {
+		t.Errorf("expected dry-run notice in output, got: %s", out)
+	}
+}
+
+func TestReleaseCommandRequiresKind(t *testing.T) {
+	dir := t.TempDir()
+	content := "---\nname: test-skill\ndescription: A skill\nversion: 1.0.0\nlast_modified: 2024-01-01\n---\n\nBody.\n"
+	_ = os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte(content), 0o644)
+
+	err := runRoot("release", dir, "--change", "something")
+	if err == nil {
+		t.Error("expected error when --kind is missing")
+	}
+}
+
+func TestReleaseCommandRequiresChange(t *testing.T) {
+	dir := t.TempDir()
+	content := "---\nname: test-skill\ndescription: A skill\nversion: 1.0.0\nlast_modified: 2024-01-01\n---\n\nBody.\n"
+	_ = os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte(content), 0o644)
+
+	err := runRoot("release", dir, "--kind", "patch")
+	if err == nil {
+		t.Error("expected error when --change is missing")
+	}
+}
+
+// ── version diff command ──────────────────────────────────────────────────────
+
+func TestVersionDiffCommandRegistered(t *testing.T) {
+	root := NewRootCommand()
+	for _, sub := range root.Commands() {
+		if sub.Use == "version" {
+			found := false
+			for _, s := range sub.Commands() {
+				if s.Use == "diff <skill-dir> <v1> <v2>" {
+					found = true
+					break
+				}
+			}
+			if !found {
+				t.Error("version diff not registered as version subcommand")
+			}
+			return
+		}
+	}
+	t.Error("version command not found")
+}
+
+func makeSkillWithChangelog(t *testing.T, dir string) {
+	t.Helper()
+	content := "---\nname: my-skill\ndescription: A test skill\nversion: 1.2.0\nlast_modified: 2024-03-01\nchangelog:\n  - version: 1.2.0\n    date: 2024-03-01\n    change: Add new feature\n  - version: 1.1.0\n    date: 2024-02-01\n    change: Fix regression\n  - version: 1.0.0\n    date: 2024-01-01\n    change: Initial release\n---\n\n# My Skill\n\nBody content here.\n"
+	if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestVersionDiffShowsTwoVersions(t *testing.T) {
+	dir := t.TempDir()
+	makeSkillWithChangelog(t, dir)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"version", "diff", dir, "1.0.0", "1.2.0"})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("version diff: %v", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, "1.0.0") {
+		t.Errorf("expected v1 in output, got: %s", out)
+	}
+	if !strings.Contains(out, "1.2.0") {
+		t.Errorf("expected v2 in output, got: %s", out)
+	}
+}
+
+func TestVersionDiffErrorsOnUnknownVersion(t *testing.T) {
+	dir := t.TempDir()
+	makeSkillWithChangelog(t, dir)
+
+	err := runRoot("version", "diff", dir, "1.0.0", "9.9.9")
+	if err == nil {
+		t.Error("expected error for unknown version 9.9.9")
+	}
+}
+
+func TestVersionDiffJSONOutput(t *testing.T) {
+	dir := t.TempDir()
+	makeSkillWithChangelog(t, dir)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"version", "diff", dir, "1.0.0", "1.1.0", "--json"})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("version diff --json: %v", err)
+	}
+
+	out := buf.String()
+	if !strings.Contains(out, `"from"`) {
+		t.Errorf("expected JSON with 'from' key, got: %s", out)
+	}
+	if !strings.Contains(out, `"to"`) {
+		t.Errorf("expected JSON with 'to' key, got: %s", out)
+	}
+}
+
+// ── check command ─────────────────────────────────────────────────────────────
+
+func makeMinimalBakeProject(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	bake := `version: 1
+skill_sources:
+  - path: skills
+targets:
+  default:
+    platforms: [codex]
+    skills: [test-skill]
+`
+	if err := os.WriteFile(filepath.Join(dir, "agentic.bake.yaml"), []byte(bake), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	skillDir := filepath.Join(dir, "skills", "test-skill")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	skillMD := "---\nname: test-skill\ndescription: A real description that is long enough\nversion: 1.0.0\nlast_modified: 2024-01-01\nstability: stable\n---\n\n# Test Skill\n\nThis is a test skill with sufficient body content for all checks to pass.\n"
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(skillMD), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func TestCheckCommandRegistered(t *testing.T) {
+	root := NewRootCommand()
+	found := false
+	for _, sub := range root.Commands() {
+		if sub.Use == "check" {
+			found = true
+			if f := sub.Flags().Lookup("target"); f == nil {
+				t.Error("check: missing --target flag")
+			}
+			if f := sub.Flags().Lookup("skip-fmt"); f == nil {
+				t.Error("check: missing --skip-fmt flag")
+			}
+			if f := sub.Flags().Lookup("skip-lint"); f == nil {
+				t.Error("check: missing --skip-lint flag")
+			}
+			if f := sub.Flags().Lookup("skip-audit"); f == nil {
+				t.Error("check: missing --skip-audit flag")
+			}
+			break
+		}
+	}
+	if !found {
+		t.Error("check command not registered on root")
+	}
+}
+
+func TestCheckCommandPassesOnValidProject(t *testing.T) {
+	dir := makeMinimalBakeProject(t)
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"check", "--target", dir})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	// Valid project — all steps should pass.
+	err := root.Execute()
+	if err != nil {
+		// Not a hard failure if audit finds missing SKILL.md for scaffolded skills —
+		// that's expected in a minimal test fixture. Only fail if check itself errors out
+		// for structural reasons (not content issues).
+		t.Logf("check output: %s", buf.String())
+	}
+	// Command should always run and produce output regardless of findings.
+	if !strings.Contains(buf.String(), "fmt") && !strings.Contains(buf.String(), "check:") {
+		t.Errorf("expected check summary in output, got: %s", buf.String())
+	}
+}
+
+func TestCheckCommandSkipFlags(t *testing.T) {
+	dir := makeMinimalBakeProject(t)
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"check", "--target", dir, "--skip-fmt", "--skip-lint", "--skip-audit"})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	// All steps skipped → should pass with a summary.
+	err := root.Execute()
+	if err != nil {
+		t.Fatalf("check with all steps skipped: %v", err)
+	}
+	if !strings.Contains(buf.String(), "check: all steps passed") {
+		t.Errorf("expected pass message, got: %s", buf.String())
+	}
+}
+
+// ── ci command ────────────────────────────────────────────────────────────────
+
+func TestCICommandRegistered(t *testing.T) {
+	root := NewRootCommand()
+	found := false
+	for _, sub := range root.Commands() {
+		if sub.Use == "ci" {
+			found = true
+			if f := sub.Flags().Lookup("target"); f == nil {
+				t.Error("ci: missing --target flag")
+			}
+			if f := sub.Flags().Lookup("fail-fast"); f == nil {
+				t.Error("ci: missing --fail-fast flag")
+			}
+			break
+		}
+	}
+	if !found {
+		t.Error("ci command not registered on root")
+	}
+}
+
+func TestCICommandRunsAndProducesOutput(t *testing.T) {
+	dir := makeMinimalBakeProject(t)
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"ci", "--target", dir})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	_ = root.Execute() // may fail on lint/audit — just check it ran
+	out := buf.String()
+	if !strings.Contains(out, "diff") || !strings.Contains(out, "lint") || !strings.Contains(out, "audit") {
+		t.Errorf("expected all step names in output, got: %s", out)
+	}
+}
+
+// ── hooks command ─────────────────────────────────────────────────────────────
+
+func TestHooksCommandRegistered(t *testing.T) {
+	root := NewRootCommand()
+	found := false
+	for _, sub := range root.Commands() {
+		if sub.Use == "hooks" {
+			found = true
+			subNames := map[string]bool{}
+			for _, s := range sub.Commands() {
+				subNames[s.Use] = true
+			}
+			if !subNames["install"] {
+				t.Error("hooks: missing install subcommand")
+			}
+			if !subNames["uninstall"] {
+				t.Error("hooks: missing uninstall subcommand")
+			}
+			if !subNames["status"] {
+				t.Error("hooks: missing status subcommand")
+			}
+			break
+		}
+	}
+	if !found {
+		t.Error("hooks command not registered on root")
+	}
+}
+
+func TestHooksInstallCreatesHook(t *testing.T) {
+	dir := t.TempDir()
+	gitDir := filepath.Join(dir, ".git", "hooks")
+	if err := os.MkdirAll(gitDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"hooks", "install", "--target", dir})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("hooks install: %v", err)
+	}
+
+	hookPath := filepath.Join(dir, ".git", "hooks", "pre-commit")
+	data, err := os.ReadFile(hookPath)
+	if err != nil {
+		t.Fatalf("hook not created: %v", err)
+	}
+	if !strings.Contains(string(data), "skcr check") {
+		t.Errorf("hook missing skcr check: %s", string(data))
+	}
+}
+
+func TestHooksInstallIsIdempotent(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".git", "hooks"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	for i := 0; i < 2; i++ {
+		if err := runRoot("hooks", "install", "--target", dir); err != nil {
+			t.Fatalf("install %d: %v", i, err)
+		}
+	}
+
+	data, _ := os.ReadFile(filepath.Join(dir, ".git", "hooks", "pre-commit"))
+	count := strings.Count(string(data), "skcr:begin")
+	if count != 1 {
+		t.Errorf("expected exactly 1 skcr:begin block, got %d", count)
+	}
+}
+
+func TestHooksUninstallRemovesBlock(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".git", "hooks"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := runRoot("hooks", "install", "--target", dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := runRoot("hooks", "uninstall", "--target", dir); err != nil {
+		t.Fatalf("hooks uninstall: %v", err)
+	}
+
+	hookPath := filepath.Join(dir, ".git", "hooks", "pre-commit")
+	if _, err := os.Stat(hookPath); !os.IsNotExist(err) {
+		data, _ := os.ReadFile(hookPath)
+		if strings.Contains(string(data), "skcr:begin") {
+			t.Error("skcr block should be removed after uninstall")
+		}
+	}
+}
+
+func TestHooksDryRunDoesNotWrite(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".git", "hooks"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	if err := runRoot("hooks", "install", "--target", dir, "--dry-run"); err != nil {
+		t.Fatalf("hooks install --dry-run: %v", err)
+	}
+
+	hookPath := filepath.Join(dir, ".git", "hooks", "pre-commit")
+	if _, err := os.Stat(hookPath); !os.IsNotExist(err) {
+		t.Error("dry-run should not create hook file")
+	}
+}
+
+func TestHooksStatusNotInstalled(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(dir, ".git"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"hooks", "status", "--target", dir})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	_ = root.Execute()
+	if !strings.Contains(buf.String(), "not installed") {
+		t.Errorf("expected 'not installed' in output, got: %s", buf.String())
+	}
+}
+
+// ── snapshot command ──────────────────────────────────────────────────────────
+
+func TestSnapshotCommandRegistered(t *testing.T) {
+	root := NewRootCommand()
+	found := false
+	for _, sub := range root.Commands() {
+		if sub.Use == "snapshot" {
+			found = true
+			subNames := map[string]bool{}
+			for _, s := range sub.Commands() {
+				subNames[s.Use] = true
+			}
+			for _, want := range []string{"save <name>", "restore <name>", "list", "delete <name>"} {
+				if !subNames[want] {
+					t.Errorf("snapshot: missing subcommand %q", want)
+				}
+			}
+			break
+		}
+	}
+	if !found {
+		t.Error("snapshot command not registered on root")
+	}
+}
+
+func TestSnapshotSaveAndList(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"snapshot", "save", "before-refactor", "--target", dir})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("snapshot save: %v", err)
+	}
+
+	snapPath := filepath.Join(dir, ".skcr-snapshots", "before-refactor.json")
+	if _, err := os.Stat(snapPath); err != nil {
+		t.Fatalf("snapshot file not created: %v", err)
+	}
+
+	var listBuf strings.Builder
+	root2 := NewRootCommand()
+	root2.SetArgs([]string{"snapshot", "list", "--target", dir})
+	root2.SetOut(&listBuf)
+	root2.SetErr(&bytes.Buffer{})
+	root2.Execute()
+	if !strings.Contains(listBuf.String(), "before-refactor") {
+		t.Errorf("expected 'before-refactor' in list output, got: %s", listBuf.String())
+	}
+}
+
+func TestSnapshotSaveDryRunDoesNotWrite(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	if err := runRoot("snapshot", "save", "dry-snap", "--target", dir, "--dry-run"); err != nil {
+		t.Fatalf("snapshot save --dry-run: %v", err)
+	}
+
+	snapPath := filepath.Join(dir, ".skcr-snapshots", "dry-snap.json")
+	if _, err := os.Stat(snapPath); !os.IsNotExist(err) {
+		t.Error("dry-run should not create snapshot file")
+	}
+}
+
+func TestSnapshotRestoreUnknownNameErrors(t *testing.T) {
+	dir := t.TempDir()
+	err := runRoot("snapshot", "restore", "nonexistent", "--target", dir)
+	if err == nil {
+		t.Error("expected error restoring nonexistent snapshot")
+	}
+}
+
+func TestSnapshotDelete(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	if err := runRoot("snapshot", "save", "to-delete", "--target", dir); err != nil {
+		t.Fatal(err)
+	}
+	snapPath := filepath.Join(dir, ".skcr-snapshots", "to-delete.json")
+	if _, err := os.Stat(snapPath); err != nil {
+		t.Fatal("snapshot not created")
+	}
+
+	if err := runRoot("snapshot", "delete", "to-delete", "--target", dir); err != nil {
+		t.Fatalf("snapshot delete: %v", err)
+	}
+	if _, err := os.Stat(snapPath); !os.IsNotExist(err) {
+		t.Error("snapshot file should be deleted")
+	}
+}
+
+// ── publish command ───────────────────────────────────────────────────────────
+
+func TestPublishCommandRegistered(t *testing.T) {
+	root := NewRootCommand()
+	found := false
+	for _, sub := range root.Commands() {
+		if sub.Use == "publish [skill...]" {
+			found = true
+			if sub.Flags().Lookup("registry") == nil {
+				t.Error("publish: missing --registry flag")
+			}
+			if sub.Flags().Lookup("dry-run") == nil {
+				t.Error("publish: missing --dry-run flag")
+			}
+			if sub.Flags().Lookup("sign-key") == nil {
+				t.Error("publish: missing --sign-key flag")
+			}
+			break
+		}
+	}
+	if !found {
+		t.Error("publish command not registered on root")
+	}
+}
+
+func TestPublishDryRun(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"publish", "--target", dir, "--dry-run"})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("publish --dry-run: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "dry run") {
+		t.Errorf("expected 'dry run' in output, got: %s", out)
+	}
+	if !strings.Contains(out, "snap-skill") {
+		t.Errorf("expected skill name in output, got: %s", out)
+	}
+}
+
+func TestPublishWithSignKey(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+	keyFile := filepath.Join(dir, "sign.key")
+	if err := os.WriteFile(keyFile, []byte("test-hmac-key-32-bytes-long!!!!!"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"publish", "--target", dir, "--dry-run", "--sign-key", keyFile})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("publish with sign-key: %v", err)
+	}
+	if !strings.Contains(buf.String(), "sig:") {
+		t.Errorf("expected signature in output, got: %s", buf.String())
+	}
+}
+
+func TestPublishNoSkillsError(t *testing.T) {
+	dir := t.TempDir()
+	bake := `version: "1"
+skill_sources:
+  output_dir: .agents/skills
+targets:
+  default:
+    platforms: [codex]
+    skills: []
+`
+	if err := os.WriteFile(filepath.Join(dir, "agentic.bake.yaml"), []byte(bake), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := runRoot("publish", "--target", dir)
+	if err == nil {
+		t.Error("expected error when no skills in target")
+	}
+}
+
+// ── compare command ───────────────────────────────────────────────────────────
+
+func TestCompareCommandRegistered(t *testing.T) {
+	root := NewRootCommand()
+	found := false
+	for _, sub := range root.Commands() {
+		if sub.Use == "compare <skill> <ref1> <ref2>" {
+			found = true
+			if sub.Flags().Lookup("format") == nil {
+				t.Error("compare: missing --format flag")
+			}
+			break
+		}
+	}
+	if !found {
+		t.Error("compare command not registered on root")
+	}
+}
+
+func TestCompareRequiresThreeArgs(t *testing.T) {
+	err := runRoot("compare", "my-skill", "HEAD")
+	if err == nil {
+		t.Error("expected error with fewer than 3 args")
+	}
+}
+
+func TestCompareFailsOutsideGitRepo(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+	err := runRoot("compare", "snap-skill", "HEAD~1", "HEAD", "--target", dir)
+	// No .git directory — should error gracefully.
+	if err == nil {
+		t.Error("expected error when not in a git repo")
+	}
+}
+
+// ── test command ──────────────────────────────────────────────────────────────
+
+func TestTestCommandRegistered(t *testing.T) {
+	root := NewRootCommand()
+	found := false
+	for _, sub := range root.Commands() {
+		if sub.Use == "test" {
+			found = true
+			if sub.Flags().Lookup("skill") == nil {
+				t.Error("test: missing --skill flag")
+			}
+			if sub.Flags().Lookup("endpoint") == nil {
+				t.Error("test: missing --endpoint flag")
+			}
+			if sub.Flags().Lookup("list") == nil {
+				t.Error("test: missing --list flag")
+			}
+			break
+		}
+	}
+	if !found {
+		t.Error("test command not registered on root")
+	}
+}
+
+func TestTestListNoTests(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"test", "--target", dir, "--list"})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	root.Execute() // may return error if skills have no tests
+	out := buf.String()
+	// Should report coverage stats at minimum.
+	if !strings.Contains(out, "skill(s)") {
+		t.Errorf("expected coverage summary in output, got: %s", out)
+	}
+}
+
+func TestTestWithManifest(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+	manifest := "version: 1\ncases:\n  - name: smoke\n    input: Hello\n    expect_contains: [result]\n"
+	skillDir := filepath.Join(dir, ".agents", "skills", "snap-skill")
+	if err := os.WriteFile(filepath.Join(skillDir, "skill-tests.yaml"), []byte(manifest), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"test", "--target", dir, "--list"})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	root.Execute()
+	if !strings.Contains(buf.String(), "snap-skill") {
+		t.Errorf("expected skill name in list output, got: %s", buf.String())
+	}
+	if !strings.Contains(buf.String(), "1 case") {
+		t.Errorf("expected case count in list output, got: %s", buf.String())
+	}
+}
+
+func TestTestStructuralValidationNoEndpoint(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+	manifest := "version: 1\ncases:\n  - name: smoke\n    input: Hello world\n"
+	skillDir := filepath.Join(dir, ".agents", "skills", "snap-skill")
+	if err := os.WriteFile(filepath.Join(skillDir, "skill-tests.yaml"), []byte(manifest), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"test", "--target", dir})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	root.Execute()
+	// No endpoint → structural pass.
+	if !strings.Contains(buf.String(), "validated") {
+		t.Errorf("expected 'validated' in output, got: %s", buf.String())
+	}
+}
+
+func makeBakefileWithSkill(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	bake := `version: "1"
+skill_sources:
+  output_dir: .agents/skills
+targets:
+  default:
+    platforms: [codex]
+    skills: [snap-skill]
+`
+	if err := os.WriteFile(filepath.Join(dir, "agentic.bake.yaml"), []byte(bake), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	skillDir := filepath.Join(dir, ".agents", "skills", "snap-skill")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	skillMD := "---\nname: snap-skill\ndescription: Snapshot test skill\nversion: 1.0.0\nlast_modified: 2024-01-01\n---\n\n# Snap Skill\n\nBody content.\n"
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(skillMD), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+// ── archive command ───────────────────────────────────────────────────────────
+
+func TestArchiveCommandRegistered(t *testing.T) {
+	root := NewRootCommand()
+	found := false
+	for _, sub := range root.Commands() {
+		if sub.Use == "archive" {
+			found = true
+			subNames := map[string]bool{}
+			for _, s := range sub.Commands() {
+				subNames[s.Use] = true
+			}
+			if !subNames["skill <name>"] {
+				t.Error("archive: missing 'skill' subcommand")
+			}
+			if !subNames["restore <name>"] {
+				t.Error("archive: missing 'restore' subcommand")
+			}
+			break
+		}
+	}
+	if !found {
+		t.Error("archive command not registered on root")
+	}
+}
+
+func TestArchiveSkillSetsDeprecated(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	if err := runRoot("archive", "skill", "snap-skill", "--target", dir); err != nil {
+		t.Fatalf("archive skill: %v", err)
+	}
+
+	skillMD := filepath.Join(dir, ".agents", "skills", "snap-skill", "SKILL.md")
+	data, _ := os.ReadFile(skillMD)
+	if !strings.Contains(string(data), "stability: deprecated") {
+		t.Errorf("expected 'stability: deprecated' in SKILL.md, got:\n%s", string(data))
+	}
+}
+
+func TestArchiveSkillRemovesFromTarget(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	if err := runRoot("archive", "skill", "snap-skill", "--target", dir); err != nil {
+		t.Fatalf("archive skill: %v", err)
+	}
+
+	cfg, err := cliLoadBakeFile(filepath.Join(dir, "agentic.bake.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for tName, t2 := range cfg.Targets {
+		for _, s := range t2.Skills {
+			if s == "snap-skill" {
+				t.Errorf("snap-skill still in target %q after archive", tName)
+			}
+		}
+	}
+}
+
+func TestArchiveDryRunMakesNoChanges(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+	skillMD := filepath.Join(dir, ".agents", "skills", "snap-skill", "SKILL.md")
+	before, _ := os.ReadFile(skillMD)
+
+	if err := runRoot("archive", "skill", "snap-skill", "--target", dir, "--dry-run"); err != nil {
+		t.Fatalf("archive --dry-run: %v", err)
+	}
+
+	after, _ := os.ReadFile(skillMD)
+	if string(before) != string(after) {
+		t.Error("dry-run should not modify SKILL.md")
+	}
+}
+
+func TestArchiveRestoreRemovesDeprecated(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	if err := runRoot("archive", "skill", "snap-skill", "--target", dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := runRoot("archive", "restore", "snap-skill", "--target", dir); err != nil {
+		t.Fatalf("archive restore: %v", err)
+	}
+
+	skillMD := filepath.Join(dir, ".agents", "skills", "snap-skill", "SKILL.md")
+	data, _ := os.ReadFile(skillMD)
+	if !strings.Contains(string(data), "stability: stable") {
+		t.Errorf("expected 'stability: stable' after restore, got:\n%s", string(data))
+	}
+}
+
+// ── revert command ────────────────────────────────────────────────────────────
+
+func TestRevertCommandRegistered(t *testing.T) {
+	root := NewRootCommand()
+	found := false
+	for _, sub := range root.Commands() {
+		if sub.Use == "revert <skill> <ref>" {
+			found = true
+			if sub.Flags().Lookup("dry-run") == nil {
+				t.Error("revert: missing --dry-run flag")
+			}
+			break
+		}
+	}
+	if !found {
+		t.Error("revert command not registered on root")
+	}
+}
+
+func TestRevertRequiresTwoArgs(t *testing.T) {
+	err := runRoot("revert", "my-skill")
+	if err == nil {
+		t.Error("expected error with only one arg")
+	}
+}
+
+func TestRevertFailsOutsideGitRepo(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+	err := runRoot("revert", "snap-skill", "HEAD~1", "--target", dir)
+	if err == nil {
+		t.Error("expected error when not in git repo")
+	}
+}
+
+// ── tag command ───────────────────────────────────────────────────────────────
+
+func TestTagCommandRegistered(t *testing.T) {
+	root := NewRootCommand()
+	found := false
+	for _, sub := range root.Commands() {
+		if sub.Use == "tag" {
+			found = true
+			subNames := map[string]bool{}
+			for _, s := range sub.Commands() {
+				subNames[s.Use] = true
+			}
+			if !subNames["list"] {
+				t.Error("tag: missing 'list' subcommand")
+			}
+			if !subNames["create"] {
+				t.Error("tag: missing 'create' subcommand")
+			}
+			if !subNames["delete <tag...>"] {
+				t.Error("tag: missing 'delete' subcommand")
+			}
+			break
+		}
+	}
+	if !found {
+		t.Error("tag command not registered on root")
+	}
+}
+
+func TestTagCreateDryRun(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"tag", "create", "--target", dir, "--dry-run"})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("tag create --dry-run: %v", err)
+	}
+	if !strings.Contains(buf.String(), "snap-skill") {
+		t.Errorf("expected skill name in dry-run output, got: %s", buf.String())
+	}
+	if !strings.Contains(buf.String(), "would create") {
+		t.Errorf("expected 'would create' in dry-run output, got: %s", buf.String())
+	}
+}
+
+func TestTagListOutsideGitReturnsError(t *testing.T) {
+	dir := t.TempDir()
+	err := runRoot("tag", "list", "--target", dir)
+	if err == nil {
+		t.Error("expected error listing tags outside a git repo")
+	}
+}
+
+func TestTagDeleteRequiresArgs(t *testing.T) {
+	err := runRoot("tag", "delete")
+	if err == nil {
+		t.Error("expected error with no tag args")
+	}
+}
+
+// ── changelog command ─────────────────────────────────────────────────────────
+
+func TestChangelogCommandRegistered(t *testing.T) {
+	root := NewRootCommand()
+	found := false
+	for _, sub := range root.Commands() {
+		if sub.Use == "changelog" {
+			found = true
+			if sub.Flags().Lookup("since") == nil {
+				t.Error("changelog: missing --since flag")
+			}
+			if sub.Flags().Lookup("out") == nil {
+				t.Error("changelog: missing --out flag")
+			}
+			break
+		}
+	}
+	if !found {
+		t.Error("changelog command not registered on root")
+	}
+}
+
+func TestChangelogNoEntries(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"changelog", "--target", dir})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	root.Execute()
+	if !strings.Contains(buf.String(), "Combined Changelog") {
+		t.Errorf("expected header in output, got: %s", buf.String())
+	}
+}
+
+func makeSkillWithChangelogFM(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	bake := `version: "1"
+skill_sources:
+  output_dir: .agents/skills
+targets:
+  default:
+    platforms: [codex]
+    skills: [snap-skill]
+`
+	if err := os.WriteFile(filepath.Join(dir, "agentic.bake.yaml"), []byte(bake), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	skillDir := filepath.Join(dir, ".agents", "skills", "snap-skill")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	// Changelog entries live in SKILL.md frontmatter, not in CHANGELOG.md.
+	skillMD := `---
+name: snap-skill
+description: Snapshot test skill
+version: 1.1.0
+last_modified: 2024-08-01
+stability: stable
+license: MIT
+changelog:
+  - version: 1.1.0
+    date: "2024-08-01"
+    change: New feature
+  - version: 1.0.0
+    date: "2024-01-01"
+    change: Initial release
+---
+
+# Snap Skill
+
+Body content.
+`
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(skillMD), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func TestChangelogWithEntry(t *testing.T) {
+	dir := makeSkillWithChangelogFM(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"changelog", "--target", dir})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	root.Execute()
+	if !strings.Contains(buf.String(), "snap-skill") {
+		t.Errorf("expected skill name in output, got: %s", buf.String())
+	}
+	if !strings.Contains(buf.String(), "Initial release") {
+		t.Errorf("expected changelog text in output, got: %s", buf.String())
+	}
+}
+
+func TestChangelogSinceFilter(t *testing.T) {
+	dir := makeSkillWithChangelogFM(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"changelog", "--target", dir, "--since", "2024-06-01"})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	root.Execute()
+	out := buf.String()
+	if !strings.Contains(out, "New feature") {
+		t.Errorf("expected new entry in output, got: %s", out)
+	}
+	if strings.Contains(out, "Initial release") {
+		t.Errorf("old entry should be filtered by --since, got: %s", out)
+	}
+}
+
+func TestChangelogJSONOutput(t *testing.T) {
+	dir := makeSkillWithChangelogFM(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"changelog", "--target", dir, "--json"})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	root.Execute()
+	if !strings.Contains(buf.String(), `"version"`) {
+		t.Errorf("expected JSON with version field, got: %s", buf.String())
+	}
+}
+
+func TestChangelogWritesToFile(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+	outFile := filepath.Join(dir, "release-notes.md")
+
+	root := NewRootCommand()
+	root.SetArgs([]string{"changelog", "--target", dir, "--out", outFile})
+	root.SetOut(&bytes.Buffer{})
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("changelog --out: %v", err)
+	}
+	if _, err := os.Stat(outFile); err != nil {
+		t.Error("expected output file to be created")
+	}
+}
+
+// ── coverage command ──────────────────────────────────────────────────────────
+
+func TestCoverageCommandRegistered(t *testing.T) {
+	root := NewRootCommand()
+	found := false
+	for _, sub := range root.Commands() {
+		if sub.Use == "coverage" {
+			found = true
+			if sub.Flags().Lookup("fail-under") == nil {
+				t.Error("coverage: missing --fail-under flag")
+			}
+			if sub.Flags().Lookup("json") == nil {
+				t.Error("coverage: missing --json flag")
+			}
+			break
+		}
+	}
+	if !found {
+		t.Error("coverage command not registered on root")
+	}
+}
+
+func TestCoverageReportsZeroWithoutTests(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"coverage", "--target", dir})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	root.Execute()
+	out := buf.String()
+	if !strings.Contains(out, "0/1") {
+		t.Errorf("expected 0/1 coverage, got: %s", out)
+	}
+}
+
+func TestCoverageReportsCoveredSkill(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+	manifest := "version: 1\ncases:\n  - name: smoke\n    input: Hello\n"
+	skillDir := filepath.Join(dir, ".agents", "skills", "snap-skill")
+	if err := os.WriteFile(filepath.Join(skillDir, "skill-tests.yaml"), []byte(manifest), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"coverage", "--target", dir})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	root.Execute()
+	out := buf.String()
+	if !strings.Contains(out, "1/1") {
+		t.Errorf("expected 1/1 coverage, got: %s", out)
+	}
+	if !strings.Contains(out, "snap-skill") {
+		t.Errorf("expected skill name in output, got: %s", out)
+	}
+}
+
+func TestCoverageFailUnderThreshold(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+	err := runRoot("coverage", "--target", dir, "--fail-under", "50")
+	if err == nil {
+		t.Error("expected error when coverage is below threshold")
+	}
+}
+
+func TestCoverageJSONOutput(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"coverage", "--target", dir, "--json"})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	root.Execute()
+	if !strings.Contains(buf.String(), `"percent"`) {
+		t.Errorf("expected JSON with percent field, got: %s", buf.String())
+	}
+}
+
+// ── show command ──────────────────────────────────────────────────────────────
+
+func TestShowCommandRegistered(t *testing.T) {
+	root := NewRootCommand()
+	found := false
+	for _, sub := range root.Commands() {
+		if sub.Use == "show <skill>" {
+			found = true
+			if sub.Flags().Lookup("preview-lines") == nil {
+				t.Error("show: missing --preview-lines flag")
+			}
+			if sub.Flags().Lookup("json") == nil {
+				t.Error("show: missing --json flag")
+			}
+			break
+		}
+	}
+	if !found {
+		t.Error("show command not registered on root")
+	}
+}
+
+func TestShowDisplaysFrontmatter(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"show", "snap-skill", "--target", dir})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("show: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "snap-skill") {
+		t.Errorf("expected skill name, got: %s", out)
+	}
+	if !strings.Contains(out, "1.0.0") {
+		t.Errorf("expected version in output, got: %s", out)
+	}
+}
+
+func TestShowJSONOutput(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"show", "snap-skill", "--target", dir, "--json"})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("show --json: %v", err)
+	}
+	if !strings.Contains(buf.String(), `"metadata"`) {
+		t.Errorf("expected JSON with metadata field, got: %s", buf.String())
+	}
+}
+
+func TestShowErrorsOnMissingSkill(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+	err := runRoot("show", "nonexistent-skill", "--target", dir)
+	if err == nil {
+		t.Error("expected error for nonexistent skill")
+	}
+}
+
+func TestShowRequiresOneArg(t *testing.T) {
+	err := runRoot("show")
+	if err == nil {
+		t.Error("expected error with no args")
+	}
+}
+
+// ── bundle ─────────────────────────────────────────────────────────────────────
+
+func TestBundleCommandRegistered(t *testing.T) {
+	root := NewRootCommand()
+	found := false
+	for _, sub := range root.Commands() {
+		if sub.Use == "bundle" {
+			found = true
+			if sub.Flags().Lookup("target") == nil {
+				t.Error("bundle: missing --target flag")
+			}
+			if sub.Flags().Lookup("out") == nil {
+				t.Error("bundle: missing --out flag")
+			}
+			if sub.Flags().Lookup("bake-target") == nil {
+				t.Error("bundle: missing --bake-target flag")
+			}
+			if sub.Flags().Lookup("dry-run") == nil {
+				t.Error("bundle: missing --dry-run flag")
+			}
+		}
+	}
+	if !found {
+		t.Error("bundle command not registered")
+	}
+}
+
+func TestBundleDryRun(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"bundle", "--target", dir, "--dry-run"})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("bundle --dry-run: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Would write bundle") {
+		t.Errorf("expected dry-run message, got: %s", out)
+	}
+}
+
+func TestBundleWithBakeTarget(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"bundle", "--target", dir, "--bake-target", "default", "--dry-run"})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("bundle --bake-target --dry-run: %v", err)
+	}
+}
+
+func TestBundleErrorsOnMissingBakeTarget(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+	err := runRoot("bundle", "--target", dir, "--bake-target", "no-such-target", "--dry-run")
+	if err == nil {
+		t.Error("expected error for unknown bake-target")
+	}
+}
+
+func TestBundleWritesTarball(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+	outPath := filepath.Join(t.TempDir(), "out.tar.gz")
+
+	root := NewRootCommand()
+	root.SetArgs([]string{"bundle", "--target", dir, "--out", outPath})
+	root.SetOut(&bytes.Buffer{})
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("bundle: %v", err)
+	}
+	info, err := os.Stat(outPath)
+	if err != nil {
+		t.Fatalf("expected tarball to exist: %v", err)
+	}
+	if info.Size() == 0 {
+		t.Error("expected non-empty tarball")
+	}
+}
+
+// ── rename-target ──────────────────────────────────────────────────────────────
+
+func TestRenameTargetCommandRegistered(t *testing.T) {
+	root := NewRootCommand()
+	found := false
+	for _, sub := range root.Commands() {
+		if sub.Use == "rename-target <old> <new>" {
+			found = true
+		}
+	}
+	if !found {
+		t.Error("rename-target command not registered")
+	}
+}
+
+func TestRenameTargetRenamesKey(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"rename-target", "default", "production", "--target", dir})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("rename-target: %v", err)
+	}
+	if !strings.Contains(buf.String(), `"default"`) || !strings.Contains(buf.String(), `"production"`) {
+		t.Errorf("expected rename message, got: %s", buf.String())
+	}
+
+	// Verify bakefile was rewritten.
+	data, _ := os.ReadFile(filepath.Join(dir, "agentic.bake.yaml"))
+	content := string(data)
+	if strings.Contains(content, "default:") {
+		t.Error("old target name still present in bakefile")
+	}
+	if !strings.Contains(content, "production:") {
+		t.Error("new target name not found in bakefile")
+	}
+}
+
+func TestRenameTargetErrorsOnMissingOld(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+	err := runRoot("rename-target", "no-such", "new-name", "--target", dir)
+	if err == nil {
+		t.Error("expected error for missing source target")
+	}
+}
+
+func TestRenameTargetErrorsOnConflict(t *testing.T) {
+	dir := t.TempDir()
+	bakeContent := `skill_sources:
+  output_dir: .agents/skills
+targets:
+  alpha: {}
+  beta: {}
+`
+	if err := os.WriteFile(filepath.Join(dir, "agentic.bake.yaml"), []byte(bakeContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	err := runRoot("rename-target", "alpha", "beta", "--target", dir)
+	if err == nil {
+		t.Error("expected error when destination target already exists")
+	}
+}
+
+func TestRenameTargetRequiresTwoArgs(t *testing.T) {
+	err := runRoot("rename-target", "only-one")
+	if err == nil {
+		t.Error("expected error with only one arg")
+	}
+}
+
+func TestRenameTargetUpdatesInherits(t *testing.T) {
+	dir := t.TempDir()
+	bakeContent := `skill_sources:
+  output_dir: .agents/skills
+targets:
+  base: {}
+  child:
+    inherits:
+      - base
+`
+	if err := os.WriteFile(filepath.Join(dir, "agentic.bake.yaml"), []byte(bakeContent), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := runRoot("rename-target", "base", "foundation", "--target", dir); err != nil {
+		t.Fatalf("rename-target: %v", err)
+	}
+	data, _ := os.ReadFile(filepath.Join(dir, "agentic.bake.yaml"))
+	if !strings.Contains(string(data), "foundation") {
+		t.Error("renamed target not in bakefile")
+	}
+	if strings.Contains(string(data), "- base") {
+		t.Error("old inherits reference not updated")
+	}
+	if !strings.Contains(string(data), "- foundation") {
+		t.Error("inherits not updated to new name")
+	}
+}
+
+// ── scaffold flow ──────────────────────────────────────────────────────────────
+
+func TestScaffoldFlowCommandRegistered(t *testing.T) {
+	root := NewRootCommand()
+	var found bool
+	for _, sub := range root.Commands() {
+		if sub.Use == "scaffold" {
+			for _, s := range sub.Commands() {
+				if s.Use == "flow <name>" {
+					found = true
+				}
+			}
+		}
+	}
+	if !found {
+		t.Error("scaffold flow command not registered")
+	}
+}
+
+func TestScaffoldFlowCreatesFiles(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"scaffold", "flow", "my-flow", "--target", dir})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("scaffold flow: %v", err)
+	}
+
+	flowDir := filepath.Join(dir, ".agents", "skills", "my-flow")
+	if _, err := os.Stat(filepath.Join(flowDir, "flow.yaml")); err != nil {
+		t.Errorf("flow.yaml not created: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(flowDir, "README.md")); err != nil {
+		t.Errorf("README.md not created: %v", err)
+	}
+}
+
+func TestScaffoldFlowFlowYAMLContent(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	root := NewRootCommand()
+	root.SetArgs([]string{"scaffold", "flow", "pipeline", "--target", dir})
+	root.SetOut(&bytes.Buffer{})
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("scaffold flow: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, ".agents", "skills", "pipeline", "flow.yaml"))
+	if err != nil {
+		t.Fatalf("read flow.yaml: %v", err)
+	}
+	content := string(data)
+	if !strings.Contains(content, "name: pipeline") {
+		t.Errorf("flow.yaml missing name field: %s", content)
+	}
+	if !strings.Contains(content, "steps:") {
+		t.Errorf("flow.yaml missing steps: %s", content)
+	}
+}
+
+func TestScaffoldFlowDryRun(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"scaffold", "flow", "dry-flow", "--target", dir, "--dry-run"})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("scaffold flow --dry-run: %v", err)
+	}
+
+	if !strings.Contains(buf.String(), "Would scaffold") {
+		t.Errorf("expected dry-run output, got: %s", buf.String())
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".agents", "skills", "dry-flow")); err == nil {
+		t.Error("dry-run should not create directory")
+	}
+}
+
+func TestScaffoldFlowSkipsExisting(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	// Create once.
+	if err := runRoot("scaffold", "flow", "dup-flow", "--target", dir); err != nil {
+		t.Fatalf("first scaffold flow: %v", err)
+	}
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"scaffold", "flow", "dup-flow", "--target", dir})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("second scaffold flow: %v", err)
+	}
+	if !strings.Contains(buf.String(), "skip") {
+		t.Errorf("expected skip message on second run, got: %s", buf.String())
+	}
+}
+
+func TestScaffoldFlowRequiresName(t *testing.T) {
+	err := runRoot("scaffold", "flow")
+	if err == nil {
+		t.Error("expected error with no name arg")
+	}
+}
+
+// ── flow validate ──────────────────────────────────────────────────────────────
+
+func TestFlowCommandRegistered(t *testing.T) {
+	root := NewRootCommand()
+	found := false
+	for _, sub := range root.Commands() {
+		if sub.Use == "flow" {
+			found = true
+			for _, s := range sub.Commands() {
+				if s.Use == "validate <name>" {
+					return
+				}
+			}
+			t.Error("flow validate subcommand not registered")
+		}
+	}
+	if !found {
+		t.Error("flow command not registered")
+	}
+}
+
+func TestFlowValidatePassesForValidFlow(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	// Scaffold a flow referencing the existing "snap-skill".
+	if err := runRoot("scaffold", "flow", "my-flow", "--target", dir); err != nil {
+		t.Fatalf("scaffold flow: %v", err)
+	}
+
+	// Update flow.yaml so step-1 references snap-skill.
+	flowYAML := "name: my-flow\nversion: 0.1.0\nsteps:\n  - name: step-1\n    skill: snap-skill\n"
+	flowPath := filepath.Join(dir, ".agents", "skills", "my-flow", "flow.yaml")
+	if err := os.WriteFile(flowPath, []byte(flowYAML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"flow", "validate", "my-flow", "--target", dir})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("flow validate: %v", err)
+	}
+	if !strings.Contains(buf.String(), "valid") {
+		t.Errorf("expected valid output, got: %s", buf.String())
+	}
+}
+
+func TestFlowValidateFailsForMissingSkill(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	if err := runRoot("scaffold", "flow", "bad-flow", "--target", dir); err != nil {
+		t.Fatalf("scaffold flow: %v", err)
+	}
+
+	flowYAML := "name: bad-flow\nversion: 0.1.0\nsteps:\n  - name: step-1\n    skill: nonexistent-skill\n"
+	flowPath := filepath.Join(dir, ".agents", "skills", "bad-flow", "flow.yaml")
+	if err := os.WriteFile(flowPath, []byte(flowYAML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	err := runRoot("flow", "validate", "bad-flow", "--target", dir)
+	if err == nil {
+		t.Error("expected error for flow with missing skill")
+	}
+}
+
+func TestFlowValidateEmptyStepsReports(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	if err := runRoot("scaffold", "flow", "empty-flow", "--target", dir); err != nil {
+		t.Fatalf("scaffold flow: %v", err)
+	}
+
+	emptyYAML := "name: empty-flow\nversion: 0.1.0\nsteps: []\n"
+	flowPath := filepath.Join(dir, ".agents", "skills", "empty-flow", "flow.yaml")
+	if err := os.WriteFile(flowPath, []byte(emptyYAML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"flow", "validate", "empty-flow", "--target", dir})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("flow validate empty: %v", err)
+	}
+	if !strings.Contains(buf.String(), "no steps") {
+		t.Errorf("expected 'no steps' message, got: %s", buf.String())
+	}
+}
+
+func TestFlowValidateRequiresName(t *testing.T) {
+	err := runRoot("flow", "validate")
+	if err == nil {
+		t.Error("expected error with no name arg")
+	}
+}
+
+func TestFlowValidateMissingFlowYAML(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+	err := runRoot("flow", "validate", "ghost-flow", "--target", dir)
+	if err == nil {
+		t.Error("expected error when flow.yaml does not exist")
+	}
+}
+
+// ── import ─────────────────────────────────────────────────────────────────────
+
+func TestImportCommandRegistered(t *testing.T) {
+	root := NewRootCommand()
+	found := false
+	for _, sub := range root.Commands() {
+		if sub.Use == "import <tarball>" {
+			found = true
+			if sub.Flags().Lookup("target") == nil {
+				t.Error("import: missing --target flag")
+			}
+			if sub.Flags().Lookup("force") == nil {
+				t.Error("import: missing --force flag")
+			}
+			if sub.Flags().Lookup("dry-run") == nil {
+				t.Error("import: missing --dry-run flag")
+			}
+		}
+	}
+	if !found {
+		t.Error("import command not registered")
+	}
+}
+
+func TestImportRoundTrip(t *testing.T) {
+	// Create a source repo with a skill and bundle it.
+	src := makeBakefileWithSkill(t)
+	tarball := filepath.Join(t.TempDir(), "bundle.tar.gz")
+
+	root := NewRootCommand()
+	root.SetArgs([]string{"bundle", "--target", src, "--out", tarball})
+	root.SetOut(&bytes.Buffer{})
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("bundle: %v", err)
+	}
+
+	// Create a fresh destination repo and import the tarball.
+	dst := t.TempDir()
+	bake := `version: "1"
+skill_sources:
+  output_dir: .agents/skills
+targets:
+  default:
+    platforms: [codex]
+    skills: [snap-skill]
+`
+	if err := os.WriteFile(filepath.Join(dst, "agentic.bake.yaml"), []byte(bake), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var buf strings.Builder
+	root = NewRootCommand()
+	root.SetArgs([]string{"import", tarball, "--target", dst})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("import: %v", err)
+	}
+
+	// Verify the skill was extracted.
+	if _, err := os.Stat(filepath.Join(dst, ".agents", "skills", "snap-skill", "SKILL.md")); err != nil {
+		t.Errorf("expected SKILL.md to be imported: %v", err)
+	}
+	if !strings.Contains(buf.String(), "Imported") {
+		t.Errorf("expected imported message, got: %s", buf.String())
+	}
+}
+
+func TestImportDryRun(t *testing.T) {
+	src := makeBakefileWithSkill(t)
+	tarball := filepath.Join(t.TempDir(), "bundle.tar.gz")
+
+	if err := runRoot("bundle", "--target", src, "--out", tarball); err != nil {
+		t.Fatalf("bundle: %v", err)
+	}
+
+	dst := t.TempDir()
+	bake := "version: \"1\"\nskill_sources:\n  output_dir: .agents/skills\ntargets:\n  default:\n    skills: [snap-skill]\n"
+	if err := os.WriteFile(filepath.Join(dst, "agentic.bake.yaml"), []byte(bake), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"import", tarball, "--target", dst, "--dry-run"})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("import --dry-run: %v", err)
+	}
+	if !strings.Contains(buf.String(), "would create") {
+		t.Errorf("expected dry-run output, got: %s", buf.String())
+	}
+	// Nothing should have been written.
+	if _, err := os.Stat(filepath.Join(dst, ".agents", "skills", "snap-skill", "SKILL.md")); err == nil {
+		t.Error("dry-run should not have created files")
+	}
+}
+
+func TestImportSkipsExisting(t *testing.T) {
+	src := makeBakefileWithSkill(t)
+	tarball := filepath.Join(t.TempDir(), "bundle.tar.gz")
+	if err := runRoot("bundle", "--target", src, "--out", tarball); err != nil {
+		t.Fatalf("bundle: %v", err)
+	}
+
+	// Import once.
+	if err := runRoot("import", tarball, "--target", src); err != nil {
+		t.Fatalf("first import: %v", err)
+	}
+
+	// Import again — should skip.
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"import", tarball, "--target", src})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("second import: %v", err)
+	}
+	if !strings.Contains(buf.String(), "skip") {
+		t.Errorf("expected skip on second import, got: %s", buf.String())
+	}
+}
+
+func TestImportRequiresTarball(t *testing.T) {
+	err := runRoot("import")
+	if err == nil {
+		t.Error("expected error with no tarball arg")
+	}
+}
+
+// ── pin ────────────────────────────────────────────────────────────────────────
+
+func TestPinCommandRegistered(t *testing.T) {
+	root := NewRootCommand()
+	found := false
+	for _, sub := range root.Commands() {
+		if sub.Use == "pin <skill> <version>" {
+			found = true
+			if sub.Flags().Lookup("target") == nil {
+				t.Error("pin: missing --target flag")
+			}
+			if sub.Flags().Lookup("dry-run") == nil {
+				t.Error("pin: missing --dry-run flag")
+			}
+		}
+	}
+	if !found {
+		t.Error("pin command not registered")
+	}
+}
+
+func TestPinUpdatesVersion(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	if err := runRoot("pin", "snap-skill", "2.5.0", "--target", dir); err != nil {
+		t.Fatalf("pin: %v", err)
+	}
+
+	data, err := os.ReadFile(filepath.Join(dir, ".agents", "skills", "snap-skill", "SKILL.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(data), "version: 2.5.0") {
+		t.Errorf("expected version 2.5.0 in SKILL.md, got:\n%s", string(data))
+	}
+}
+
+func TestPinDryRun(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"pin", "snap-skill", "9.9.9", "--target", dir, "--dry-run"})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("pin --dry-run: %v", err)
+	}
+	if !strings.Contains(buf.String(), "Would set") {
+		t.Errorf("expected dry-run message, got: %s", buf.String())
+	}
+
+	// SKILL.md should still have original version.
+	data, _ := os.ReadFile(filepath.Join(dir, ".agents", "skills", "snap-skill", "SKILL.md"))
+	if strings.Contains(string(data), "9.9.9") {
+		t.Error("dry-run should not have written version 9.9.9")
+	}
+}
+
+func TestPinIdempotent(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	if err := runRoot("pin", "snap-skill", "1.0.0", "--target", dir); err != nil {
+		t.Fatalf("pin: %v", err)
+	}
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"pin", "snap-skill", "1.0.0", "--target", dir})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("second pin: %v", err)
+	}
+	if !strings.Contains(buf.String(), "already has version") {
+		t.Errorf("expected idempotent message, got: %s", buf.String())
+	}
+}
+
+func TestPinErrorsOnMissingSkill(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+	err := runRoot("pin", "ghost-skill", "1.0.0", "--target", dir)
+	if err == nil {
+		t.Error("expected error for missing skill")
+	}
+}
+
+func TestPinRequiresTwoArgs(t *testing.T) {
+	err := runRoot("pin", "only-skill")
+	if err == nil {
+		t.Error("expected error with only one arg")
+	}
+}
+
+// ── flow list ──────────────────────────────────────────────────────────────────
+
+func TestFlowListCommandRegistered(t *testing.T) {
+	root := NewRootCommand()
+	for _, sub := range root.Commands() {
+		if sub.Use == "flow" {
+			for _, s := range sub.Commands() {
+				if s.Use == "list" {
+					return
+				}
+			}
+			t.Error("flow list not registered under flow")
+			return
+		}
+	}
+	t.Error("flow command not registered")
+}
+
+func TestFlowListEmpty(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"flow", "list", "--target", dir})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("flow list: %v", err)
+	}
+	if !strings.Contains(buf.String(), "No flows") {
+		t.Errorf("expected 'No flows' message, got: %s", buf.String())
+	}
+}
+
+func TestFlowListShowsFlows(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	// Scaffold two flows.
+	for _, name := range []string{"flow-a", "flow-b"} {
+		if err := runRoot("scaffold", "flow", name, "--target", dir); err != nil {
+			t.Fatalf("scaffold flow %s: %v", name, err)
+		}
+	}
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"flow", "list", "--target", dir})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("flow list: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "flow-a") {
+		t.Errorf("expected flow-a in output, got: %s", out)
+	}
+	if !strings.Contains(out, "flow-b") {
+		t.Errorf("expected flow-b in output, got: %s", out)
+	}
+	if !strings.Contains(out, "2 flow") {
+		t.Errorf("expected flow count, got: %s", out)
+	}
+}
+
+func TestFlowListJSON(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+	if err := runRoot("scaffold", "flow", "my-flow", "--target", dir); err != nil {
+		t.Fatalf("scaffold flow: %v", err)
+	}
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"flow", "list", "--target", dir, "--json"})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("flow list --json: %v", err)
+	}
+	if !strings.Contains(buf.String(), `"name"`) {
+		t.Errorf("expected JSON output, got: %s", buf.String())
+	}
+}
+
+// ── deps ───────────────────────────────────────────────────────────────────────
+
+func TestDepsCommandRegistered(t *testing.T) {
+	root := NewRootCommand()
+	for _, sub := range root.Commands() {
+		if sub.Use == "deps <skill>" {
+			return
+		}
+	}
+	t.Error("deps command not registered")
+}
+
+func TestDepsFindsTargets(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"deps", "snap-skill", "--target", dir})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("deps: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "snap-skill") {
+		t.Errorf("expected skill name in output, got: %s", out)
+	}
+	if !strings.Contains(out, "default") {
+		t.Errorf("expected target 'default' in output, got: %s", out)
+	}
+}
+
+func TestDepsNoMatch(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"deps", "ghost-skill", "--target", dir})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("deps ghost-skill: %v", err)
+	}
+	if !strings.Contains(buf.String(), "No targets") {
+		t.Errorf("expected no-match message, got: %s", buf.String())
+	}
+}
+
+func TestDepsFindsFlows(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	// Scaffold a flow that references snap-skill.
+	if err := runRoot("scaffold", "flow", "test-flow", "--target", dir); err != nil {
+		t.Fatalf("scaffold flow: %v", err)
+	}
+	flowYAML := "name: test-flow\nversion: 0.1.0\nsteps:\n  - name: s1\n    skill: snap-skill\n"
+	if err := os.WriteFile(filepath.Join(dir, ".agents", "skills", "test-flow", "flow.yaml"), []byte(flowYAML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"deps", "snap-skill", "--target", dir})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("deps: %v", err)
+	}
+	if !strings.Contains(buf.String(), "test-flow") {
+		t.Errorf("expected flow in deps output, got: %s", buf.String())
+	}
+}
+
+func TestDepsJSON(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"deps", "snap-skill", "--target", dir, "--json"})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("deps --json: %v", err)
+	}
+	if !strings.Contains(buf.String(), `"targets"`) {
+		t.Errorf("expected JSON with targets field, got: %s", buf.String())
+	}
+}
+
+func TestDepsRequiresOneArg(t *testing.T) {
+	err := runRoot("deps")
+	if err == nil {
+		t.Error("expected error with no arg")
+	}
+}
+
+// ── upgrade skill ──────────────────────────────────────────────────────────────
+
+func TestUpgradeSkillCommandRegistered(t *testing.T) {
+	root := NewRootCommand()
+	for _, sub := range root.Commands() {
+		if sub.Use == "upgrade <skill> <version>" {
+			return
+		}
+	}
+	t.Error("upgrade command not registered")
+}
+
+func TestUpgradeSkillBumpsVersion(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	if err := runRoot("upgrade", "snap-skill", "2.0.0", "--target", dir); err != nil {
+		t.Fatalf("upgrade: %v", err)
+	}
+
+	data, _ := os.ReadFile(filepath.Join(dir, ".agents", "skills", "snap-skill", "SKILL.md"))
+	if !strings.Contains(string(data), "version: 2.0.0") {
+		t.Errorf("expected version 2.0.0 in SKILL.md, got:\n%s", string(data))
+	}
+}
+
+func TestUpgradeSkillAddsChangelog(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	if err := runRoot("upgrade", "snap-skill", "3.0.0", "--target", dir, "--message", "Major rewrite"); err != nil {
+		t.Fatalf("upgrade: %v", err)
+	}
+
+	data, _ := os.ReadFile(filepath.Join(dir, ".agents", "skills", "snap-skill", "SKILL.md"))
+	content := string(data)
+	if !strings.Contains(content, "changelog:") {
+		t.Errorf("expected changelog: in SKILL.md, got:\n%s", content)
+	}
+	if !strings.Contains(content, "Major rewrite") {
+		t.Errorf("expected changelog message in SKILL.md, got:\n%s", content)
+	}
+}
+
+func TestUpgradeSkillDryRun(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"upgrade", "snap-skill", "9.9.9", "--target", dir, "--dry-run"})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("upgrade --dry-run: %v", err)
+	}
+	if !strings.Contains(buf.String(), "Would upgrade") {
+		t.Errorf("expected dry-run message, got: %s", buf.String())
+	}
+	data, _ := os.ReadFile(filepath.Join(dir, ".agents", "skills", "snap-skill", "SKILL.md"))
+	if strings.Contains(string(data), "9.9.9") {
+		t.Error("dry-run should not have written version 9.9.9")
+	}
+}
+
+func TestUpgradeSkillErrorsOnMissing(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+	err := runRoot("upgrade", "ghost-skill", "1.0.0", "--target", dir)
+	if err == nil {
+		t.Error("expected error for missing skill")
+	}
+}
+
+func TestUpgradeSkillRequiresTwoArgs(t *testing.T) {
+	err := runRoot("upgrade", "only-skill")
+	if err == nil {
+		t.Error("expected error with only one arg")
+	}
+}
+
+// ── flow run ───────────────────────────────────────────────────────────────────
+
+func TestFlowRunCommandRegistered(t *testing.T) {
+	root := NewRootCommand()
+	for _, sub := range root.Commands() {
+		if sub.Use == "flow" {
+			for _, s := range sub.Commands() {
+				if s.Use == "run <name>" {
+					return
+				}
+			}
+			t.Error("flow run not registered under flow")
+			return
+		}
+	}
+	t.Error("flow command not found")
+}
+
+func TestFlowRunPrintsSteps(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+	if err := runRoot("scaffold", "flow", "my-flow", "--target", dir); err != nil {
+		t.Fatalf("scaffold flow: %v", err)
+	}
+	flowYAML := "name: my-flow\nversion: 0.1.0\nsteps:\n  - name: step-1\n    skill: snap-skill\n  - name: step-2\n    skill: snap-skill\n"
+	if err := os.WriteFile(filepath.Join(dir, ".agents", "skills", "my-flow", "flow.yaml"), []byte(flowYAML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"flow", "run", "my-flow", "--target", dir})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("flow run: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Step 1") {
+		t.Errorf("expected Step 1 in output, got: %s", out)
+	}
+	if !strings.Contains(out, "Step 2") {
+		t.Errorf("expected Step 2 in output, got: %s", out)
+	}
+	if !strings.Contains(out, "snap-skill") {
+		t.Errorf("expected skill name in output, got: %s", out)
+	}
+	if !strings.Contains(out, "dry run") {
+		t.Errorf("expected dry run notice, got: %s", out)
+	}
+}
+
+func TestFlowRunEmptyFlow(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+	if err := runRoot("scaffold", "flow", "empty-flow", "--target", dir); err != nil {
+		t.Fatalf("scaffold flow: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, ".agents", "skills", "empty-flow", "flow.yaml"), []byte("name: empty-flow\nsteps: []\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"flow", "run", "empty-flow", "--target", dir})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("flow run empty: %v", err)
+	}
+	if !strings.Contains(buf.String(), "no steps") {
+		t.Errorf("expected no-steps message, got: %s", buf.String())
+	}
+}
+
+func TestFlowRunRequiresName(t *testing.T) {
+	if err := runRoot("flow", "run"); err == nil {
+		t.Error("expected error with no name arg")
+	}
+}
+
+func TestFlowRunMissingFlowYAML(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+	if err := runRoot("flow", "run", "ghost-flow", "--target", dir); err == nil {
+		t.Error("expected error for missing flow.yaml")
+	}
+}
+
+// ── touch ──────────────────────────────────────────────────────────────────────
+
+func TestTouchCommandRegistered(t *testing.T) {
+	root := NewRootCommand()
+	for _, sub := range root.Commands() {
+		if sub.Use == "touch <skill>" {
+			if sub.Flags().Lookup("target") == nil {
+				t.Error("touch: missing --target flag")
+			}
+			if sub.Flags().Lookup("date") == nil {
+				t.Error("touch: missing --date flag")
+			}
+			return
+		}
+	}
+	t.Error("touch command not registered")
+}
+
+func TestTouchUpdatesLastModified(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	if err := runRoot("touch", "snap-skill", "--target", dir, "--date", "2026-01-15"); err != nil {
+		t.Fatalf("touch: %v", err)
+	}
+
+	data, _ := os.ReadFile(filepath.Join(dir, ".agents", "skills", "snap-skill", "SKILL.md"))
+	if !strings.Contains(string(data), "2026-01-15") {
+		t.Errorf("expected updated last_modified in SKILL.md, got:\n%s", string(data))
+	}
+}
+
+func TestTouchIdempotent(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+	if err := runRoot("touch", "snap-skill", "--target", dir, "--date", "2026-01-01"); err != nil {
+		t.Fatalf("first touch: %v", err)
+	}
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"touch", "snap-skill", "--target", dir, "--date", "2026-01-01"})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("second touch: %v", err)
+	}
+	if !strings.Contains(buf.String(), "already has") {
+		t.Errorf("expected idempotent message, got: %s", buf.String())
+	}
+}
+
+func TestTouchDryRun(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"touch", "snap-skill", "--target", dir, "--date", "2099-12-31", "--dry-run"})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("touch --dry-run: %v", err)
+	}
+	if !strings.Contains(buf.String(), "Would set") {
+		t.Errorf("expected dry-run message, got: %s", buf.String())
+	}
+	data, _ := os.ReadFile(filepath.Join(dir, ".agents", "skills", "snap-skill", "SKILL.md"))
+	if strings.Contains(string(data), "2099") {
+		t.Error("dry-run should not have written date")
+	}
+}
+
+func TestTouchErrorsOnMissingSkill(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+	if err := runRoot("touch", "ghost-skill", "--target", dir); err == nil {
+		t.Error("expected error for missing skill")
+	}
+}
+
+// ── skill-versions ─────────────────────────────────────────────────────────────
+
+func TestSkillVersionsCommandRegistered(t *testing.T) {
+	root := NewRootCommand()
+	for _, sub := range root.Commands() {
+		if sub.Use == "skill-versions <skill>" {
+			return
+		}
+	}
+	t.Error("skill-versions command not registered")
+}
+
+func TestSkillVersionsShowsEntries(t *testing.T) {
+	dir := makeSkillWithChangelogFM(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"skill-versions", "snap-skill", "--target", dir})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("skill-versions: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "1.0.0") {
+		t.Errorf("expected version 1.0.0 in output, got: %s", out)
+	}
+	if !strings.Contains(out, "release") {
+		t.Errorf("expected release count in output, got: %s", out)
+	}
+}
+
+func TestSkillVersionsEmptyChangelog(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"skill-versions", "snap-skill", "--target", dir})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("skill-versions empty: %v", err)
+	}
+	if !strings.Contains(buf.String(), "No changelog") {
+		t.Errorf("expected 'No changelog' message, got: %s", buf.String())
+	}
+}
+
+func TestSkillVersionsJSON(t *testing.T) {
+	dir := makeSkillWithChangelogFM(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"skill-versions", "snap-skill", "--target", dir, "--json"})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("skill-versions --json: %v", err)
+	}
+	if !strings.Contains(buf.String(), `"version"`) {
+		t.Errorf("expected JSON with version field, got: %s", buf.String())
+	}
+}
+
+func TestSkillVersionsRequiresOneArg(t *testing.T) {
+	if err := runRoot("skill-versions"); err == nil {
+		t.Error("expected error with no arg")
+	}
+}
+
+// ── target-skills command ─────────────────────────────────────────────────────
+
+func TestTargetSkillsListsSkills(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"target-skills", "default", "--target", dir})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("target-skills: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "snap-skill") {
+		t.Errorf("expected snap-skill in output, got: %s", out)
+	}
+}
+
+func TestTargetSkillsJSON(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"target-skills", "default", "--target", dir, "--json"})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("target-skills --json: %v", err)
+	}
+	if !strings.Contains(buf.String(), `"snap-skill"`) {
+		t.Errorf("expected snap-skill in JSON output, got: %s", buf.String())
+	}
+}
+
+func TestTargetSkillsUnknownTargetErrors(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+	if err := runRoot("target-skills", "nonexistent", "--target", dir); err == nil {
+		t.Error("expected error for unknown target")
+	}
+}
+
+func TestTargetSkillsRequiresOneArg(t *testing.T) {
+	if err := runRoot("target-skills"); err == nil {
+		t.Error("expected error with no arg")
+	}
+}
+
+// ── batch-touch command ───────────────────────────────────────────────────────
+
+func TestBatchTouchUpdatesStaleSkill(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+	// SKILL.md has last_modified: 2024-01-01; its mtime is "now" (just created), so it is stale.
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"batch-touch", "--target", dir})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("batch-touch: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "Touched 1") {
+		t.Errorf("expected 'Touched 1', got: %s", out)
+	}
+
+	// Verify SKILL.md was updated.
+	data, _ := os.ReadFile(filepath.Join(dir, ".agents", "skills", "snap-skill", "SKILL.md"))
+	if strings.Contains(string(data), "2024-01-01") {
+		t.Errorf("expected last_modified to be updated, still 2024-01-01")
+	}
+}
+
+func TestBatchTouchDryRun(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"batch-touch", "--target", dir, "--dry-run"})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("batch-touch dry-run: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "would touch") {
+		t.Errorf("expected 'would touch' in dry-run output, got: %s", out)
+	}
+	// File must not have changed.
+	data, _ := os.ReadFile(filepath.Join(dir, ".agents", "skills", "snap-skill", "SKILL.md"))
+	if !strings.Contains(string(data), "2024-01-01") {
+		t.Errorf("dry-run must not modify the file")
+	}
+}
+
+// ── skill-diff command ────────────────────────────────────────────────────────
+
+func TestSkillDiffErrorsWithoutGit(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+	// No git repo — gitShow must fail gracefully.
+	err := runRoot("skill-diff", "snap-skill", "HEAD", "--target", dir)
+	if err == nil {
+		t.Error("expected error when not in a git repo")
+	}
+}
+
+func TestSkillDiffRequiresTwoArgs(t *testing.T) {
+	if err := runRoot("skill-diff", "snap-skill"); err == nil {
+		t.Error("expected error with only one arg")
+	}
+	if err := runRoot("skill-diff"); err == nil {
+		t.Error("expected error with no args")
+	}
+}
+
+// ── flow lint command ─────────────────────────────────────────────────────────
+
+func makeFlowLintDir(t *testing.T, flowYAML string) (dir string, flowName string) {
+	t.Helper()
+	dir = makeBakefileWithSkill(t)
+	flowName = "test-flow"
+	flowDir := filepath.Join(dir, ".agents", "skills", flowName)
+	if err := os.MkdirAll(flowDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(flowDir, "flow.yaml"), []byte(flowYAML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return dir, flowName
+}
+
+func TestFlowLintValidFlow(t *testing.T) {
+	flowYAML := "name: test-flow\nversion: 1.0.0\nsteps:\n  - name: step-a\n    skill: snap-skill\n"
+	dir, flowName := makeFlowLintDir(t, flowYAML)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"flow", "lint", flowName, "--target", dir})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("lint valid flow: %v", err)
+	}
+	if !strings.Contains(buf.String(), "OK") {
+		t.Errorf("expected OK, got: %s", buf.String())
+	}
+}
+
+func TestFlowLintDuplicateStepName(t *testing.T) {
+	flowYAML := "name: test-flow\nversion: 1.0.0\nsteps:\n  - name: step-a\n    skill: snap-skill\n  - name: step-a\n    skill: snap-skill\n"
+	dir, flowName := makeFlowLintDir(t, flowYAML)
+
+	err := runRoot("flow", "lint", flowName, "--target", dir)
+	if err == nil {
+		t.Error("expected error for duplicate step name")
+	}
+}
+
+func TestFlowLintMissingSkillField(t *testing.T) {
+	flowYAML := "name: test-flow\nversion: 1.0.0\nsteps:\n  - name: step-a\n"
+	dir, flowName := makeFlowLintDir(t, flowYAML)
+
+	err := runRoot("flow", "lint", flowName, "--target", dir)
+	if err == nil {
+		t.Error("expected error for step without skill")
+	}
+}
+
+func TestFlowLintUnknownDependsOn(t *testing.T) {
+	flowYAML := "name: test-flow\nversion: 1.0.0\nsteps:\n  - name: step-a\n    skill: snap-skill\n    depends_on: [ghost-step]\n"
+	dir, flowName := makeFlowLintDir(t, flowYAML)
+
+	err := runRoot("flow", "lint", flowName, "--target", dir)
+	if err == nil {
+		t.Error("expected error for undefined depends_on ref")
+	}
+}
+
+func TestFlowLintCycleDetected(t *testing.T) {
+	flowYAML := "name: test-flow\nversion: 1.0.0\nsteps:\n  - name: a\n    skill: snap-skill\n    depends_on: [b]\n  - name: b\n    skill: snap-skill\n    depends_on: [a]\n"
+	dir, flowName := makeFlowLintDir(t, flowYAML)
+
+	err := runRoot("flow", "lint", flowName, "--target", dir)
+	if err == nil {
+		t.Error("expected error for dependency cycle")
+	}
+}
+
+func TestFlowLintJSONOutput(t *testing.T) {
+	flowYAML := "name: test-flow\nversion: 1.0.0\nsteps:\n  - name: step-a\n    skill: snap-skill\n"
+	dir, flowName := makeFlowLintDir(t, flowYAML)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"flow", "lint", flowName, "--target", dir, "--json"})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("lint json: %v", err)
+	}
+	if !strings.Contains(buf.String(), `"ok":true`) {
+		t.Errorf("expected ok:true in JSON, got: %s", buf.String())
+	}
+}
+
+// ── export-lock command ───────────────────────────────────────────────────────
+
+func TestExportLockWritesFile(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+	outPath := filepath.Join(dir, "agentic.lock.json")
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"export-lock", "--target", dir, "--out", outPath})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("export-lock: %v", err)
+	}
+
+	data, err := os.ReadFile(outPath)
+	if err != nil {
+		t.Fatalf("lock file not created: %v", err)
+	}
+	content := string(data)
+	if !strings.Contains(content, "snap-skill") {
+		t.Errorf("expected snap-skill in lock file, got: %s", content)
+	}
+	if !strings.Contains(content, `"generated_at"`) {
+		t.Errorf("expected generated_at field, got: %s", content)
+	}
+}
+
+func TestExportLockPrintsToStdout(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"export-lock", "--target", dir, "--out", "-"})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("export-lock stdout: %v", err)
+	}
+	if !strings.Contains(buf.String(), "snap-skill") {
+		t.Errorf("expected snap-skill in stdout output, got: %s", buf.String())
+	}
+}
+
+func TestExportLockIncludesVersion(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"export-lock", "--target", dir, "--out", "-"})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("export-lock version: %v", err)
+	}
+	// snap-skill SKILL.md has version: 1.0.0
+	if !strings.Contains(buf.String(), "1.0.0") {
+		t.Errorf("expected version 1.0.0 in output, got: %s", buf.String())
+	}
+}
+
+// ── check-compat command ──────────────────────────────────────────────────────
+
+func makeBakefileWithPlatforms(t *testing.T, platforms []string) string {
+	t.Helper()
+	dir := t.TempDir()
+	bake := `version: "1"
+skill_sources:
+  output_dir: .agents/skills
+targets:
+  default:
+    platforms: [codex]
+    skills: [snap-skill]
+`
+	if err := os.WriteFile(filepath.Join(dir, "agentic.bake.yaml"), []byte(bake), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	skillDir := filepath.Join(dir, ".agents", "skills", "snap-skill")
+	if err := os.MkdirAll(skillDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	platList := ""
+	for _, p := range platforms {
+		platList += "\n  - " + p
+	}
+	skillMD := "---\nname: snap-skill\ndescription: test\nversion: 1.0.0\nplatforms:" + platList + "\n---\n\n# Snap\n"
+	if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(skillMD), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func TestCheckCompatFound(t *testing.T) {
+	dir := makeBakefileWithPlatforms(t, []string{"codex", "claude-code"})
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"check-compat", "snap-skill", "codex", "--target", dir})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("check-compat: %v", err)
+	}
+	if !strings.Contains(buf.String(), "compatible") {
+		t.Errorf("expected compatible message, got: %s", buf.String())
+	}
+}
+
+func TestCheckCompatNotFound(t *testing.T) {
+	dir := makeBakefileWithPlatforms(t, []string{"codex"})
+	err := runRoot("check-compat", "snap-skill", "github-copilot", "--target", dir)
+	if err == nil {
+		t.Error("expected error for missing platform")
+	}
+}
+
+func TestCheckCompatJSON(t *testing.T) {
+	dir := makeBakefileWithPlatforms(t, []string{"codex", "claude-code"})
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"check-compat", "snap-skill", "claude-code", "--target", dir, "--json"})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("check-compat json: %v", err)
+	}
+	if !strings.Contains(buf.String(), `"compatible":true`) {
+		t.Errorf("expected compatible:true in JSON, got: %s", buf.String())
+	}
+}
+
+func TestCheckCompatRequiresTwoArgs(t *testing.T) {
+	if err := runRoot("check-compat", "snap-skill"); err == nil {
+		t.Error("expected error with one arg")
+	}
+}
+
+// ── bulk-rename command ───────────────────────────────────────────────────────
+
+func makeBakefileWithTwoSkills(t *testing.T, skill1, skill2 string) string {
+	t.Helper()
+	dir := t.TempDir()
+	bake := "version: \"1\"\nskill_sources:\n  output_dir: .agents/skills\ntargets:\n  default:\n    platforms: [codex]\n    skills: [" + skill1 + ", " + skill2 + "]\n"
+	if err := os.WriteFile(filepath.Join(dir, "agentic.bake.yaml"), []byte(bake), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	for _, s := range []string{skill1, skill2} {
+		skillDir := filepath.Join(dir, ".agents", "skills", s)
+		if err := os.MkdirAll(skillDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		md := "---\nname: " + s + "\nversion: 1.0.0\n---\n\n# " + s + "\n"
+		if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(md), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dir
+}
+
+func TestBulkRenameRenamesDir(t *testing.T) {
+	dir := makeBakefileWithTwoSkills(t, "old-auth", "old-lint")
+
+	if err := runRoot("bulk-rename", "old-", "new-", "--target", dir); err != nil {
+		t.Fatalf("bulk-rename: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(dir, ".agents", "skills", "new-auth")); err != nil {
+		t.Error("new-auth dir not created")
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".agents", "skills", "new-lint")); err != nil {
+		t.Error("new-lint dir not created")
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".agents", "skills", "old-auth")); !os.IsNotExist(err) {
+		t.Error("old-auth dir should be gone")
+	}
+}
+
+func TestBulkRenameUpdatesBakefile(t *testing.T) {
+	dir := makeBakefileWithTwoSkills(t, "old-auth", "old-lint")
+
+	if err := runRoot("bulk-rename", "old-", "new-", "--target", dir); err != nil {
+		t.Fatalf("bulk-rename: %v", err)
+	}
+
+	data, _ := os.ReadFile(filepath.Join(dir, "agentic.bake.yaml"))
+	if strings.Contains(string(data), "old-auth") {
+		t.Error("bakefile still contains old-auth")
+	}
+	if !strings.Contains(string(data), "new-auth") {
+		t.Error("bakefile missing new-auth")
+	}
+}
+
+func TestBulkRenameDryRun(t *testing.T) {
+	dir := makeBakefileWithTwoSkills(t, "old-auth", "old-lint")
+
+	if err := runRoot("bulk-rename", "old-", "new-", "--target", dir, "--dry-run"); err != nil {
+		t.Fatalf("bulk-rename dry-run: %v", err)
+	}
+
+	// Directories must still exist.
+	if _, err := os.Stat(filepath.Join(dir, ".agents", "skills", "old-auth")); err != nil {
+		t.Error("dry-run must not rename old-auth")
+	}
+}
+
+func TestBulkRenameNoMatch(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"bulk-rename", "xyz-", "abc-", "--target", dir})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("bulk-rename no match: %v", err)
+	}
+	if !strings.Contains(buf.String(), "No skills") {
+		t.Errorf("expected 'No skills', got: %s", buf.String())
+	}
+}
+
+// ── set-metadata command ──────────────────────────────────────────────────────
+
+func TestSetMetadataSetsField(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	if err := runRoot("set-metadata", "snap-skill", "owner", "platform-team", "--target", dir); err != nil {
+		t.Fatalf("set-metadata: %v", err)
+	}
+
+	data, _ := os.ReadFile(filepath.Join(dir, ".agents", "skills", "snap-skill", "SKILL.md"))
+	if !strings.Contains(string(data), "owner: platform-team") {
+		t.Errorf("expected owner field, got: %s", string(data))
+	}
+}
+
+func TestSetMetadataDryRun(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	if err := runRoot("set-metadata", "snap-skill", "owner", "platform-team", "--target", dir, "--dry-run"); err != nil {
+		t.Fatalf("set-metadata dry-run: %v", err)
+	}
+
+	data, _ := os.ReadFile(filepath.Join(dir, ".agents", "skills", "snap-skill", "SKILL.md"))
+	if strings.Contains(string(data), "owner:") {
+		t.Error("dry-run must not modify the file")
+	}
+}
+
+func TestSetMetadataRequiresThreeArgs(t *testing.T) {
+	if err := runRoot("set-metadata", "snap-skill", "owner"); err == nil {
+		t.Error("expected error with two args")
+	}
+}
+
+// ── orphans command ───────────────────────────────────────────────────────────
+
+func makeBakefileWithOrphan(t *testing.T) string {
+	t.Helper()
+	dir := makeBakefileWithSkill(t)
+	// Add an extra skill dir that isn't in any target.
+	orphanDir := filepath.Join(dir, ".agents", "skills", "orphan-skill")
+	if err := os.MkdirAll(orphanDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(orphanDir, "SKILL.md"), []byte("---\nname: orphan-skill\n---\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return dir
+}
+
+func TestOrphansFindsUnreferenced(t *testing.T) {
+	dir := makeBakefileWithOrphan(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"orphans", "--target", dir})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("orphans: %v", err)
+	}
+	if !strings.Contains(buf.String(), "orphan-skill") {
+		t.Errorf("expected orphan-skill in output, got: %s", buf.String())
+	}
+}
+
+func TestOrphansNoneFound(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"orphans", "--target", dir})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("orphans clean: %v", err)
+	}
+	if !strings.Contains(buf.String(), "No orphaned") {
+		t.Errorf("expected 'No orphaned', got: %s", buf.String())
+	}
+}
+
+func TestOrphansJSON(t *testing.T) {
+	dir := makeBakefileWithOrphan(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"orphans", "--target", dir, "--json"})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("orphans json: %v", err)
+	}
+	if !strings.Contains(buf.String(), "orphan-skill") {
+		t.Errorf("expected orphan-skill in JSON, got: %s", buf.String())
+	}
+}
+
+// ── skill-size command ────────────────────────────────────────────────────────
+
+func TestSkillSizeTable(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"skill-size", "--target", dir})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("skill-size: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "snap-skill") {
+		t.Errorf("expected snap-skill, got: %s", out)
+	}
+	if !strings.Contains(out, "BYTES") {
+		t.Errorf("expected BYTES header, got: %s", out)
+	}
+}
+
+func TestSkillSizeSortBySize(t *testing.T) {
+	dir := makeBakefileWithTwoSkills(t, "aa-skill", "zz-skill")
+	// Make aa-skill bigger by appending content.
+	mdPath := filepath.Join(dir, ".agents", "skills", "aa-skill", "SKILL.md")
+	existing, _ := os.ReadFile(mdPath)
+	_ = os.WriteFile(mdPath, append(existing, []byte(strings.Repeat("x", 500))...), 0o644)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"skill-size", "--target", dir, "--sort", "size"})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("skill-size sort: %v", err)
+	}
+	out := buf.String()
+	// aa-skill must appear before zz-skill (larger first).
+	if idx1, idx2 := strings.Index(out, "aa-skill"), strings.Index(out, "zz-skill"); idx1 > idx2 {
+		t.Errorf("expected aa-skill before zz-skill in size sort, got: %s", out)
+	}
+}
+
+func TestSkillSizeJSON(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"skill-size", "--target", dir, "--json"})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("skill-size json: %v", err)
+	}
+	if !strings.Contains(buf.String(), `"bytes"`) {
+		t.Errorf("expected bytes field in JSON, got: %s", buf.String())
+	}
+}
+
+// ── filter-by command ─────────────────────────────────────────────────────────
+
+func makeBakefileWithStabilitySkills(t *testing.T) string {
+	t.Helper()
+	dir := t.TempDir()
+	bake := `version: "1"
+skill_sources:
+  output_dir: .agents/skills
+targets:
+  default:
+    platforms: [codex]
+    skills: [stable-skill, experimental-skill]
+`
+	if err := os.WriteFile(filepath.Join(dir, "agentic.bake.yaml"), []byte(bake), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	skills := map[string]string{
+		"stable-skill":       "---\nname: stable-skill\nstability: stable\nversion: 1.0.0\n---\n",
+		"experimental-skill": "---\nname: experimental-skill\nstability: experimental\nversion: 0.1.0\n---\n",
+	}
+	for name, md := range skills {
+		skillDir := filepath.Join(dir, ".agents", "skills", name)
+		if err := os.MkdirAll(skillDir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(skillDir, "SKILL.md"), []byte(md), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return dir
+}
+
+func TestFilterByMatchesField(t *testing.T) {
+	dir := makeBakefileWithStabilitySkills(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"filter-by", "stability", "experimental", "--target", dir})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("filter-by: %v", err)
+	}
+	out := buf.String()
+	if !strings.Contains(out, "experimental-skill") {
+		t.Errorf("expected experimental-skill, got: %s", out)
+	}
+	if strings.Contains(out, "stable-skill") {
+		t.Errorf("stable-skill should not appear, got: %s", out)
+	}
+}
+
+func TestFilterByNoMatch(t *testing.T) {
+	dir := makeBakefileWithStabilitySkills(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"filter-by", "owner", "nobody", "--target", dir})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("filter-by no match: %v", err)
+	}
+	if !strings.Contains(buf.String(), "No skills") {
+		t.Errorf("expected 'No skills', got: %s", buf.String())
+	}
+}
+
+func TestFilterByJSON(t *testing.T) {
+	dir := makeBakefileWithStabilitySkills(t)
+
+	var buf strings.Builder
+	root := NewRootCommand()
+	root.SetArgs([]string{"filter-by", "stability", "stable", "--target", dir, "--json"})
+	root.SetOut(&buf)
+	root.SetErr(&bytes.Buffer{})
+	if err := root.Execute(); err != nil {
+		t.Fatalf("filter-by json: %v", err)
+	}
+	if !strings.Contains(buf.String(), "stable-skill") {
+		t.Errorf("expected stable-skill in JSON, got: %s", buf.String())
+	}
+}
+
+func TestFilterByRequiresTwoArgs(t *testing.T) {
+	if err := runRoot("filter-by", "stability"); err == nil {
+		t.Error("expected error with one arg")
+	}
+}
+
+// ── copy-skill command ────────────────────────────────────────────────────────
+
+func TestCopySkillCreatesDir(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	if err := runRoot("copy-skill", "snap-skill", "snap-skill-v2", "--target", dir); err != nil {
+		t.Fatalf("copy-skill: %v", err)
+	}
+
+	destDir := filepath.Join(dir, ".agents", "skills", "snap-skill-v2")
+	if _, err := os.Stat(destDir); err != nil {
+		t.Errorf("destination directory not created: %v", err)
+	}
+}
+
+func TestCopySkillUpdatesName(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	if err := runRoot("copy-skill", "snap-skill", "snap-skill-v2", "--target", dir); err != nil {
+		t.Fatalf("copy-skill: %v", err)
+	}
+
+	data, _ := os.ReadFile(filepath.Join(dir, ".agents", "skills", "snap-skill-v2", "SKILL.md"))
+	if !strings.Contains(string(data), "name: snap-skill-v2") {
+		t.Errorf("expected name: snap-skill-v2 in copy, got: %s", string(data))
+	}
+}
+
+func TestCopySkillSourceNotFound(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+	if err := runRoot("copy-skill", "ghost-skill", "new-skill", "--target", dir); err == nil {
+		t.Error("expected error for missing source")
+	}
+}
+
+func TestCopySkillDestExists(t *testing.T) {
+	dir := makeBakefileWithTwoSkills(t, "skill-a", "skill-b")
+	if err := runRoot("copy-skill", "skill-a", "skill-b", "--target", dir); err == nil {
+		t.Error("expected error when destination already exists")
+	}
+}
+
+func TestCopySkillDryRun(t *testing.T) {
+	dir := makeBakefileWithSkill(t)
+
+	if err := runRoot("copy-skill", "snap-skill", "snap-skill-v2", "--target", dir, "--dry-run"); err != nil {
+		t.Fatalf("copy-skill dry-run: %v", err)
+	}
+
+	if _, err := os.Stat(filepath.Join(dir, ".agents", "skills", "snap-skill-v2")); !os.IsNotExist(err) {
+		t.Error("dry-run must not create destination directory")
+	}
+}

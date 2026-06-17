@@ -22,6 +22,7 @@ func newScaffoldCommand() *cobra.Command {
 	}
 	cmd.AddCommand(newScaffoldSkillCommand())
 	cmd.AddCommand(newScaffoldSkillsCommand())
+	cmd.AddCommand(newScaffoldFlowCommand())
 	return cmd
 }
 

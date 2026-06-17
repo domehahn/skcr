@@ -261,10 +261,14 @@ func newAddSkillCommand() *cobra.Command {
 }
 
 // copyDir recursively copies src into dst, creating dst and all subdirectories.
+// Symlinks are skipped to prevent escaping the source directory.
 func copyDir(src, dst string) error {
 	return filepath.WalkDir(src, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
+		}
+		if d.Type()&fs.ModeSymlink != 0 {
+			return nil
 		}
 		rel, err := filepath.Rel(src, path)
 		if err != nil {

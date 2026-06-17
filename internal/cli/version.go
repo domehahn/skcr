@@ -30,6 +30,7 @@ func newVersionCommand() *cobra.Command {
 	cmd.AddCommand(newVersionReleaseBundleCommand())
 	cmd.AddCommand(newVersionSyncCommand())
 	cmd.AddCommand(newVersionTagCommand())
+	cmd.AddCommand(newVersionDiffCommand())
 	return cmd
 }
 
@@ -590,6 +591,114 @@ func newVersionReleaseBundleCommand() *cobra.Command {
 	}
 	cmd.Flags().StringVar(&since, "since", "", "Only include changelog entries on or after this YYYY-MM-DD date")
 	cmd.Flags().BoolVar(&changed, "changed", false, "Include git changed-skill report when available")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "Print JSON output")
+	return cmd
+}
+
+func newVersionDiffCommand() *cobra.Command {
+	var jsonOut bool
+
+	cmd := &cobra.Command{
+		Use:   "diff <skill-dir> <v1> <v2>",
+		Short: "Show changelog diff between two versions of a skill",
+		Long: `Reads CHANGELOG.md and shows what changed between two released versions.
+Useful for reviewing what a version bump will contain before tagging.`,
+		Args: cobra.ExactArgs(3),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			dir, v1, v2 := args[0], args[1], args[2]
+			absDir, err := filepath.Abs(dir)
+			if err != nil {
+				return fmt.Errorf("resolve path: %w", err)
+			}
+
+			entries, err := skillversion.Changelog(absDir)
+			if err != nil {
+				return fmt.Errorf("read changelog: %w", err)
+			}
+
+			find := func(v string) *skillversion.ReleaseEntry {
+				v = strings.TrimPrefix(v, "v")
+				for i := range entries {
+					if entries[i].Version == v {
+						return &entries[i]
+					}
+				}
+				return nil
+			}
+
+			e1 := find(v1)
+			e2 := find(v2)
+
+			if e1 == nil {
+				return fmt.Errorf("version %s not found in CHANGELOG.md", v1)
+			}
+			if e2 == nil {
+				return fmt.Errorf("version %s not found in CHANGELOG.md", v2)
+			}
+
+			if jsonOut {
+				type diffResult struct {
+					Skill   string `json:"skill"`
+					From    string `json:"from"`
+					To      string `json:"to"`
+					Changes []struct {
+						Version string `json:"version"`
+						Date    string `json:"date"`
+						Change  string `json:"change"`
+					} `json:"changes"`
+				}
+
+				// Collect all entries between v1 and v2 (inclusive), ordered old→new.
+				var between []skillversion.ReleaseEntry
+				inRange := false
+				for i := len(entries) - 1; i >= 0; i-- {
+					e := entries[i]
+					ev := strings.TrimPrefix(e.Version, "v")
+					ov := strings.TrimPrefix(v1, "v")
+					nv := strings.TrimPrefix(v2, "v")
+					if ev == ov {
+						inRange = true
+					}
+					if inRange {
+						between = append(between, e)
+					}
+					if ev == nv {
+						break
+					}
+				}
+
+				res := diffResult{
+					Skill: e1.Name,
+					From:  v1,
+					To:    v2,
+				}
+				for _, b := range between {
+					res.Changes = append(res.Changes, struct {
+						Version string `json:"version"`
+						Date    string `json:"date"`
+						Change  string `json:"change"`
+					}{b.Version, b.Date, b.Change})
+				}
+				return writeJSON(cmd, res)
+			}
+
+			fmt.Fprintf(cmd.OutOrStdout(), "Skill: %s  (%s → %s)\n\n", e1.Name, v1, v2)
+			fmt.Fprintf(cmd.OutOrStdout(), "  %s  [%s]  %s\n", v1, e1.Date, e1.Change)
+			fmt.Fprintf(cmd.OutOrStdout(), "  %s  [%s]  %s\n", v2, e2.Date, e2.Change)
+
+			if e1.Change != e2.Change {
+				fmt.Fprintf(cmd.OutOrStdout(), "\nDiff:\n")
+				diff := unifiedDiff(e1.Change+"\n", e2.Change+"\n", v1, false)
+				if strings.TrimSpace(diff) != "" {
+					fmt.Fprint(cmd.OutOrStdout(), diff)
+				}
+			} else {
+				fmt.Fprintf(cmd.OutOrStdout(), "\nChange messages are identical.\n")
+			}
+			return nil
+		},
+	}
+
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Print JSON output")
 	return cmd
 }
