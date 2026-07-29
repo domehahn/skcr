@@ -9,6 +9,7 @@ import (
 
 	"github.com/domehahn/skcr/internal/models"
 	platformcompat "github.com/domehahn/skcr/internal/platforms"
+	"github.com/domehahn/skcr/internal/skillmeta"
 	"github.com/domehahn/sklib/spec"
 	"gopkg.in/yaml.v3"
 )
@@ -54,34 +55,98 @@ func PlanSkill(opts SkillOptions) ([]PlannedFile, error) {
 		description = "Describe what this skill helps an agent do."
 	}
 
-	skillSpec := spec.Skill{
-		Name:           opts.Name,
-		Version:        opts.Version,
-		Description:    description,
-		Entrypoint:     spec.DefaultEntrypointValue,
-		License:        opts.License,
-		CompatibleWith: stringsToSpecPlatforms(opts.Platforms),
-	}
+	owners := []string{}
 	if opts.Owner != "" {
-		skillSpec.Owners = []string{opts.Owner}
+		owners = []string{opts.Owner}
 	}
+	skillSpec := skillmeta.NewDescriptor(opts.Name, opts.Version, description, opts.License, owners, stringsToSpecPlatforms(opts.Platforms))
 	skillYAMLBytes, err := yaml.Marshal(skillSpec)
 	if err != nil {
 		return nil, fmt.Errorf("marshal skill.yaml: %w", err)
+	}
+	contractYAMLBytes, err := yaml.Marshal(skillmeta.NewContract())
+	if err != nil {
+		return nil, fmt.Errorf("marshal contract.yaml: %w", err)
+	}
+	evalYAMLBytes, err := yaml.Marshal(skillmeta.NewBaselineEval())
+	if err != nil {
+		return nil, fmt.Errorf("marshal evals/baseline.yaml: %w", err)
 	}
 
 	return []PlannedFile{
 		{Path: filepath.Join(root, "SKILL.md"), Content: skillMarkdown(opts.Name, description, opts.License, opts.Version, opts.Stability, opts.Owner, opts.Since, opts.Platforms)},
 		{Path: filepath.Join(root, "skill.yaml"), Content: string(skillYAMLBytes)},
+		{Path: filepath.Join(root, "contract.yaml"), Content: string(contractYAMLBytes)},
 		{Path: filepath.Join(root, "VERSION"), Content: opts.Version + "\n"},
 		{Path: filepath.Join(root, "CHANGELOG.md"), Content: fmt.Sprintf("# Changelog\n\n## %s\n\n- Initial skill scaffold.\n", opts.Version)},
-		{Path: filepath.Join(root, "README.md"), Content: fmt.Sprintf("# %s\n\nThis is an AI agent skill scaffolded with `skcr`.\n\n## Version\n\nCurrent version: `%s`\n\n## Compatible platforms\n\n%s\n## Lifecycle\n\nAfter editing this skill, use `skpm` for lifecycle management:\n\n```bash\nskpm validate %s\nskpm package %s\nskpm publish %s\n```\n", opts.Name, opts.Version, platformBlock, opts.Name, opts.Name, opts.Name)},
+		{Path: filepath.Join(root, "README.md"), Content: skillReadme(opts.Name, opts.Version, platformBlock)},
 		{Path: filepath.Join(root, "LICENSE"), Content: licenseText(opts.License)},
 		{Path: filepath.Join(root, "scripts", "README.md"), Content: fmt.Sprintf("# %s Scripts\n\nPlace executable helper scripts for this skill here. Keep scripts self-contained, document dependencies, and reference them from `SKILL.md` only when the agent should run them.\n", opts.Name)},
 		{Path: filepath.Join(root, "references", "README.md"), Content: fmt.Sprintf("# %s References\n\nPlace focused supplemental documentation for this skill here. Agents should load these files on demand via relative links from `SKILL.md`.\n", opts.Name)},
 		{Path: filepath.Join(root, "assets", "README.md"), Content: fmt.Sprintf("# %s Assets\n\nPlace templates, static resources, schemas, diagrams, example payloads, or lookup tables for this skill here.\n", opts.Name)},
-		{Path: filepath.Join(root, "tests", "README.md"), Content: fmt.Sprintf("# %s Tests\n\nAdd examples, fixtures, and expected outputs for this skill here.\n", opts.Name)},
+		{Path: filepath.Join(root, "tests", "README.md"), Content: fmt.Sprintf("# %s Tests\n\nAdd implementation, unit, integration, fixtures, and expected-output tests for this skill here. Behavioral agent scenarios belong in `evals/`.\n", opts.Name)},
+		{Path: filepath.Join(root, "evals", "README.md"), Content: evalsReadme(opts.Name)},
+		{Path: filepath.Join(root, "evals", "baseline.yaml"), Content: string(evalYAMLBytes)},
 	}, nil
+}
+
+func skillReadme(name, version, platformBlock string) string {
+	return fmt.Sprintf(`# %s
+
+This is an AI agent skill scaffolded with `+"`skcr`"+`.
+
+## Authoring workflow
+
+1. Define the Goal in `+"`skill.yaml`"+`.
+2. Define a least-privilege behavioral/security boundary in `+"`contract.yaml`"+`.
+3. Write model-facing instructions in `+"`SKILL.md`"+`.
+4. Add behavioral and adversarial scenarios in `+"`evals/`"+`.
+5. Run `+"`skcr validate`"+`.
+6. Run `+"`skcr sync`"+`.
+7. Run `+"`skcr version check`"+`.
+
+“Never modify files” in `+"`SKILL.md`"+` is guidance. An empty
+`+"`capabilities.allowed.repository.write`"+` list in `+"`contract.yaml`"+` is
+the authoritative machine-readable boundary. Neither statement alone is runtime
+enforcement. `+"`skcr`"+` declares and validates; an external verifier or
+runtime must observe and enforce.
+
+## Version
+
+Current version: `+"`%s`"+`
+
+## Compatible platforms
+
+%s## Lifecycle
+
+After editing this skill, use `+"`skpm`"+` for packaging and publishing:
+
+`+"```bash"+`
+skpm validate %s
+skpm package %s
+skpm publish %s
+`+"```"+`
+`, name, version, platformBlock, name, name, name)
+}
+
+func evalsReadme(name string) string {
+	return fmt.Sprintf(`# %s Behavioral Evals
+
+This directory contains vendor-neutral behavioral and adversarial scenario
+declarations. It is distinct from `+"`tests/`"+`, which contains implementation,
+unit, and integration tests.
+
+Eval v1 documents baseline, goal, boundary, and adversarial scenarios with
+structured assertions. Evals describe expected goal and contract outcomes; they
+do not execute an agent and are not runtime enforcement.
+
+Example categories:
+
+- `+"`baseline`"+`: normal intended behavior.
+- `+"`goal`"+`: traceable Goal criteria.
+- `+"`boundary`"+`: capability, tool, data, or limit boundaries.
+- `+"`adversarial`"+`: requests that attempt to bypass the Contract.
+`, name)
 }
 
 func WriteSkill(opts SkillOptions) ([]PlannedFile, error) {
@@ -258,7 +323,7 @@ changelog:
   - version: "%s"
     date: "%s"
     change: "Initial release"
-`, name, description, version, since, today, owner, stability, platformBlock, version, today)
+`, name, description, version, since, today, owner, stability, platformBlock, version, since)
 
 	if license != "" {
 		frontmatter += fmt.Sprintf("license: %s\n", license)
@@ -271,6 +336,16 @@ changelog:
 ## Purpose
 
 %s
+
+## Goal and behavioral contract
+
+The authoritative Goal and artifact references are defined in `+"`skill.yaml`"+`.
+Capability boundaries, tool permissions, data boundaries, invariants, approval
+requirements, output contract, and operational limits are defined in
+`+"`contract.yaml`"+`.
+
+Treat those declarations as mandatory execution constraints. `+"`skcr`"+`
+validates the declaration but does not enforce it at runtime.
 
 ## When to use
 

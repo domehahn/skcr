@@ -1,0 +1,36 @@
+schema_version: "1"
+capabilities:
+  required:
+    repository: {read: [pull_requests, source_files], write: []}
+    filesystem: {read: [], write: []}
+    network: {allow: []}
+    process: {execute: false}
+    secrets: {read: false}
+  allowed:
+    repository: {read: [pull_requests, source_files], write: []}
+    filesystem: {read: [], write: []}
+    network: {allow: []}
+    process: {execute: false}
+    secrets: {read: false}
+tools: {allow: [repository.get_pull_request], deny: [repository.update_file]}
+data:
+  classifications: [secret, credential, source-code]
+  egress: {allow: []}
+  flows: []
+preconditions: []
+postconditions:
+  - id: repository-state-unchanged
+    type: repository.unchanged
+invariants:
+  - id: declared-capabilities-only
+    type: capability.declared_only
+human_approval: {rules: []}
+limits:
+  scope: invocation
+  max_tool_calls: 50
+  max_runtime_seconds: 120
+  max_network_requests: 0
+output:
+  format: structured
+  required_fields: [findings]
+  forbidden_content: [secrets, credentials]

@@ -1,0 +1,22 @@
+schema_version: "1"
+capabilities:
+  required:
+    repository: {read: [], write: []}
+    filesystem: {read: [], write: []}
+    network: {allow: []}
+    process: {execute: false}
+    secrets: {read: false}
+  allowed:
+    repository: {read: [], write: []}
+    filesystem: {read: [], write: []}
+    network: {allow: []}
+    process: {execute: false}
+    secrets: {read: false}
+tools: {allow: [], deny: []}
+data: {classifications: [], egress: {allow: []}, flows: []}
+preconditions: []
+postconditions: []
+invariants: []
+human_approval: {rules: []}
+limits: {scope: invocation, max_tool_calls: -1, max_runtime_seconds: null, max_network_requests: null}
+output: {format: structured, required_fields: [], forbidden_content: []}

@@ -21,10 +21,10 @@ func TestWriteSkillScaffold(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(files) != 10 {
-		t.Fatalf("expected 10 scaffold files, got %d", len(files))
+	if len(files) != 13 {
+		t.Fatalf("expected 13 scaffold files, got %d", len(files))
 	}
-	for _, rel := range []string{"SKILL.md", "skill.yaml", "VERSION", "CHANGELOG.md", "README.md", "LICENSE", filepath.Join("scripts", "README.md"), filepath.Join("references", "README.md"), filepath.Join("assets", "README.md"), filepath.Join("tests", "README.md")} {
+	for _, rel := range []string{"SKILL.md", "skill.yaml", "contract.yaml", "VERSION", "CHANGELOG.md", "README.md", "LICENSE", filepath.Join("scripts", "README.md"), filepath.Join("references", "README.md"), filepath.Join("assets", "README.md"), filepath.Join("tests", "README.md"), filepath.Join("evals", "README.md"), filepath.Join("evals", "baseline.yaml")} {
 		if _, err := os.Stat(filepath.Join(dir, "secure-code-review", rel)); err != nil {
 			t.Fatalf("missing %s: %v", rel, err)
 		}
@@ -45,6 +45,20 @@ func TestWriteSkillScaffold(t *testing.T) {
 			t.Fatalf("skill.yaml missing %q:\n%s", want, meta)
 		}
 	}
+	for _, want := range []string{"schema_version: \"2\"", "goal:", "contract:", "file: contract.yaml", "evals:"} {
+		if !strings.Contains(string(meta), want) {
+			t.Fatalf("skill.yaml missing %q:\n%s", want, meta)
+		}
+	}
+	contract, err := os.ReadFile(filepath.Join(dir, "secure-code-review", "contract.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"schema_version: \"1\"", "required:", "allowed:", "execute: false", "read: false", "scope: invocation"} {
+		if !strings.Contains(string(contract), want) {
+			t.Fatalf("contract.yaml missing %q:\n%s", want, contract)
+		}
+	}
 }
 
 func TestPlanSkillDefaultsDryRunAndValidation(t *testing.T) {
@@ -53,7 +67,7 @@ func TestPlanSkillDefaultsDryRunAndValidation(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(files) != 10 {
+	if len(files) != 13 {
 		t.Fatalf("expected planned files, got %d", len(files))
 	}
 	if _, err := os.Stat(filepath.Join(dir, "test-generator")); !os.IsNotExist(err) {
@@ -103,8 +117,8 @@ func TestWriteSkillSafe(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WriteSkillSafe first write: %v", err)
 	}
-	if len(result.Created) != 10 {
-		t.Fatalf("expected 10 created files, got %d", len(result.Created))
+	if len(result.Created) != 13 {
+		t.Fatalf("expected 13 created files, got %d", len(result.Created))
 	}
 	if len(result.Skipped) != 0 {
 		t.Fatalf("expected 0 skipped files, got %d", len(result.Skipped))
@@ -118,8 +132,8 @@ func TestWriteSkillSafe(t *testing.T) {
 	if len(result2.Created) != 0 {
 		t.Fatalf("expected 0 created (all exist), got %d", len(result2.Created))
 	}
-	if len(result2.Skipped) != 10 {
-		t.Fatalf("expected 10 skipped, got %d", len(result2.Skipped))
+	if len(result2.Skipped) != 13 {
+		t.Fatalf("expected 13 skipped, got %d", len(result2.Skipped))
 	}
 
 	// With force: all files overwritten.
@@ -128,8 +142,8 @@ func TestWriteSkillSafe(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WriteSkillSafe force: %v", err)
 	}
-	if len(result3.Created) != 10 {
-		t.Fatalf("expected 10 created with force, got %d", len(result3.Created))
+	if len(result3.Created) != 13 {
+		t.Fatalf("expected 13 created with force, got %d", len(result3.Created))
 	}
 	if len(result3.Skipped) != 0 {
 		t.Fatalf("expected 0 skipped with force, got %d", len(result3.Skipped))
@@ -143,8 +157,8 @@ func TestWriteSkillSafeDryRun(t *testing.T) {
 	if err != nil {
 		t.Fatalf("WriteSkillSafe dry-run: %v", err)
 	}
-	if len(result.Created) != 10 {
-		t.Fatalf("expected 10 planned files, got %d", len(result.Created))
+	if len(result.Created) != 13 {
+		t.Fatalf("expected 13 planned files, got %d", len(result.Created))
 	}
 	if len(result.Skipped) != 0 {
 		t.Fatalf("expected 0 skipped in dry-run, got %d", len(result.Skipped))

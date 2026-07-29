@@ -13,6 +13,11 @@ skpm  = validate / package / publish / install / update / lock / verify
 
 `skcr` creates, renders, synchronizes, validates local version metadata, detects changed skills, bumps local skill versions, and generates release notes. `skpm` manages registry-facing lifecycle work such as packaging, publishing, installing, locking, and verifying registry artifacts.
 
+New skills separate the Goal and identity (`skill.yaml`), behavioral/security
+Contract (`contract.yaml`), Instructions (`SKILL.md`), and behavioral Evals
+(`evals/`). These independently versioned formats are documented in
+[Skill Goals, Contracts, Instructions, and Evals](docs/SKILL_CONTRACTS.md).
+
 ## Architecture
 
 ```text
@@ -35,7 +40,7 @@ skcr list skills [--with-targets] [--in-target <name>]
   → lists all skills defined across bakefile targets (one per line, pipeable)
 
 skcr sync
-  → propagates SKILL.md edits from .agents/skills/ to all platform directories
+  → propagates canonical SKILL.md, skill.yaml, contract.yaml, and evals/ artifacts
 
 skcr status
   → shows which skills are scaffolded and in sync across platform directories
@@ -264,7 +269,7 @@ skcr version release-bundle .agents/skills --changed --json
 | `skcr list skills` | List all skills defined across bakefile targets |
 | `skcr list targets` | List available bake targets |
 | `skcr bake [target]` | Scaffold skill directories and render platform-specific output |
-| `skcr sync` | Propagate `SKILL.md` edits from `.agents/skills/` to all platform dirs |
+| `skcr sync` | Propagate canonical instructions, descriptor, contract, and eval artifacts |
 | `skcr status` | Show skill scaffold status across all platform directories |
 | `skcr doctor` | Check project health: bakefile, skills, platform sync, and toolchain |
 | `skcr compatibility matrix` | Print built-in plus local platform compatibility status |
@@ -281,6 +286,9 @@ skcr version release-bundle .agents/skills --changed --json
 | `skcr clean` | Remove skcr-managed files listed in `.agentic-template.lock` |
 | `skcr list-targets` | List available bake targets |
 | `skcr scaffold skill <name>` | Create a standalone skill skeleton from CLI flags |
+| `skcr migrate skill <name>` | Explicitly migrate a legacy skill to default-deny split artifacts |
+| `skcr contract diff <old> <new>` | Classify semantic Contract changes, with optional JSON output |
+| `skcr contract digest <path>` | Hash a normalized Contract deterministically |
 | `skcr version` | Show version, commit, and build date |
 
 ## Bakefile format (`agentic.bake.yaml`)
@@ -298,7 +306,7 @@ variables:
 
 skill_sources:
   defaults:
-    version: 0.1.0
+    initial_version: 0.1.0
     owner: platform-engineering
     license: MIT
     compatible_with:

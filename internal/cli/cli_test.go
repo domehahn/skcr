@@ -13,6 +13,7 @@ import (
 	"github.com/domehahn/skcr/internal/models"
 	"github.com/domehahn/skcr/internal/renderer"
 	"github.com/domehahn/skcr/internal/scaffold"
+	"github.com/domehahn/skcr/internal/skillmeta"
 	"gopkg.in/yaml.v3"
 )
 
@@ -41,6 +42,74 @@ func TestRootAndVersionCommand(t *testing.T) {
 	out := buf.String()
 	if !strings.Contains(out, "1.2.3") || !strings.Contains(out, "abcdef1") {
 		t.Fatalf("unexpected version output: %q", out)
+	}
+}
+
+func TestContractDiffAndDigestCommands(t *testing.T) {
+	oldDir := t.TempDir()
+	newDir := t.TempDir()
+	oldContract := skillmeta.NewContract()
+	newContract := skillmeta.NewContract()
+	newContract.Capabilities.Allowed.Network.Allow = []string{"api.example.com"}
+	for dir, contract := range map[string]skillmeta.Contract{oldDir: oldContract, newDir: newContract} {
+		data, err := yaml.Marshal(contract)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "contract.yaml"), data, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	out, err := runRootOut("contract", "diff", oldDir, newDir, "--json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, `"classification": "EXPANSION"`) || !strings.Contains(out, "api.example.com") {
+		t.Fatalf("unexpected contract diff: %s", out)
+	}
+	out, err = runRootOut("contract", "digest", oldDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(strings.TrimSpace(out), "sha256:") {
+		t.Fatalf("unexpected digest: %s", out)
+	}
+}
+
+func TestMigrateSkillCreatesDefaultDenySplitArtifact(t *testing.T) {
+	dir := t.TempDir()
+	if err := runRoot("init", "--target", dir, "--platform", "codex", "--project-name", "Migration"); err != nil {
+		t.Fatal(err)
+	}
+	if err := runRoot("add", "skill", "legacy-skill", "--target", dir); err != nil {
+		t.Fatal(err)
+	}
+	skillDir := filepath.Join(dir, ".agents", "skills", "legacy-skill")
+	skillMD := filepath.Join(skillDir, "SKILL.md")
+	originalInstructions, err := os.ReadFile(skillMD)
+	if err != nil {
+		t.Fatal(err)
+	}
+	legacy := "name: legacy-skill\nversion: 0.1.0\ndescription: Legacy skill\nentrypoint: SKILL.md\ncompatible_with: [codex]\n"
+	if err := os.WriteFile(filepath.Join(skillDir, "skill.yaml"), []byte(legacy), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(filepath.Join(skillDir, "contract.yaml")); err != nil {
+		t.Fatal(err)
+	}
+	if err := runRoot("migrate", "skill", "legacy-skill", "--target", dir); err != nil {
+		t.Fatal(err)
+	}
+	afterInstructions, err := os.ReadFile(skillMD)
+	if err != nil || string(afterInstructions) != string(originalInstructions) {
+		t.Fatal("migration modified SKILL.md")
+	}
+	contract, err := skillmeta.LoadContract(filepath.Join(skillDir, "contract.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(contract.Capabilities.Allowed.Repository.Write) != 0 || *contract.Capabilities.Allowed.Process.Execute {
+		t.Fatal("migration inferred permissions instead of default deny")
 	}
 }
 
@@ -1091,6 +1160,11 @@ func TestAddSkillCommand(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(skillDir, "SKILL.md")); err != nil {
 		t.Fatalf("SKILL.md not scaffolded: %v", err)
 	}
+	for _, rel := range []string{"skill.yaml", "contract.yaml", filepath.Join("evals", "baseline.yaml")} {
+		if _, err := os.Stat(filepath.Join(skillDir, rel)); err != nil {
+			t.Fatalf("%s not scaffolded: %v", rel, err)
+		}
+	}
 
 	// Add the same skill again: should succeed (already present message, no error).
 	if err := runRoot("add", "skill", "my-new-skill", "--target", dir); err != nil {
@@ -1151,6 +1225,18 @@ func TestRenameSkillCommand(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".agents", "skills", "old-skill")); !os.IsNotExist(err) {
 		t.Fatal("old skill directory still exists after rename")
+	}
+	for _, file := range []string{"SKILL.md", "skill.yaml"} {
+		data, err := os.ReadFile(filepath.Join(dir, ".agents", "skills", "new-skill", file))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(data), `name: "new-skill"`) {
+			t.Fatalf("%s identity not updated after rename:\n%s", file, data)
+		}
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".agents", "skills", "new-skill", "evals", "baseline.yaml")); err != nil {
+		t.Fatalf("eval scaffold not preserved during rename: %v", err)
 	}
 
 	// Rename non-existent skill → error.
@@ -1366,6 +1452,56 @@ func TestStatusCommand(t *testing.T) {
 	}
 }
 
+func TestStatusAndDoctorUnderstandContracts(t *testing.T) {
+	dir := t.TempDir()
+	if err := runRoot("init", "--target", dir, "--platform", "codex", "--platform", "claude-code", "--project-name", "ContractHealth"); err != nil {
+		t.Fatal(err)
+	}
+	if err := runRoot("add", "skill", "contract-health", "--target", dir); err != nil {
+		t.Fatal(err)
+	}
+	canonical := filepath.Join(dir, ".agents", "skills", "contract-health", "contract.yaml")
+	original, err := os.ReadFile(canonical)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(canonical); err != nil {
+		t.Fatal(err)
+	}
+	out, err := runRootOut("status", "--target", dir, "--json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, `"invalid"`) {
+		t.Fatalf("status did not report missing contract: %s", out)
+	}
+	if err := os.WriteFile(canonical, []byte("schema_version: ["), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := runRoot("doctor", "--target", dir); err == nil {
+		t.Fatal("doctor should report malformed contract")
+	}
+	if err := os.WriteFile(canonical, original, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	platformContract := filepath.Join(dir, ".claude", "skills", "contract-health", "contract.yaml")
+	platform, err := os.ReadFile(platformContract)
+	if err != nil {
+		t.Fatal(err)
+	}
+	platform = []byte(strings.Replace(string(platform), "format: structured", "format: drifted", 1))
+	if err := os.WriteFile(platformContract, platform, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err = runRootOut("status", "--target", dir, "--json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(out, `"differs"`) {
+		t.Fatalf("status did not report contract drift: %s", out)
+	}
+}
+
 func min(a, b int) int {
 	if a < b {
 		return a
@@ -1506,7 +1642,7 @@ func TestDoctorSkillYAMLVersionMismatch(t *testing.T) {
 
 func TestSyncCommand(t *testing.T) {
 	dir := t.TempDir()
-	if err := runRoot("init", "--target", dir, "--platform", "codex", "--project-name", "TestProj"); err != nil {
+	if err := runRoot("init", "--target", dir, "--platform", "codex", "--platform", "claude-code", "--project-name", "TestProj"); err != nil {
 		t.Fatal(err)
 	}
 	if err := runRoot("add", "skill", "sync-skill", "--target", dir); err != nil {
@@ -1521,6 +1657,45 @@ func TestSyncCommand(t *testing.T) {
 	// Dry-run.
 	if err := runRoot("sync", "--target", dir, "--dry-run"); err != nil {
 		t.Fatalf("sync --dry-run failed: %v", err)
+	}
+
+	canonicalDir := filepath.Join(dir, ".agents", "skills", "sync-skill")
+	descriptorPath := filepath.Join(canonicalDir, "skill.yaml")
+	descriptor, err := os.ReadFile(descriptorPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	descriptor = []byte(strings.Replace(string(descriptor), "description: Describe", "description: Canonical Describe", 1))
+	if err := os.WriteFile(descriptorPath, descriptor, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	contractPath := filepath.Join(canonicalDir, "contract.yaml")
+	contract, err := os.ReadFile(contractPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	contract = []byte(strings.Replace(string(contract), "format: structured", "format: review-result", 1))
+	if err := os.WriteFile(contractPath, contract, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	baselinePath := filepath.Join(canonicalDir, "evals", "baseline.yaml")
+	baseline, err := os.ReadFile(baselinePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	baseline = append(baseline, []byte("\n# canonical eval change\n")...)
+	if err := os.WriteFile(baselinePath, baseline, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := runRoot("sync", "--target", dir); err != nil {
+		t.Fatalf("sync canonical descriptor/evals failed: %v", err)
+	}
+	for _, rel := range []string{"skill.yaml", "contract.yaml", filepath.Join("evals", "baseline.yaml")} {
+		canonical, _ := os.ReadFile(filepath.Join(canonicalDir, rel))
+		platform, readErr := os.ReadFile(filepath.Join(dir, ".claude", "skills", "sync-skill", rel))
+		if readErr != nil || string(platform) != string(canonical) {
+			t.Fatalf("%s was not synchronized to platform copy: %v", rel, readErr)
+		}
 	}
 
 	// Skill filter on non-existent skill: should succeed (skip + summary).
@@ -1999,6 +2174,44 @@ func TestSyncRenderedSkillArtifacts(t *testing.T) {
 	// Empty slice → no-op.
 	if err := syncRenderedSkillArtifacts(dir, nil); err != nil {
 		t.Fatalf("syncRenderedSkillArtifacts nil: %v", err)
+	}
+}
+
+func TestBakeWritePreservesSplitArtifactIdempotently(t *testing.T) {
+	dir := t.TempDir()
+	if err := runRoot("init", "--target", dir, "--platform", "codex", "--project-name", "SplitArtifact"); err != nil {
+		t.Fatal(err)
+	}
+	if err := runRoot("add", "skill", "split-artifact", "--target", dir); err != nil {
+		t.Fatal(err)
+	}
+	if err := runRoot("bake", "--write", "--target", dir); err != nil {
+		t.Fatal(err)
+	}
+	paths := []string{
+		filepath.Join(".agents", "skills", "split-artifact", "skill.yaml"),
+		filepath.Join(".agents", "skills", "split-artifact", "contract.yaml"),
+		filepath.Join(".agents", "skills", "split-artifact", "evals", "baseline.yaml"),
+	}
+	before := map[string]string{}
+	for _, rel := range paths {
+		data, err := os.ReadFile(filepath.Join(dir, rel))
+		if err != nil {
+			t.Fatal(err)
+		}
+		before[rel] = string(data)
+	}
+	if err := runRoot("bake", "--write", "--target", dir); err != nil {
+		t.Fatal(err)
+	}
+	for _, rel := range paths {
+		data, err := os.ReadFile(filepath.Join(dir, rel))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if string(data) != before[rel] {
+			t.Fatalf("second bake changed %s", rel)
+		}
 	}
 }
 

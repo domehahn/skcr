@@ -180,6 +180,11 @@ func newRenameSkillCommand() *cobra.Command {
 				if err := os.Rename(srcDir, dstDir); err != nil {
 					return fmt.Errorf("move %s/%s → %s/%s: %w", baseDir, oldName, baseDir, newName, err)
 				}
+				for _, file := range []string{"SKILL.md", "skill.yaml"} {
+					if err := replaceTopLevelYAMLName(filepath.Join(dstDir, file), newName); err != nil {
+						return fmt.Errorf("update %s/%s/%s identity: %w", baseDir, newName, file, err)
+					}
+				}
 				fmt.Printf("moved  %s/%s/  →  %s/%s/\n", baseDir, oldName, baseDir, newName)
 				moved++
 			}
@@ -199,4 +204,27 @@ func newRenameSkillCommand() *cobra.Command {
 	cmd.Flags().StringVarP(&target, "target", "t", ".", "Repository path")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview changes without writing")
 	return cmd
+}
+
+func replaceTopLevelYAMLName(path, name string) error {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	lines := strings.Split(string(data), "\n")
+	replaced := false
+	for i, line := range lines {
+		if strings.HasPrefix(line, "name:") {
+			lines[i] = fmt.Sprintf("name: %q", name)
+			replaced = true
+			break
+		}
+	}
+	if !replaced {
+		return fmt.Errorf("top-level name field not found")
+	}
+	return os.WriteFile(path, []byte(strings.Join(lines, "\n")), 0o644)
 }

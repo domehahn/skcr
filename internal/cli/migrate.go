@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/domehahn/skcr/internal/skillmeta"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )
@@ -67,7 +68,123 @@ Currently handles:
 
 	cmd.Flags().StringVarP(&repoPath, "target", "t", ".", "Repository path")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview migrations without writing")
+	cmd.AddCommand(newMigrateSkillCommand())
 	return cmd
+}
+
+func newMigrateSkillCommand() *cobra.Command {
+	var target string
+	var dryRun bool
+	cmd := &cobra.Command{
+		Use:   "skill <name>",
+		Short: "Explicitly migrate a legacy skill to split Descriptor/Contract/Eval artifacts",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			absTarget, err := filepath.Abs(target)
+			if err != nil {
+				return err
+			}
+			cfg, err := cliLoadBakeFile(filepath.Join(absTarget, "agentic.bake.yaml"))
+			if err != nil {
+				return err
+			}
+			skillDir := filepath.Join(absTarget, skillSourceOutputDir(cfg.SkillSources), args[0])
+			if err := ensureMigrationRoot(absTarget, skillDir); err != nil {
+				return err
+			}
+			descriptorPath := filepath.Join(skillDir, "skill.yaml")
+			legacy, err := skillmeta.LoadDescriptor(descriptorPath)
+			if err != nil {
+				return err
+			}
+			if legacy.SchemaVersion == skillmeta.DescriptorSchemaVersion && legacy.LegacyEmbeddedContract == nil && legacy.Contract != nil {
+				if _, err := os.Stat(filepath.Join(skillDir, legacy.Contract.File)); err == nil {
+					fmt.Fprintln(cmd.OutOrStdout(), "No migration needed — split artifact already exists.")
+					return nil
+				}
+			}
+			description := legacy.Description
+			if strings.TrimSpace(description) == "" {
+				description = "TODO: Describe what this skill helps an agent do."
+			}
+			descriptor := skillmeta.NewDescriptor(legacy.Name, legacy.Version, description, legacy.License, legacy.Owners, legacy.CompatibleWith)
+			descriptor.Namespace = legacy.Namespace
+			descriptor.Tags = legacy.Tags
+			descriptor.Security = legacy.Security
+			descriptor.Metadata = legacy.Metadata
+			if legacy.Goal != nil && strings.TrimSpace(legacy.Goal.Objective) != "" {
+				descriptor.Goal = legacy.Goal
+			}
+			contract := skillmeta.NewContract() // explicit default deny; never inferred from prose
+			eval := skillmeta.NewBaselineEval()
+			files := []struct {
+				path      string
+				value     any
+				overwrite bool
+			}{
+				{descriptorPath, descriptor, true},
+				{filepath.Join(skillDir, "contract.yaml"), contract, false},
+				{filepath.Join(skillDir, "evals", "baseline.yaml"), eval, false},
+			}
+			if dryRun {
+				for _, file := range files {
+					if _, err := os.Stat(file.path); err == nil && !file.overwrite {
+						fmt.Fprintf(cmd.OutOrStdout(), "would preserve  %s\n", file.path)
+					} else {
+						fmt.Fprintf(cmd.OutOrStdout(), "would write  %s\n", file.path)
+					}
+				}
+				return nil
+			}
+			for _, file := range files {
+				if _, err := os.Stat(file.path); err == nil && !file.overwrite {
+					continue
+				}
+				data, err := yaml.Marshal(file.value)
+				if err != nil {
+					return err
+				}
+				if err := os.MkdirAll(filepath.Dir(file.path), 0o755); err != nil {
+					return err
+				}
+				if err := os.WriteFile(file.path, data, 0o644); err != nil {
+					return err
+				}
+			}
+			readme := filepath.Join(skillDir, "evals", "README.md")
+			if _, err := os.Stat(readme); os.IsNotExist(err) {
+				if err := os.WriteFile(readme, []byte("# Behavioral Evals\n\nDeclarative behavioral and adversarial scenarios for this skill.\n"), 0o644); err != nil {
+					return err
+				}
+			}
+			fmt.Fprintln(cmd.OutOrStdout(), "Migrated skill with a default-deny Contract; review TODO Goal and capability scopes explicitly.")
+			return nil
+		},
+	}
+	cmd.Flags().StringVarP(&target, "target", "t", ".", "Repository path")
+	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview without writing")
+	return cmd
+}
+
+func ensureMigrationRoot(projectRoot, skillDir string) error {
+	resolvedRoot, err := filepath.EvalSymlinks(projectRoot)
+	if err != nil {
+		return err
+	}
+	resolvedSkill, err := filepath.EvalSymlinks(skillDir)
+	if err != nil {
+		return err
+	}
+	rel, err := filepath.Rel(resolvedRoot, resolvedSkill)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return fmt.Errorf("skill directory resolves outside project root")
+	}
+	for _, path := range []string{filepath.Join(skillDir, "contract.yaml"), filepath.Join(skillDir, "evals")} {
+		if info, err := os.Lstat(path); err == nil && info.Mode()&os.ModeSymlink != 0 {
+			return fmt.Errorf("migration refuses symlinked artifact path: %s", path)
+		}
+	}
+	return nil
 }
 
 type yamlRename struct{ from, to string }

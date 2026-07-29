@@ -1173,6 +1173,7 @@ func buildSkillBody(name string, content skillContent) string {
 	var b strings.Builder
 	b.WriteString("# {{.Title}}\n\n")
 	writeParagraph(&b, "Purpose", content.Purpose)
+	writeParagraph(&b, "Goal and behavioral contract", "The authoritative Goal and artifact references are defined in `skill.yaml`. Capability boundaries, tool permissions, data boundaries, invariants, approval requirements, output contract, and operational limits are defined in `contract.yaml`.\n\nTreat those declarations as mandatory execution constraints. `skcr` validates the declaration but does not enforce it at runtime.")
 	writeBullets(&b, "When to use", content.When, false)
 	writeNumbered(&b, "Operating model", content.Operating)
 	writeBullets(&b, "Spec-Driven Change Context", sharedSpecDrivenChangeContext, false)

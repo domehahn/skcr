@@ -6,11 +6,13 @@ import (
 	"os/exec"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/domehahn/skcr/internal/skillmeta"
 	"github.com/domehahn/skcr/internal/validator"
 	"github.com/domehahn/sklib/spec"
 	"gopkg.in/yaml.v3"
@@ -63,6 +65,8 @@ type ChangedSkill struct {
 	CurrentVersion string   `json:"current_version,omitempty"`
 	VersionChanged bool     `json:"version_changed"`
 	Files          []string `json:"files"`
+	ChangeTypes    []string `json:"change_types,omitempty"`
+	ContractImpact string   `json:"contract_impact,omitempty"`
 	Errors         []string `json:"errors,omitempty"`
 }
 
@@ -340,14 +344,52 @@ func Changed(path string) ([]ChangedSkill, error) {
 			bySkill[skillMD] = item
 		}
 		item.Files = append(item.Files, filepath.ToSlash(changedFile))
+		changeType := materialChangeType(changedFile)
+		if changeType != "" && !slices.Contains(item.ChangeTypes, changeType) {
+			item.ChangeTypes = append(item.ChangeTypes, changeType)
+		}
+		if changeType == "contract" {
+			currentContract, currentErr := skillmeta.LoadContract(filepath.Join(root, changedFile))
+			oldBytes, oldErr := headFile(root, changedFile)
+			if currentErr == nil && oldErr == nil {
+				oldContract, parseErr := skillmeta.ParseContract(oldBytes)
+				if parseErr == nil {
+					item.ContractImpact = string(skillmeta.DiffContracts(oldContract, currentContract).Classification)
+				}
+			} else if os.IsNotExist(currentErr) && oldErr == nil {
+				item.ContractImpact = string(skillmeta.ImpactExpansion)
+			}
+		}
 	}
 	out := make([]ChangedSkill, 0, len(bySkill))
 	for _, item := range bySkill {
 		sort.Strings(item.Files)
+		sort.Strings(item.ChangeTypes)
 		out = append(out, *item)
 	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Path < out[j].Path })
 	return out, nil
+}
+
+func materialChangeType(path string) string {
+	slashPath := filepath.ToSlash(path)
+	switch {
+	case filepath.Base(path) == "contract.yaml":
+		return "contract"
+	case strings.Contains(slashPath, "/evals/"):
+		return "eval"
+	case filepath.Base(path) == "skill.yaml":
+		return "goal_or_descriptor"
+	case filepath.Base(path) == "SKILL.md":
+		return "instructions"
+	default:
+		return "supporting_content"
+	}
+}
+
+func headFile(root, rel string) ([]byte, error) {
+	cmd := gitCommand("git", "-C", root, "show", "HEAD:"+filepath.ToSlash(rel))
+	return cmd.Output()
 }
 
 func BumpAllChanged(path string, opts BumpOptions) ([]BumpResult, error) {

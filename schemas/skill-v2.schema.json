@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/domehahn/skcr/schemas/skill-v2.schema.json",
+  "title": "skcr Skill Descriptor v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "name", "version", "description", "entrypoint", "compatible_with", "goal", "contract", "evals"],
+  "properties": {
+    "schema_version": { "const": "2" },
+    "name": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+    "namespace": { "type": "string" },
+    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$" },
+    "description": { "type": "string", "minLength": 1 },
+    "owners": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "license": { "type": "string" },
+    "entrypoint": { "type": "string", "minLength": 1 },
+    "compatible_with": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "tags": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "security": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requires_network": { "type": "boolean" },
+        "requires_secrets": { "type": "boolean" },
+        "writes_files": { "type": "boolean" },
+        "runs_commands": { "type": "boolean" }
+      }
+    },
+    "metadata": { "type": "object", "additionalProperties": { "type": "string" } },
+    "goal": { "$ref": "#/$defs/goal" },
+    "contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file"],
+      "properties": { "file": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$" } }
+    },
+    "evals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["directory"],
+      "properties": { "directory": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$" } }
+    }
+  },
+  "$defs": {
+    "criterion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "description"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$" },
+        "description": { "type": "string", "minLength": 1 }
+      }
+    },
+    "goal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["objective", "success_criteria", "failure_conditions"],
+      "properties": {
+        "objective": { "type": "string", "minLength": 1 },
+        "success_criteria": { "type": "array", "items": { "$ref": "#/$defs/criterion" } },
+        "failure_conditions": { "type": "array", "items": { "$ref": "#/$defs/criterion" } }
+      }
+    }
+  }
+}

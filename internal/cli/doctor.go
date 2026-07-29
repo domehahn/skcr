@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/domehahn/skcr/internal/skillmeta"
 	"github.com/domehahn/skcr/internal/validator"
 	"github.com/domehahn/sklib/spec"
 	"github.com/spf13/cobra"
@@ -141,13 +142,22 @@ func newDoctorCommand() *cobra.Command {
 					}
 				}
 
+				descriptorPresent := false
 				if yamlData, err := os.ReadFile(filepath.Join(skillDir, "skill.yaml")); err != nil {
 					add("error", "skills", fmt.Sprintf("%s/%s/skill.yaml missing", agentsBase, name))
-				} else if readErr == nil {
-					if fm, ok := parseFrontmatterDates(string(skillMDContent)); ok && fm.Version != "" {
-						if yamlVersion := extractYAMLStringKey(string(yamlData), "version"); yamlVersion != "" && yamlVersion != fm.Version {
-							add("error", "skills", fmt.Sprintf("%s/%s/skill.yaml version %q does not match SKILL.md version %q", agentsBase, name, yamlVersion, fm.Version))
+				} else {
+					descriptorPresent = true
+					if readErr == nil {
+						if fm, ok := parseFrontmatterDates(string(skillMDContent)); ok && fm.Version != "" {
+							if yamlVersion := extractYAMLStringKey(string(yamlData), "version"); yamlVersion != "" && yamlVersion != fm.Version {
+								add("error", "skills", fmt.Sprintf("%s/%s/skill.yaml version %q does not match SKILL.md version %q", agentsBase, name, yamlVersion, fm.Version))
+							}
 						}
+					}
+				}
+				if descriptorPresent {
+					for _, descriptorErr := range skillmeta.ValidateDirectory(skillDir) {
+						add("error", "contract", fmt.Sprintf("%s/%s: %s", agentsBase, name, descriptorErr))
 					}
 				}
 
@@ -189,7 +199,7 @@ func newDoctorCommand() *cobra.Command {
 			outOfSync := 0
 			for _, name := range skillNames {
 				canonicalPath := filepath.Join(absTarget, agentsBase, name, "SKILL.md")
-				canonicalData, err := os.ReadFile(canonicalPath)
+				_, err := os.ReadFile(canonicalPath)
 				if err != nil {
 					continue // already reported above
 				}
@@ -197,19 +207,19 @@ func newDoctorCommand() *cobra.Command {
 					if baseDir == agentsBase {
 						continue
 					}
-					destPath := filepath.Join(absTarget, baseDir, name, "SKILL.md")
-					data, err := os.ReadFile(destPath)
+					destDir := filepath.Join(absTarget, baseDir, name)
+					_, err := os.Stat(filepath.Join(destDir, "SKILL.md"))
 					if os.IsNotExist(err) {
 						continue // not scaffolded; not an error here
 					}
-					if string(data) != string(canonicalData) {
-						add("warn", "sync", fmt.Sprintf("%s/%s/SKILL.md differs from canonical — run: skcr sync", baseDir, name))
+					if !skillArtifactsEqual(filepath.Dir(canonicalPath), destDir) {
+						add("warn", "sync", fmt.Sprintf("%s/%s canonical artifacts differ — run: skcr sync", baseDir, name))
 						outOfSync++
 					}
 				}
 			}
 			if outOfSync == 0 && len(skillNames) > 0 {
-				add("ok", "sync", "all platform SKILL.md files match canonical source")
+				add("ok", "sync", "all platform skill artifacts match canonical source")
 			}
 
 			// ── Lockfile ─────────────────────────────────────────────────────────

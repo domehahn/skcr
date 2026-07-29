@@ -112,6 +112,7 @@ func NewRootCommand() *cobra.Command {
 	root.AddCommand(newSkillSizeCommand())
 	root.AddCommand(newFilterByCommand())
 	root.AddCommand(newCopySkillCommand())
+	root.AddCommand(newContractCommand())
 
 	return root
 }

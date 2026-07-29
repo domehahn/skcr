@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -43,6 +44,24 @@ func TestBumpSynchronizesSkillArtifacts(t *testing.T) {
 			t.Fatalf("%s was not updated: %s", path, content)
 		}
 	}
+	descriptor, err := os.ReadFile(filepath.Join(skillDir, "skill.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"schema_version: \"2\"", "goal:", "contract:", "file: contract.yaml", "evals:"} {
+		if !strings.Contains(string(descriptor), want) {
+			t.Fatalf("version bump erased descriptor field %q:\n%s", want, descriptor)
+		}
+	}
+	contract, err := os.ReadFile(filepath.Join(skillDir, "contract.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"schema_version: \"1\"", "declared-tools-only", "scope: invocation"} {
+		if !strings.Contains(string(contract), want) {
+			t.Fatalf("version bump erased contract field %q:\n%s", want, contract)
+		}
+	}
 	infos, err := Check(skillDir)
 	if err != nil {
 		t.Fatal(err)
@@ -63,6 +82,90 @@ func TestBumpSynchronizesSkillArtifacts(t *testing.T) {
 	}
 	if !strings.Contains(notes, "secure-code-review 1.1.0") {
 		t.Fatalf("unexpected release notes: %s", notes)
+	}
+}
+
+func TestChangedDetectsContractOnlyChange(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	dir := t.TempDir()
+	runGit(t, dir, "init")
+	runGit(t, dir, "config", "user.email", "test@example.com")
+	runGit(t, dir, "config", "user.name", "Test User")
+	if _, err := scaffold.WriteSkill(scaffold.SkillOptions{
+		Name: "contract-skill", OutputDir: filepath.Join(dir, ".agents", "skills"),
+		Version: "1.0.0", Platforms: []string{"codex"},
+	}); err != nil {
+		t.Fatal(err)
+	}
+	runGit(t, dir, "add", ".")
+	runGit(t, dir, "commit", "-m", "initial")
+	path := filepath.Join(dir, ".agents", "skills", "contract-skill", "contract.yaml")
+	data, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	updated := strings.ReplaceAll(string(data), "network:\n            allow: []", "network:\n            allow:\n                - api.example.com")
+	if updated == string(data) {
+		t.Fatalf("network contract fixture not found:\n%s", data)
+	}
+	if err := os.WriteFile(path, []byte(updated), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	changed, err := Changed(filepath.Join(dir, ".agents", "skills"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(changed) != 1 || len(changed[0].Errors) == 0 || !strings.Contains(strings.Join(changed[0].Files, "\n"), "contract.yaml") || changed[0].ContractImpact != "EXPANSION" {
+		t.Fatalf("contract-only change was not material: %#v", changed)
+	}
+}
+
+func TestChangedClassifiesGoalAndEvalOnlyChanges(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	tests := []struct {
+		name, rel, old, replacement, wantType string
+	}{
+		{"goal", "skill.yaml", "TODO: Define the outcome this skill is expected to achieve.", "Produce a classified result.", "goal_or_descriptor"},
+		{"eval", filepath.Join("evals", "baseline.yaml"), "Perform the requested task.", "Perform the bounded requested task.", "eval"},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := t.TempDir()
+			runGit(t, dir, "init")
+			runGit(t, dir, "config", "user.email", "test@example.com")
+			runGit(t, dir, "config", "user.name", "Test User")
+			if _, err := scaffold.WriteSkill(scaffold.SkillOptions{
+				Name: "classified-skill", OutputDir: filepath.Join(dir, ".agents", "skills"),
+				Version: "1.0.0", Platforms: []string{"codex"},
+			}); err != nil {
+				t.Fatal(err)
+			}
+			runGit(t, dir, "add", ".")
+			runGit(t, dir, "commit", "-m", "initial")
+			path := filepath.Join(dir, ".agents", "skills", "classified-skill", tc.rel)
+			data, err := os.ReadFile(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			updated := strings.Replace(string(data), tc.old, tc.replacement, 1)
+			if updated == string(data) {
+				t.Fatalf("fixture %q not found in %s", tc.old, data)
+			}
+			if err := os.WriteFile(path, []byte(updated), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			changed, err := Changed(filepath.Join(dir, ".agents", "skills"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if len(changed) != 1 || !slices.Contains(changed[0].ChangeTypes, tc.wantType) {
+				t.Fatalf("unexpected classification: %#v", changed)
+			}
+		})
 	}
 }
 

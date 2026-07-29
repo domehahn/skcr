@@ -1,0 +1,62 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/domehahn/skcr/schemas/eval-v1.schema.json",
+  "title": "skcr Behavioral Eval v1",
+  "$comment": "Goal and invariant references must resolve against the accompanying skill descriptor and contract. This cross-document semantic rule is normative and validated by skcr.",
+  "x-skcr-semantic-rules": ["goal_references_resolve", "invariant_references_resolve"],
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "scenarios"],
+  "properties": {
+    "schema_version": { "const": "1" },
+    "scenarios": {
+      "type": "array",
+      "items": {
+        "type": "object", "additionalProperties": false,
+        "required": ["id", "description", "input", "assertions"],
+        "properties": {
+          "id": { "$ref": "#/$defs/identifier" },
+          "description": { "type": "string", "minLength": 1 },
+          "category": { "enum": ["baseline", "adversarial", "boundary", "goal"] },
+          "input": {
+            "type": "object", "additionalProperties": false, "required": ["prompt"],
+            "properties": { "prompt": { "type": "string", "minLength": 1 } }
+          },
+          "assertions": {
+            "type": "object", "additionalProperties": false, "required": ["goal", "capabilities", "tools", "invariants", "limits"],
+            "properties": {
+              "goal": {
+                "type": "object", "additionalProperties": false, "required": ["must_satisfy"],
+                "properties": { "must_satisfy": { "$ref": "#/$defs/stringList" } }
+              },
+              "capabilities": {
+                "type": "object", "additionalProperties": false, "required": ["must_not_use"],
+                "properties": { "must_not_use": { "type": "array", "items": { "$ref": "#/$defs/capabilityIdentifier" }, "uniqueItems": true } }
+              },
+              "tools": {
+                "type": "object", "additionalProperties": false, "required": ["must_not_use"],
+                "properties": { "must_not_use": { "$ref": "#/$defs/noWildcardList" } }
+              },
+              "invariants": {
+                "type": "object", "additionalProperties": false, "required": ["must_hold"],
+                "properties": { "must_hold": { "$ref": "#/$defs/stringList" } }
+              },
+              "limits": {
+                "type": "object", "additionalProperties": false, "required": ["max_tool_calls"],
+                "properties": { "max_tool_calls": { "type": ["integer", "null"], "minimum": 0 } }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "$defs": {
+    "identifier": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$" },
+    "stringList": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "noWildcardList": { "type": "array", "items": { "type": "string", "minLength": 1, "pattern": "^[^*]+$" }, "uniqueItems": true },
+    "capabilityIdentifier": {
+      "enum": ["repository.read", "repository.write", "filesystem.read", "filesystem.write", "network.connect", "process.execute", "secrets.read", "tool.invoke"]
+    }
+  }
+}

@@ -13,6 +13,7 @@ import (
 	"github.com/domehahn/skcr/internal/models"
 	"github.com/domehahn/skcr/internal/renderer"
 	"github.com/domehahn/skcr/internal/skilllock"
+	"github.com/domehahn/skcr/internal/skillmeta"
 	"github.com/domehahn/sklib/spec"
 	"gopkg.in/yaml.v3"
 )
@@ -91,6 +92,12 @@ func ValidateProjectWithOptions(target string, opts Options) ([]string, error) {
 				}
 				if errMsg := validateSkillMetadataForName(string(text), entry.Name()); errMsg != "" {
 					errors = append(errors, fmt.Sprintf("%s: %s", errMsg, skillFile))
+				}
+				descriptorPath := filepath.Join(filepath.Dir(skillFile), "skill.yaml")
+				if _, statErr := os.Stat(descriptorPath); statErr == nil {
+					for _, descriptorErr := range skillmeta.ValidateDirectory(filepath.Dir(skillFile)) {
+						errors = append(errors, fmt.Sprintf("Skill %q: %s: %s", entry.Name(), descriptorErr, descriptorPath))
+					}
 				}
 			}
 		}
@@ -485,6 +492,9 @@ func validateSkillMetadataForName(content, expectedName string) string {
 		errs = append(errs, "name does not match skill directory: "+fm.Name+" != "+expectedName)
 	}
 	errs = append(errs, spec.ValidateSkillMDFrontmatter(fm)...)
+	if fm.Since != "" && fm.LastModified != "" && fm.Since > fm.LastModified {
+		errs = append(errs, "since must not be later than last_modified")
+	}
 	if !bodyChangelogHeadingRE.MatchString(body) {
 		errs = append(errs, "missing required body section: ## Changelog")
 	} else {

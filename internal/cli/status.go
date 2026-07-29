@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/domehahn/skcr/internal/skillmeta"
 	"github.com/spf13/cobra"
 )
 
@@ -83,10 +84,12 @@ func newStatusCommand() *cobra.Command {
 			}
 
 			var rows []skillStatus
-			inSync, outOfSync, missing := 0, 0, 0
+			inSync, outOfSync, missing, invalid := 0, 0, 0, 0
 			for _, s := range skills {
-				canonicalPath := filepath.Join(absTarget, agentsBase, s, "SKILL.md")
+				canonicalDir := filepath.Join(absTarget, agentsBase, s)
+				canonicalPath := filepath.Join(canonicalDir, "SKILL.md")
 				canonicalData, _ := os.ReadFile(canonicalPath)
+				descriptorErrors := skillmeta.ValidateDirectory(canonicalDir)
 
 				ver := "-"
 				if fm, ok := parseFrontmatterDates(string(canonicalData)); ok && fm.Version != "" {
@@ -96,14 +99,17 @@ func newStatusCommand() *cobra.Command {
 				dirStatus := map[string]string{}
 				row := fmt.Sprintf("%-*s  %-*s", nameWidth, s, verWidth, ver)
 				for _, d := range dirs {
-					skillMD := filepath.Join(absTarget, d, s, "SKILL.md")
-					data, statErr := os.ReadFile(skillMD)
+					skillDir := filepath.Join(absTarget, d, s)
+					_, statErr := os.Stat(filepath.Join(skillDir, "SKILL.md"))
 					var cell, cellJSON string
 					switch {
 					case os.IsNotExist(statErr):
 						cell, cellJSON = "✗", "missing"
 						missing++
-					case d == agentsBase || string(data) == string(canonicalData):
+					case d == agentsBase && len(descriptorErrors) > 0:
+						cell, cellJSON = "!", "invalid"
+						invalid++
+					case d == agentsBase || skillArtifactsEqual(canonicalDir, skillDir):
 						cell, cellJSON = "✓", "ok"
 						inSync++
 					default:
@@ -130,6 +136,9 @@ func newStatusCommand() *cobra.Command {
 			if outOfSync > 0 {
 				legend = append(legend, fmt.Sprintf("%d ~ differs (run skcr sync)", outOfSync))
 			}
+			if invalid > 0 {
+				legend = append(legend, fmt.Sprintf("%d ! invalid contract (run skcr validate)", invalid))
+			}
 			if missing > 0 {
 				legend = append(legend, fmt.Sprintf("%d ✗ missing (run skcr bake --write)", missing))
 			}
@@ -141,6 +150,24 @@ func newStatusCommand() *cobra.Command {
 	cmd.Flags().StringVarP(&target, "target", "t", ".", "Repository path")
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Print JSON output")
 	return cmd
+}
+
+func skillArtifactsEqual(canonicalDir, destinationDir string) bool {
+	artifacts, err := canonicalSkillArtifacts(canonicalDir)
+	if err != nil {
+		return false
+	}
+	for _, rel := range artifacts {
+		left, err := os.ReadFile(filepath.Join(canonicalDir, rel))
+		if err != nil {
+			return false
+		}
+		right, err := os.ReadFile(filepath.Join(destinationDir, rel))
+		if err != nil || string(left) != string(right) {
+			return false
+		}
+	}
+	return true
 }
 
 func shortDirLabel(dir string) string {

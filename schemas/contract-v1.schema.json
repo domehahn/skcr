@@ -1,0 +1,143 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/domehahn/skcr/schemas/contract-v1.schema.json",
+  "title": "skcr Behavioral Contract v1",
+  "$comment": "Cross-field rules required by Contract v1: required capabilities must be a subset of allowed capabilities; tools.allow and tools.deny must be disjoint. These semantic constraints are normative even though JSON Schema draft 2020-12 cannot compare arbitrary array values across sibling properties.",
+  "x-skcr-semantic-rules": ["required_subset_of_allowed", "tool_allow_deny_disjoint"],
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "capabilities", "tools", "data", "preconditions", "postconditions", "invariants", "human_approval", "limits", "output"],
+  "properties": {
+    "schema_version": { "const": "1" },
+    "capabilities": {
+      "type": "object", "additionalProperties": false, "required": ["required", "allowed"],
+      "properties": {
+        "required": { "$ref": "#/$defs/capabilitySet" },
+        "allowed": { "$ref": "#/$defs/capabilitySet" }
+      }
+    },
+    "tools": {
+      "type": "object", "additionalProperties": false, "required": ["allow", "deny"],
+      "properties": {
+        "allow": { "$ref": "#/$defs/noWildcardList" },
+        "deny": { "$ref": "#/$defs/noWildcardList" }
+      }
+    },
+    "data": {
+      "type": "object", "additionalProperties": false, "required": ["classifications", "egress", "flows"],
+      "properties": {
+        "classifications": { "$ref": "#/$defs/stringList" },
+        "egress": {
+          "type": "object", "additionalProperties": false, "required": ["allow"],
+          "properties": { "allow": { "$ref": "#/$defs/noWildcardList" } }
+        },
+        "flows": {
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["source", "sink", "allowed"],
+            "properties": {
+              "source": { "$ref": "#/$defs/dataEndpoint" },
+              "sink": { "$ref": "#/$defs/dataEndpoint" },
+              "allowed": { "type": "boolean" }
+            }
+          }
+        }
+      }
+    },
+    "preconditions": { "type": "array", "items": { "$ref": "#/$defs/condition" } },
+    "postconditions": { "type": "array", "items": { "$ref": "#/$defs/condition" } },
+    "invariants": { "type": "array", "items": { "$ref": "#/$defs/condition" } },
+    "human_approval": {
+      "type": "object", "additionalProperties": false, "required": ["rules"],
+      "properties": {
+        "rules": {
+          "type": "array",
+          "items": {
+            "type": "object", "additionalProperties": false, "required": ["id", "action", "mode"],
+            "properties": {
+              "id": { "$ref": "#/$defs/identifier" },
+              "action": {
+                "type": "object", "additionalProperties": false, "required": ["capability"],
+                "properties": {
+                  "capability": { "$ref": "#/$defs/capabilityIdentifier" },
+                  "tool": { "type": "string", "minLength": 1, "not": { "const": "*" } }
+                }
+              },
+              "mode": { "enum": ["per_action", "per_invocation", "per_session"] }
+            }
+          }
+        }
+      }
+    },
+    "limits": {
+      "type": "object", "additionalProperties": false,
+      "required": ["scope", "max_tool_calls", "max_runtime_seconds", "max_network_requests"],
+      "properties": {
+        "scope": { "const": "invocation" },
+        "max_tool_calls": { "$ref": "#/$defs/nullableLimit" },
+        "max_runtime_seconds": { "$ref": "#/$defs/nullableLimit" },
+        "max_network_requests": { "$ref": "#/$defs/nullableLimit" }
+      }
+    },
+    "output": {
+      "type": "object", "additionalProperties": false, "required": ["format", "required_fields", "forbidden_content"],
+      "properties": {
+        "format": { "type": "string", "minLength": 1 },
+        "required_fields": { "$ref": "#/$defs/stringList" },
+        "forbidden_content": { "$ref": "#/$defs/stringList" }
+      }
+    }
+  },
+  "$defs": {
+    "identifier": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$" },
+    "capabilityIdentifier": {
+      "enum": ["repository.read", "repository.write", "filesystem.read", "filesystem.write", "network.connect", "process.execute", "secrets.read", "tool.invoke"]
+    },
+    "stringList": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "noWildcardList": { "type": "array", "items": { "type": "string", "minLength": 1, "pattern": "^[^*]+$" }, "uniqueItems": true },
+    "nullableLimit": { "type": ["integer", "null"], "minimum": 0 },
+    "capabilitySet": {
+      "type": "object", "additionalProperties": false, "required": ["repository", "filesystem", "network", "process", "secrets"],
+      "properties": {
+        "repository": {
+          "type": "object", "additionalProperties": false, "required": ["read", "write"],
+          "properties": { "read": { "$ref": "#/$defs/noWildcardList" }, "write": { "$ref": "#/$defs/noWildcardList" } }
+        },
+        "filesystem": {
+          "type": "object", "additionalProperties": false, "required": ["read", "write"],
+          "properties": { "read": { "$ref": "#/$defs/noWildcardList" }, "write": { "$ref": "#/$defs/noWildcardList" } }
+        },
+        "network": {
+          "type": "object", "additionalProperties": false, "required": ["allow"],
+          "properties": { "allow": { "$ref": "#/$defs/noWildcardList" } }
+        },
+        "process": {
+          "type": "object", "additionalProperties": false, "required": ["execute"],
+          "properties": { "execute": { "type": "boolean" } }
+        },
+        "secrets": {
+          "type": "object", "additionalProperties": false, "required": ["read"],
+          "properties": { "read": { "type": "boolean" } }
+        }
+      }
+    },
+    "condition": {
+      "type": "object", "additionalProperties": false, "required": ["id", "type"],
+      "properties": {
+        "id": { "$ref": "#/$defs/identifier" },
+        "type": { "$ref": "#/$defs/identifier" },
+        "description": { "type": "string" },
+        "capabilities": { "type": "array", "items": { "$ref": "#/$defs/capabilityIdentifier" }, "uniqueItems": true },
+        "classifications": { "$ref": "#/$defs/stringList" }
+      }
+    },
+    "dataEndpoint": {
+      "type": "object", "additionalProperties": false,
+      "properties": {
+        "classification": { "type": "string", "minLength": 1 },
+        "type": { "type": "string", "minLength": 1 },
+        "destination": { "type": "string", "minLength": 1 }
+      }
+    }
+  }
+}
