@@ -1,0 +1,79 @@
+schema_version: "2"
+capabilities:
+  semantic:
+    required:
+      repository.read: [source-files]
+  runtime:
+    required:
+      filesystem: {read: [], write: [], delete: []}
+      network: {inbound: false, outbound: false, hosts: []}
+      commands: {execute: false, allow: []}
+      secrets: {read: [], expose: false}
+      environment: {read: []}
+      tools: {allow: [], deny: []}
+      mcp: {servers: [], tools: []}
+      persistence: false
+      agent:
+        autonomous_actions: false
+        external_side_effects: false
+        confirm_destructive: true
+        confirm_external: true
+        external_targets: []
+    allowed:
+      filesystem: {read: [], write: [], delete: []}
+      network: {inbound: false, outbound: false, hosts: []}
+      commands: {execute: false, allow: []}
+      secrets: {read: [], expose: false}
+      environment: {read: []}
+      tools: {allow: [], deny: []}
+      mcp: {servers: [], tools: []}
+      persistence: false
+      agent:
+        autonomous_actions: false
+        external_side_effects: false
+        confirm_destructive: true
+        confirm_external: true
+        external_targets: []
+identity:
+  accepted_principals: [agent, human]
+  credentials:
+    max_ttl_seconds: 900
+    require_audience_binding: true
+    allow_token_passthrough: false
+    required_scopes: []
+delegation:
+  allowed: false
+  max_depth: 0
+  require_child_capability_subset: true
+  require_authenticated_origin: true
+data:
+  classifications: [secret, credential, source-code]
+  policies:
+    - {id: secret, sensitivity: restricted, purposes: [task-execution], retention: invocation}
+    - {id: credential, sensitivity: restricted, purposes: [authentication], retention: invocation}
+    - {id: source-code, sensitivity: internal, purposes: [code-review], retention: invocation}
+  egress: {allow: []}
+  flows: []
+preconditions: []
+postconditions: []
+invariants:
+  - id: declared-capabilities-only
+    type: capability.declared_only
+human_approval: {rules: []}
+effects: {tools: []}
+resources:
+  scope: invocation
+  max_runtime_seconds: 30
+  max_memory_mb: 512
+  max_network_bytes: 0
+  max_network_requests: 0
+  max_tool_calls: 10
+  max_steps: 30
+  max_replans: 5
+  max_delegation_depth: 0
+  max_model_tokens: 20000
+  max_external_mutations: 0
+output:
+  format: structured
+  required_fields: [findings]
+  forbidden_content: [secrets, credentials]

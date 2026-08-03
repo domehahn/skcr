@@ -119,6 +119,8 @@ func newScaffoldSkillCommand() *cobra.Command {
 			}
 
 			fmt.Printf("\nNext steps:\n")
+			fmt.Printf("  skcr validate --target %s\n", skillPath)
+			fmt.Printf("  skcr compile %s --target skil\n", skillPath)
 			fmt.Printf("  skpm validate %s\n", skillPath)
 			fmt.Printf("  skpm package %s\n", skillPath)
 			fmt.Printf("  skpm publish %s --source <registry>\n", skillPath)
@@ -128,7 +130,7 @@ func newScaffoldSkillCommand() *cobra.Command {
 
 	cmd.Flags().StringVar(&outputDir, "output-dir", ".", "Directory where the skill directory should be created")
 	cmd.Flags().StringVar(&version, "version", "0.1.0", "Initial semver version")
-	cmd.Flags().StringVar(&description, "description", "", "Skill description for skill.yaml")
+	cmd.Flags().StringVar(&description, "description", "", "Skill description for descriptor.yaml")
 	cmd.Flags().StringVar(&owner, "owner", "", "Skill owner")
 	cmd.Flags().StringArrayVar(&platforms, "platform", []string{"claude-code", "codex"}, "Compatible platform; may be repeated")
 	cmd.Flags().StringVar(&license, "license", "MIT", "Skill license")
@@ -201,6 +203,8 @@ func newScaffoldSkillsCommand() *cobra.Command {
 				}
 				if len(result.Created) > 0 || len(result.Skipped) > 0 {
 					fmt.Printf("\nNext steps for %s:\n", skillPath)
+					fmt.Printf("  skcr validate --target %s\n", skillPath)
+					fmt.Printf("  skcr compile %s --target skil\n", skillPath)
 					fmt.Printf("  skpm validate %s\n", skillPath)
 					fmt.Printf("  skpm package %s\n", skillPath)
 					fmt.Printf("  skpm publish %s --source <registry>\n\n", skillPath)

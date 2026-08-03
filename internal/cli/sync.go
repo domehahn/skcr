@@ -20,7 +20,7 @@ func newSyncCommand() *cobra.Command {
 		Use:   "sync",
 		Short: "Propagate canonical skill artifacts to all platform directories",
 		Long: `Reads canonical artifacts from .agents/skills/<name>/ and copies SKILL.md,
-skill.yaml, contract.yaml, and evals/ to every other platform skill directory
+descriptor.yaml, contract.yaml, assurance.yaml, evals/, integrations/, and dependencies.yaml to every other platform skill directory
 (.claude/skills/, .github/skills/, etc.)
 where the skill is already scaffolded. Unscaffolded directories are skipped —
 run "skcr bake --write" first to create them.`,
@@ -142,7 +142,7 @@ run "skcr bake --write" first to create them.`,
 
 func canonicalSkillArtifacts(skillDir string) ([]string, error) {
 	artifacts := []string{}
-	for _, rel := range []string{"SKILL.md", "contract.yaml", "skill.yaml"} {
+	for _, rel := range []string{"SKILL.md", "contract.yaml", "descriptor.yaml", "dependencies.yaml", "assurance.yaml"} {
 		info, err := os.Lstat(filepath.Join(skillDir, rel))
 		if err == nil && info.Mode()&os.ModeSymlink != 0 {
 			return nil, fmt.Errorf("canonical artifact must not be a symlink: %s", filepath.Join(skillDir, rel))
@@ -152,29 +152,34 @@ func canonicalSkillArtifacts(skillDir string) ([]string, error) {
 			return nil, err
 		}
 	}
-	evalsDir := filepath.Join(skillDir, "evals")
-	err := filepath.WalkDir(evalsDir, func(path string, entry fs.DirEntry, err error) error {
-		if err != nil {
-			if os.IsNotExist(err) && path == evalsDir {
+	for _, directory := range []string{"evals", "integrations"} {
+		artifactDir := filepath.Join(skillDir, directory)
+		err := filepath.WalkDir(artifactDir, func(path string, entry fs.DirEntry, err error) error {
+			if err != nil {
+				if os.IsNotExist(err) && path == artifactDir {
+					return nil
+				}
+				return err
+			}
+			if entry.IsDir() {
 				return nil
 			}
-			return err
-		}
-		if entry.IsDir() {
+			if entry.Type()&os.ModeSymlink != 0 {
+				return fmt.Errorf("canonical artifact must not be a symlink: %s", path)
+			}
+			rel, err := filepath.Rel(skillDir, path)
+			if err != nil {
+				return err
+			}
+			artifacts = append(artifacts, rel)
 			return nil
-		}
-		if entry.Type()&os.ModeSymlink != 0 {
-			return fmt.Errorf("canonical artifact must not be a symlink: %s", path)
-		}
-		rel, err := filepath.Rel(skillDir, path)
+		})
 		if err != nil {
-			return err
+			return nil, err
 		}
-		artifacts = append(artifacts, rel)
-		return nil
-	})
+	}
 	sort.Strings(artifacts)
-	return artifacts, err
+	return artifacts, nil
 }
 
 func rejectSymlinkArtifactPath(skillDir, destination string) error {

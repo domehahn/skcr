@@ -9,6 +9,8 @@ import (
 	"testing"
 
 	"github.com/domehahn/skcr/internal/scaffold"
+	"github.com/domehahn/skcr/internal/skillmeta"
+	"gopkg.in/yaml.v3"
 )
 
 func TestBumpSynchronizesSkillArtifacts(t *testing.T) {
@@ -35,7 +37,7 @@ func TestBumpSynchronizesSkillArtifacts(t *testing.T) {
 	if info.Version != "1.1.0" || info.LastModified != "2026-06-17" {
 		t.Fatalf("unexpected bumped info: %#v", info)
 	}
-	for _, path := range []string{"SKILL.md", "VERSION", "skill.yaml", "CHANGELOG.md"} {
+	for _, path := range []string{"SKILL.md", "VERSION", "descriptor.yaml", "CHANGELOG.md"} {
 		content, err := os.ReadFile(filepath.Join(skillDir, path))
 		if err != nil {
 			t.Fatal(err)
@@ -44,7 +46,7 @@ func TestBumpSynchronizesSkillArtifacts(t *testing.T) {
 			t.Fatalf("%s was not updated: %s", path, content)
 		}
 	}
-	descriptor, err := os.ReadFile(filepath.Join(skillDir, "skill.yaml"))
+	descriptor, err := os.ReadFile(filepath.Join(skillDir, "descriptor.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -57,7 +59,7 @@ func TestBumpSynchronizesSkillArtifacts(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"schema_version: \"1\"", "declared-tools-only", "scope: invocation"} {
+	for _, want := range []string{"schema_version: \"2\"", "runtime:", "declared-tools-only", "scope: invocation"} {
 		if !strings.Contains(string(contract), want) {
 			t.Fatalf("version bump erased contract field %q:\n%s", want, contract)
 		}
@@ -102,15 +104,20 @@ func TestChangedDetectsContractOnlyChange(t *testing.T) {
 	runGit(t, dir, "add", ".")
 	runGit(t, dir, "commit", "-m", "initial")
 	path := filepath.Join(dir, ".agents", "skills", "contract-skill", "contract.yaml")
-	data, err := os.ReadFile(path)
+	contract, err := skillmeta.LoadContract(path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	updated := strings.ReplaceAll(string(data), "network:\n            allow: []", "network:\n            allow:\n                - api.example.com")
-	if updated == string(data) {
-		t.Fatalf("network contract fixture not found:\n%s", data)
+	allow := true
+	contract.Capabilities.Runtime.Required.Network.Outbound = &allow
+	contract.Capabilities.Runtime.Required.Network.Hosts = []string{"api.example.com"}
+	contract.Capabilities.Runtime.Allowed.Network.Outbound = &allow
+	contract.Capabilities.Runtime.Allowed.Network.Hosts = []string{"api.example.com"}
+	updated, err := yaml.Marshal(contract)
+	if err != nil {
+		t.Fatal(err)
 	}
-	if err := os.WriteFile(path, []byte(updated), 0o644); err != nil {
+	if err := os.WriteFile(path, updated, 0o644); err != nil {
 		t.Fatal(err)
 	}
 	changed, err := Changed(filepath.Join(dir, ".agents", "skills"))
@@ -119,6 +126,10 @@ func TestChangedDetectsContractOnlyChange(t *testing.T) {
 	}
 	if len(changed) != 1 || len(changed[0].Errors) == 0 || !strings.Contains(strings.Join(changed[0].Files, "\n"), "contract.yaml") || changed[0].ContractImpact != "EXPANSION" {
 		t.Fatalf("contract-only change was not material: %#v", changed)
+	}
+	recommendation, err := Recommend(filepath.Join(dir, ".agents", "skills", "contract-skill"))
+	if err != nil || recommendation.Kind != BumpMajor || !recommendation.SecurityExpansion {
+		t.Fatalf("unexpected security recommendation: %#v, %v", recommendation, err)
 	}
 }
 
@@ -129,7 +140,7 @@ func TestChangedClassifiesGoalAndEvalOnlyChanges(t *testing.T) {
 	tests := []struct {
 		name, rel, old, replacement, wantType string
 	}{
-		{"goal", "skill.yaml", "TODO: Define the outcome this skill is expected to achieve.", "Produce a classified result.", "goal_or_descriptor"},
+		{"goal", "descriptor.yaml", "TODO: Define the outcome this skill is expected to achieve.", "Produce a classified result.", "goal_or_descriptor"},
 		{"eval", filepath.Join("evals", "baseline.yaml"), "Perform the requested task.", "Perform the bounded requested task.", "eval"},
 	}
 	for _, tc := range tests {
@@ -165,6 +176,10 @@ func TestChangedClassifiesGoalAndEvalOnlyChanges(t *testing.T) {
 			if len(changed) != 1 || !slices.Contains(changed[0].ChangeTypes, tc.wantType) {
 				t.Fatalf("unexpected classification: %#v", changed)
 			}
+			recommendation, err := Recommend(filepath.Join(dir, ".agents", "skills", "classified-skill"))
+			if err != nil || recommendation.Kind != BumpMinor {
+				t.Fatalf("unexpected recommendation: %#v, %v", recommendation, err)
+			}
 		})
 	}
 }
@@ -184,7 +199,7 @@ func TestCheckDetectsDivergentSkillArtifacts(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(skillDir, "VERSION"), []byte("9.9.9\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(skillDir, "skill.yaml"), []byte("name: secure-code-review\nversion: 9.9.9\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(skillDir, "descriptor.yaml"), []byte("name: secure-code-review\nversion: 9.9.9\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(skillDir, "CHANGELOG.md"), []byte("# Changelog\n\n## 9.9.9 - 2026-06-12\n\n- Drift.\n"), 0o644); err != nil {
@@ -198,7 +213,7 @@ func TestCheckDetectsDivergentSkillArtifacts(t *testing.T) {
 		t.Fatalf("expected one skill info, got %#v", infos)
 	}
 	errText := strings.Join(infos[0].Errors, "\n")
-	for _, want := range []string{"VERSION", "skill.yaml", "CHANGELOG.md"} {
+	for _, want := range []string{"VERSION", "descriptor.yaml", "CHANGELOG.md"} {
 		if !strings.Contains(errText, want) {
 			t.Fatalf("expected %s drift error, got %#v", want, infos[0].Errors)
 		}
@@ -211,6 +226,24 @@ func TestBumpRejectsInvalidInputs(t *testing.T) {
 	}
 	if _, err := Bump(t.TempDir(), BumpPatch, "2026/06/12", "change"); err == nil {
 		t.Fatal("expected invalid date error")
+	}
+}
+
+func TestRecordExpansionApprovalBindsCurrentContractDigest(t *testing.T) {
+	dir := t.TempDir()
+	if _, err := scaffold.WriteSkill(scaffold.SkillOptions{Name: "approval-skill", OutputDir: dir, Version: "1.0.0", Owner: "security", Platforms: []string{"codex"}}); err != nil {
+		t.Fatal(err)
+	}
+	skillDir := filepath.Join(dir, "approval-skill")
+	if err := RecordExpansionApproval(skillDir, "security-team", "Approve constrained API access", "2026-08-02"); err != nil {
+		t.Fatal(err)
+	}
+	document, err := skillmeta.LoadAssurance(filepath.Join(skillDir, "assurance.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(document.SecurityReview.ExpansionApprovals) != 1 || document.SecurityReview.ExpansionApprovals[0].ApprovedBy != "security-team" {
+		t.Fatalf("approval not recorded: %#v", document)
 	}
 }
 
@@ -309,11 +342,11 @@ func TestSyncArtifacts(t *testing.T) {
 	}
 	skillDir := filepath.Join(dir, "secure-code-review")
 
-	// Diverge VERSION and skill.yaml from SKILL.md.
+	// Diverge VERSION and descriptor.yaml from SKILL.md.
 	if err := os.WriteFile(filepath.Join(skillDir, "VERSION"), []byte("9.9.9\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(filepath.Join(skillDir, "skill.yaml"), []byte("name: secure-code-review\nversion: 9.9.9\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(skillDir, "descriptor.yaml"), []byte("name: secure-code-review\nversion: 9.9.9\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -333,9 +366,9 @@ func TestSyncArtifacts(t *testing.T) {
 		t.Fatalf("VERSION not synced: %q", version)
 	}
 
-	got, ok, err := skillYAMLVersion(filepath.Join(skillDir, "skill.yaml"))
+	got, ok, err := skillYAMLVersion(filepath.Join(skillDir, "descriptor.yaml"))
 	if err != nil || !ok || got != "1.0.0" {
-		t.Fatalf("skill.yaml not synced: %q ok=%v err=%v", got, ok, err)
+		t.Fatalf("descriptor.yaml not synced: %q ok=%v err=%v", got, ok, err)
 	}
 
 	changelog, err := os.ReadFile(filepath.Join(skillDir, "CHANGELOG.md"))

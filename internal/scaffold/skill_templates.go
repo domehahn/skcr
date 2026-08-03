@@ -148,6 +148,12 @@ var AdditionalSDLCSkillNames = []string{
 	"mlops-governance-reviewer",
 	"llmops-security-reviewer",
 	"ai-change-risk-reviewer",
+	"agent-containment-reviewer",
+	"agent-runtime-enforcement-reviewer",
+	"agent-behavior-eval-engineer",
+	"backdoor-persistence-reviewer",
+	"agentic-threat-modeler",
+	"security-invariant-test-engineer",
 	"privacy-data-protection-reviewer",
 	"api-contract-reviewer",
 	"secure-design-reviewer",
@@ -540,6 +546,7 @@ var sdlcSkillContent = map[string]skillContent{
 		Operating: []string{
 			"Inspect existing patterns, tests, ownership boundaries, and generated-file flows before editing.",
 			"Implement only requested behavior and avoid broad refactoring.",
+			"Trace every behavioral change to the requested change, specification, Goal, Contract, or an explicitly documented supporting requirement.",
 			"Add or update tests for changed behavior and relevant failure paths.",
 			"Validate inputs at trust boundaries and handle errors safely.",
 			"Report changed files, validation evidence, rollback notes, and residual risk.",
@@ -564,6 +571,7 @@ var sdlcSkillContent = map[string]skillContent{
 			"Summarize changed files and validation performed.",
 			"Keep generated outputs synchronized with canonical sources.",
 			"Separate formatting-only churn from functional changes.",
+			"Identify new outbound requests, privileged paths, persistence mechanisms, bypasses, or tool capabilities and record their requirement provenance.",
 		},
 		DecisionRules: []string{
 			"If required behavior implies unrelated refactoring, ask before expanding scope.",
@@ -572,6 +580,7 @@ var sdlcSkillContent = map[string]skillContent{
 			"If a migration is required, make rollout and rollback explicit.",
 			"If tests cannot run, report the reason and residual risk.",
 			"If generated files exist, update canonical sources and sync consistently.",
+			"If behavior cannot be traced to the task, specification, Goal, Contract, or a documented supporting requirement, do not implement it and require security review.",
 		},
 		FindingCategories: []string{
 			"Scope creep or unrelated change.",
@@ -580,6 +589,7 @@ var sdlcSkillContent = map[string]skillContent{
 			"API compatibility or migration risk.",
 			"Secret exposure or unsafe configuration.",
 			"Global side effect or hidden state change.",
+			"Unexplained behavior or capability without requirement provenance.",
 		},
 		SeverityGuidance: []string{
 			"Critical: change introduces data loss, secret exposure, or unsafe production behavior.",
@@ -602,6 +612,7 @@ var sdlcSkillContent = map[string]skillContent{
 			"Public API compatibility is preserved or approved.",
 			"No secrets or unsafe globals are introduced.",
 			"Rollback and generated-file consistency are addressed.",
+			"Every behavioral change is traceable to an authorized requirement, Goal, Contract declaration, or explicit supporting decision.",
 		},
 		AntiPatterns: []string{
 			"Broad refactoring in a narrow fix.",
@@ -610,6 +621,7 @@ var sdlcSkillContent = map[string]skillContent{
 			"Swallowing errors or leaking internal errors externally.",
 			"Hardcoding environment-specific secrets or URLs.",
 			"Editing generated copies without updating canonical source.",
+			"Introducing undocumented network calls, privileged control paths, persistence, bypasses, or other behavior unrelated to the authorized change.",
 		},
 	},
 	"test-strategy-engineer": {
@@ -1163,6 +1175,9 @@ func buildSkillBodies() map[string]string {
 	for _, seed := range additionalSkillSeeds {
 		sdlcSkillContent[seed.Name] = generatedAdditionalSkillContent(seed)
 	}
+	for name, content := range agenticSecuritySkillContent {
+		sdlcSkillContent[name] = content
+	}
 	for _, name := range SDLCSkillNames {
 		bodies[name] = buildSkillBody(name, sdlcSkillContent[name])
 	}
@@ -1173,7 +1188,7 @@ func buildSkillBody(name string, content skillContent) string {
 	var b strings.Builder
 	b.WriteString("# {{.Title}}\n\n")
 	writeParagraph(&b, "Purpose", content.Purpose)
-	writeParagraph(&b, "Goal and behavioral contract", "The authoritative Goal and artifact references are defined in `skill.yaml`. Capability boundaries, tool permissions, data boundaries, invariants, approval requirements, output contract, and operational limits are defined in `contract.yaml`.\n\nTreat those declarations as mandatory execution constraints. `skcr` validates the declaration but does not enforce it at runtime.")
+	writeParagraph(&b, "Goal and behavioral contract", "The authoritative Goal and artifact references are defined in `descriptor.yaml`. Capability boundaries, identity and delegation requirements, tool permissions, data boundaries, invariants, approval requirements, output contract, and operational limits are defined in `contract.yaml`. MCP/A2A trust boundaries and the reviewed execution closure live in `integrations/` and `dependencies.yaml`; ASPS and assurance requirements live in `assurance.yaml`.\n\nTreat those declarations as mandatory execution constraints. `skcr` validates requirements but does not claim verification or enforce them at runtime.")
 	writeBullets(&b, "When to use", content.When, false)
 	writeNumbered(&b, "Operating model", content.Operating)
 	writeBullets(&b, "Spec-Driven Change Context", sharedSpecDrivenChangeContext, false)

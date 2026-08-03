@@ -203,6 +203,8 @@ Use `skcr version` commands for repeatable skill version work:
 ```bash
 skcr version check .agents/skills --changed
 skcr version changed .agents/skills --json
+skcr version recommend .agents/skills/security-reviewer
+skcr version bump .agents/skills/security-reviewer --auto --change "Add adversarial eval coverage"
 skcr version bump .agents/skills/security-reviewer --kind patch --change "Tighten SSRF decision rules"
 skcr version bump .agents/skills --all-changed --kind patch --change "Refresh generated skill guidance" --dry-run
 skcr version changelog .agents/skills --json
@@ -210,17 +212,25 @@ skcr version release-notes .agents/skills --since 2026-06-01
 skcr version release-bundle .agents/skills --since 2026-06-01 --changed --json
 ```
 
-`version bump` updates `SKILL.md` frontmatter, the body `## Changelog`, `VERSION`, `skill.yaml`, and `CHANGELOG.md` when those files exist.
+`version bump` updates `SKILL.md` frontmatter, the body `## Changelog`, `VERSION`, `descriptor.yaml`, and `CHANGELOG.md` when those files exist.
 
-`bake --write` performs the same local artifact synchronization after the final `SKILL.md` is rendered. This prevents registered generated skills from keeping stale scaffold defaults in `VERSION`, `skill.yaml`, or `CHANGELOG.md`.
+`bake --write` performs the same local artifact synchronization after the final `SKILL.md` is rendered. This prevents registered generated skills from keeping stale scaffold defaults in `VERSION`, `descriptor.yaml`, or `CHANGELOG.md`.
 
 `version check` treats version drift as an error when any existing local artifact disagrees with `SKILL.md`:
 
 - `VERSION` must equal `SKILL.md` frontmatter `version`.
-- `skill.yaml` `version` must equal `SKILL.md` frontmatter `version`.
+- `descriptor.yaml` `version` must equal `SKILL.md` frontmatter `version`.
 - The latest `CHANGELOG.md` entry must equal `SKILL.md` frontmatter `version`.
 
 `version check --changed` and `version changed` use git status plus the version in `HEAD:SKILL.md` to detect material skill edits that did not bump the skill version. Use this in CI before releasing generated skills.
+
+`version recommend` applies the source/security rules: documentation and
+narrowing are patch-level, new Goals/Evals/integrations/dependencies/assurance
+requirements are minor-level, and Contract authority expansions are
+major-level. `version bump --auto` applies that recommendation. A detected
+security expansion additionally requires `--approve-security-expansion` and
+`--approved-by`; the review is bound to the canonical Contract digest in
+`assurance.yaml`.
 
 ---
 

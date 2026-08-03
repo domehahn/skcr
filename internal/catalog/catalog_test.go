@@ -68,6 +68,15 @@ func TestSkillCategories(t *testing.T) {
 		t.Fatalf("unexpected first DORA skill: %q", skills[0])
 	}
 
+	agentic, err := SkillsForCategory("agent-security")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(agentic) != 6 || agentic[0] != "agent-containment-reviewer" ||
+		agentic[5] != "security-invariant-test-engineer" {
+		t.Fatalf("unexpected agentic-security skills: %#v", agentic)
+	}
+
 	if _, err := SkillsForCategory("not-a-category"); err == nil {
 		t.Fatal("expected unknown category error")
 	}

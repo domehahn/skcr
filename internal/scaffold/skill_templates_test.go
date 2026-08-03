@@ -187,13 +187,29 @@ func TestRequiredDomainTerms(t *testing.T) {
 			"changelog",
 			"release notes",
 		},
-		"universal-skill-creator":          {"domain-specific", "changelog", "anti-patterns", "compatibility", "generic copy-paste"},
-		"dora-readiness-reviewer":          {"DORA readiness", "ICT risk framework", "third-party register", "auditability", "legal advice"},
-		"ict-third-party-risk-reviewer":    {"provider inventory", "subcontractor", "exit readiness", "DORA register", "concentration risk"},
-		"pipeline-security-architect":      {"OIDC trust policy", "artifact signing", "protected environment", "runner isolation", "deployment gate"},
-		"software-supply-chain-architect":  {"SLSA", "provenance", "SBOM", "trusted builder", "attestation"},
-		"kubernetes-platform-reviewer":     {"NetworkPolicy", "Pod Security", "admission controller", "cluster-admin", "upgrade readiness"},
-		"llmops-security-reviewer":         {"prompt injection", "tool permission", "RAG source", "guardrail", "red-team eval"},
+		"universal-skill-creator":         {"domain-specific", "changelog", "anti-patterns", "compatibility", "generic copy-paste"},
+		"dora-readiness-reviewer":         {"DORA readiness", "ICT risk framework", "third-party register", "auditability", "legal advice"},
+		"ict-third-party-risk-reviewer":   {"provider inventory", "subcontractor", "exit readiness", "DORA register", "concentration risk"},
+		"pipeline-security-architect":     {"OIDC trust policy", "artifact signing", "protected environment", "runner isolation", "deployment gate"},
+		"software-supply-chain-architect": {"SLSA", "provenance", "SBOM", "trusted builder", "attestation"},
+		"kubernetes-platform-reviewer":    {"NetworkPolicy", "Pod Security", "admission controller", "cluster-admin", "upgrade readiness"},
+		"llmops-security-reviewer":        {"prompt injection", "tool permission", "RAG source", "guardrail", "red-team eval"},
+		"agent-containment-reviewer":      {"untrusted principal", "transitive path", "container sockets", "lateral movement", "metadata endpoints", "kill switch"},
+		"agent-runtime-enforcement-reviewer": {
+			"contract digest", "runtime enforcement", "fail closed", "tool gateway", "approval replay", "alternate interfaces",
+		},
+		"agent-behavior-eval-engineer": {
+			"complete trajectory", "goal hacking", "hidden answers", "contract digest", "long-horizon", "declarative",
+		},
+		"backdoor-persistence-reviewer": {
+			"magic values", "hidden trigger", "covert egress", "startup persistence", "requirement provenance", "security-control tampering",
+		},
+		"agentic-threat-modeler": {
+			"untrusted principal", "MCP", "memory poisoning", "specification gaming", "sandbox escape", "cross-agent injection",
+		},
+		"security-invariant-test-engineer": {
+			"negative tests", "deny precedence", "contract digest", "no-secret-egress", "runtime enforcement", "declarative",
+		},
 		"privacy-data-protection-reviewer": {"personal data", "purpose limitation", "GDPR", "sensitive logging", "deletion"},
 		"secure-code-reviewer":             {"injection", "path traversal", "SSRF", "XSS", "race condition"},
 	}
@@ -204,6 +220,19 @@ func TestRequiredDomainTerms(t *testing.T) {
 			if !strings.Contains(lower, strings.ToLower(term)) {
 				t.Errorf("skill %q missing domain term %q", name, term)
 			}
+		}
+	}
+}
+
+func TestSafeImplementerRequiresBehaviorProvenance(t *testing.T) {
+	rendered := renderForTest(t, "safe-implementer")
+	for _, want := range []string{
+		"Trace every behavioral change to the requested change, specification, Goal, Contract, or an explicitly documented supporting requirement.",
+		"If behavior cannot be traced to the task, specification, Goal, Contract, or a documented supporting requirement, do not implement it and require security review.",
+		"Unexplained behavior or capability without requirement provenance.",
+	} {
+		if !strings.Contains(rendered, want) {
+			t.Errorf("safe-implementer missing behavior-provenance rule %q", want)
 		}
 	}
 }

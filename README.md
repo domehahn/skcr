@@ -1,22 +1,27 @@
 # Skill Creator (`skcr`)
 
-`skcr` is a Go CLI for creating versioned AI agent skill structures and rendering agentic project and platform files across multiple agent platforms.
+`skcr` is a Go source-artifact compiler for creating, validating, compiling,
+versioning, and rendering AI agent skills across multiple platforms.
 
 ## Purpose
 
 This repository contains versioned Agent Skills and the `skcr` CLI used to scaffold, render, sync, validate, version-check, and release-prepare those skills across Codex, GitLab Duo, Claude Code, GitHub Copilot, OpenHands, OpenCode, Ollama, Cursor, Roo Code, Kiro, Junie, Gemini CLI, Windsurf, Antigravity, Amazon Q, Qwen, and other agent platforms.
 
 ```text
-skcr  = init / add / remove / rename / list / bake / sync / status / doctor / export / validate / compatibility / version / clean
+skcr  = scaffold / validate / compile / render / sync / version
+skil  = validate / scan / verify / eval / assure / policy / enforce
 skpm  = validate / package / publish / install / update / lock / verify
 ```
 
 `skcr` creates, renders, synchronizes, validates local version metadata, detects changed skills, bumps local skill versions, and generates release notes. `skpm` manages registry-facing lifecycle work such as packaging, publishing, installing, locking, and verifying registry artifacts.
 
-New skills separate the Goal and identity (`skill.yaml`), behavioral/security
+New skills separate the Goal and identity (`descriptor.yaml`), behavioral/security
 Contract (`contract.yaml`), Instructions (`SKILL.md`), and behavioral Evals
 (`evals/`). These independently versioned formats are documented in
 [Skill Goals, Contracts, Instructions, and Evals](docs/SKILL_CONTRACTS.md).
+The historical optional descriptor `security` object is accepted only as
+deprecated compatibility metadata and never grants or denies permissions;
+`contract.yaml` is the sole authoritative behavioral/security boundary.
 
 ## Architecture
 
@@ -40,7 +45,16 @@ skcr list skills [--with-targets] [--in-target <name>]
   → lists all skills defined across bakefile targets (one per line, pipeable)
 
 skcr sync
-  → propagates canonical SKILL.md, skill.yaml, contract.yaml, and evals/ artifacts
+  → propagates canonical SKILL.md, descriptor.yaml, contract.yaml, and evals/ artifacts
+
+skcr compile <skill-or-collection> --target skil [--output .skcr/build/skil]
+  → emits native skil skill.yaml and per-scenario eval files with a provenance manifest
+
+skcr asps list|show|validate|requirements|coverage
+  → authors pinned ASPS v1.0 requirements and source coverage, never PASS/FAIL claims
+
+skcr version recommend <skill>
+  → recommends patch/minor/major from material and security-impact changes
 
 skcr status
   → shows which skills are scaffolded and in sync across platform directories
@@ -61,7 +75,7 @@ skcr version changed <path> [--json]
   → reports changed skills and whether their version changed
 
 skcr version bump <skill-dir> --kind patch --change "Describe change" [--dry-run] [--json]
-  → bumps skill version and synchronizes SKILL.md, VERSION, skill.yaml, and CHANGELOG.md
+  → bumps skill version and synchronizes SKILL.md, VERSION, descriptor.yaml, and CHANGELOG.md
 
 skcr version bump <path> --all-changed --change "Describe change"
   → bumps all git-changed skills that have not already changed version
@@ -86,7 +100,14 @@ Skills are declared once in `targets.*.skills`. `skcr bake --write` scaffolds th
 ```text
 .agents/skills/<name>/     ← canonical source + universal fallback
   ├── SKILL.md             ← edit this to update the skill content
-  ├── skill.yaml
+  ├── descriptor.yaml       ← skcr authoring source (Descriptor v2)
+  ├── contract.yaml         ← Contract v2 semantic intent + runtime authority
+  ├── evals/                ← Eval v2 behavioral/adversarial source scenarios
+  ├── integrations/
+  │   ├── mcp.yaml          ← MCP identity, auth, and tool boundaries
+  │   └── a2a.yaml          ← agent trust and delegation constraints
+  ├── dependencies.yaml     ← reviewed execution closure
+  ├── assurance.yaml        ← ASPS, assurance, and expansion-review requirements
   ├── VERSION
   ├── CHANGELOG.md
   ├── README.md
@@ -99,6 +120,13 @@ Skills are declared once in `targets.*.skills`. `skcr bake --write` scaffolds th
   │   └── README.md
   └── tests/
       └── README.md
+
+.skcr/build/skil/<name>/    ← generated executable assurance artifact
+  ├── SKILL.md
+  ├── skill.yaml            ← native skil Contract v1
+  ├── evals/                ← one native skil Eval v1 per source scenario
+  ├── build-manifest.json
+  └── checksums.txt
 
 .claude/skills/<name>/     ← Claude Code  (full scaffold)
 .github/skills/<name>/     ← GitHub Copilot  (full scaffold)
@@ -351,9 +379,9 @@ targets:
 Controls default metadata for scaffolded skill directories.
 
 - `defaults.version` — initial `VERSION` file content (default: `0.1.0`)
-- `defaults.owner` — owner written into `skill.yaml`
-- `defaults.license` — license written into `skill.yaml` and `LICENSE` (default: `MIT`)
-- `defaults.compatible_with` — default platform list for `skill.yaml`
+- `defaults.owner` — owner written into `descriptor.yaml`
+- `defaults.license` — license written into `descriptor.yaml` and `LICENSE` (default: `MIT`)
+- `defaults.compatible_with` — default platform list for `descriptor.yaml`
 
 ### `skills` block
 
@@ -566,6 +594,7 @@ Built-in categories:
 - `devsecops`
 - `cloudops-platformops`
 - `aiops-mlops-llmops`
+- `agentic-security`
 - `security-governance`
 
 ## `skcr doctor`
@@ -583,7 +612,7 @@ Checks performed:
 | `toolchain` | `skpm` is available in `PATH` |
 | `bakefile` | `agentic.bake.yaml` parses without errors |
 | `targets` | At least one target defined; no duplicate skill names per target |
-| `skills` | Each skill has `SKILL.md`, `skill.yaml`, `VERSION`; `VERSION` is valid semver; `SKILL.md` has complete versioning frontmatter and a body `## Changelog` |
+| `skills` | Each source skill has `SKILL.md`, `descriptor.yaml`, `VERSION`; `VERSION` is valid semver; `SKILL.md` has complete versioning frontmatter and a body `## Changelog` |
 | `sync` | All platform `SKILL.md` files match the canonical `.agents/skills/` source |
 | `lockfile` | `.agentic-template.lock` is present |
 
@@ -664,7 +693,7 @@ skcr scaffold skill <name> [flags]
 | --- | --- | --- |
 | `--output-dir` | `.` | Directory where the skill directory is created |
 | `--version` | `0.1.0` | Initial semver version |
-| `--description` | | Skill description for `skill.yaml` |
+| `--description` | | Skill description for `descriptor.yaml` |
 | `--owner` | | Skill owner |
 | `--platform` | `claude-code`, `codex` | Compatible platform (repeatable) |
 | `--license` | `MIT` | License |
@@ -685,7 +714,7 @@ skcr validate --skills
 - `agentic.bake.yaml` structure and platform names
 - Platform names are valid (delegates to sklib)
 - Generated platform files match the lockfile state
-- `skill.yaml` and `SKILL.md` presence in discovered skill directories
+- `descriptor.yaml` and `SKILL.md` presence in discovered source skill directories
 
 ## `skcr version`
 
@@ -725,12 +754,12 @@ skcr version release-bundle .agents/skills --since 2026-06-01 --changed --json
 - `SKILL.md` frontmatter `version`, `last_modified`, and `changelog`,
 - body `## Changelog`,
 - `VERSION`,
-- `skill.yaml`,
+- `descriptor.yaml`,
 - `CHANGELOG.md`.
 
-`skcr bake --write` also synchronizes these local version artifacts after rendering `SKILL.md`, so generated registered skills do not keep stale scaffold defaults in `VERSION`, `skill.yaml`, or `CHANGELOG.md`.
+`skcr bake --write` also synchronizes these local version artifacts after rendering `SKILL.md`, so generated registered skills do not keep stale scaffold defaults in `VERSION`, `descriptor.yaml`, or `CHANGELOG.md`.
 
-`skcr version check` verifies that all existing local version artifacts agree with the `SKILL.md` frontmatter version. Drift between `SKILL.md`, `VERSION`, `skill.yaml`, and `CHANGELOG.md` is reported as an error.
+`skcr version check` verifies that all existing local version artifacts agree with the `SKILL.md` frontmatter version. Drift between `SKILL.md`, `VERSION`, `descriptor.yaml`, and `CHANGELOG.md` is reported as an error.
 
 `skcr version changed` compares the current working tree against `HEAD:SKILL.md` and reports material skill edits that did not change the skill version.
 

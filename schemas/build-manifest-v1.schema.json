@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/domehahn/skcr/schemas/build-manifest-v1.schema.json",
+  "title": "skcr Build Manifest v1",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "source", "target", "mapping", "provenance"],
+  "properties": {
+    "schema_version": {"const": "1"},
+    "source": {"type": "object", "additionalProperties": false, "required": ["descriptor_digest", "contract_digest", "eval_digest", "instructions_digest", "integrations_digest", "dependencies_digest", "assurance_digest"], "properties": {"descriptor_digest": {"$ref": "#/$defs/digest"}, "contract_digest": {"$ref": "#/$defs/digest"}, "eval_digest": {"$ref": "#/$defs/digest"}, "instructions_digest": {"$ref": "#/$defs/digest"}, "integrations_digest": {"$ref": "#/$defs/digest"}, "dependencies_digest": {"$ref": "#/$defs/digest"}, "assurance_digest": {"$ref": "#/$defs/digest"}}},
+    "target": {"type": "object", "additionalProperties": false, "required": ["type", "contract_schema", "eval_schema", "artifact_digest"], "properties": {"type": {"const": "skil"}, "contract_schema": {"const": "1"}, "eval_schema": {"const": "1"}, "artifact_digest": {"$ref": "#/$defs/digest"}}},
+    "mapping": {"type": "object", "additionalProperties": false, "required": ["mapped", "verification_only", "unsupported", "lossy"], "properties": {"mapped": {"$ref": "#/$defs/strings"}, "verification_only": {"$ref": "#/$defs/strings"}, "unsupported": {"$ref": "#/$defs/strings"}, "lossy": {"$ref": "#/$defs/strings"}}},
+    "provenance": {"type": "object", "additionalProperties": false, "required": ["compiler", "source_artifact_digest", "mapping_digest"], "properties": {"compiler": {"type": "object", "additionalProperties": false, "required": ["name", "version"], "properties": {"name": {"const": "skcr"}, "version": {"type": "string", "minLength": 1}}}, "source_artifact_digest": {"$ref": "#/$defs/digest"}, "mapping_digest": {"$ref": "#/$defs/digest"}}}
+  },
+  "$defs": {"digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}, "strings": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}}
+}

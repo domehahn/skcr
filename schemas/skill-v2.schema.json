@@ -17,6 +17,9 @@
     "compatible_with": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
     "tags": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
     "security": {
+      "description": "Deprecated compatibility hints retained for legacy descriptors. This field is non-authoritative and MUST NOT be used to authorize behavior; contract.yaml is the sole behavioral/security boundary.",
+      "deprecated": true,
+      "readOnly": true,
       "type": "object",
       "additionalProperties": false,
       "properties": {

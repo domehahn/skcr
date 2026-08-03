@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/domehahn/skcr/internal/skillversion"
 	"github.com/spf13/cobra"
@@ -31,6 +32,7 @@ func newVersionCommand() *cobra.Command {
 	cmd.AddCommand(newVersionSyncCommand())
 	cmd.AddCommand(newVersionTagCommand())
 	cmd.AddCommand(newVersionDiffCommand())
+	cmd.AddCommand(newVersionRecommendCommand())
 	return cmd
 }
 
@@ -281,6 +283,9 @@ func newVersionBumpCommand() *cobra.Command {
 	var allSkills bool
 	var interactive bool
 	var jsonOut bool
+	var auto bool
+	var approveSecurityExpansion bool
+	var approvedBy string
 	cmd := &cobra.Command{
 		Use:   "bump <skill-dir-or-bakefile-dir>",
 		Short: "Bump a skill version and synchronize changelogs",
@@ -294,6 +299,28 @@ func newVersionBumpCommand() *cobra.Command {
 			}
 			if preview {
 				dryRun = true
+			}
+			if (auto || approveSecurityExpansion) && (allChanged || allSkills || interactive) {
+				return fmt.Errorf("--auto and security-expansion approval currently require a single skill")
+			}
+			var recommendation skillversion.VersionRecommendation
+			if !allChanged && !allSkills && !interactive {
+				recommended, recommendErr := skillversion.Recommend(args[0])
+				if recommendErr != nil && auto {
+					return recommendErr
+				}
+				if recommendErr == nil {
+					recommendation = recommended
+					if auto {
+						kind = string(recommended.Kind)
+					}
+					if recommended.SecurityExpansion && !approveSecurityExpansion {
+						return fmt.Errorf("security expansion requires --approve-security-expansion")
+					}
+				}
+			}
+			if approveSecurityExpansion && strings.TrimSpace(approvedBy) == "" {
+				return fmt.Errorf("--approved-by is required with --approve-security-expansion")
 			}
 			opts := skillversion.BumpOptions{Kind: skillversion.BumpKind(kind), Date: date, Change: change, DryRun: dryRun}
 			if allChanged {
@@ -363,6 +390,15 @@ func newVersionBumpCommand() *cobra.Command {
 			if err != nil {
 				return err
 			}
+			if approveSecurityExpansion && recommendation.SecurityExpansion && !dryRun {
+				approvalDate := date
+				if approvalDate == "" {
+					approvalDate = time.Now().Format("2006-01-02")
+				}
+				if err := skillversion.RecordExpansionApproval(args[0], approvedBy, change, approvalDate); err != nil {
+					return err
+				}
+			}
 			if jsonOut {
 				return writeJSON(cmd, result)
 			}
@@ -399,6 +435,29 @@ func newVersionBumpCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&allChanged, "all-changed", false, "Bump every changed skill that has not already changed version")
 	cmd.Flags().BoolVar(&allSkills, "all", false, "Bump all scaffolded skills defined in the bakefile")
 	cmd.Flags().BoolVar(&interactive, "interactive", false, "Prompt for bump kind and message per changed skill")
+	cmd.Flags().BoolVar(&jsonOut, "json", false, "Print JSON output")
+	cmd.Flags().BoolVar(&auto, "auto", false, "Use the security-aware recommended bump kind")
+	cmd.Flags().BoolVar(&approveSecurityExpansion, "approve-security-expansion", false, "Explicitly approve a detected contract security expansion")
+	cmd.Flags().StringVar(&approvedBy, "approved-by", "", "Reviewer identity recorded for an approved security expansion")
+	return cmd
+}
+
+func newVersionRecommendCommand() *cobra.Command {
+	var jsonOut bool
+	cmd := &cobra.Command{Use: "recommend <skill>", Short: "Recommend a version bump from source and security impact", Args: cobra.ExactArgs(1), RunE: func(cmd *cobra.Command, args []string) error {
+		recommendation, err := skillversion.Recommend(args[0])
+		if err != nil {
+			return err
+		}
+		if jsonOut {
+			return writeJSON(cmd, recommendation)
+		}
+		fmt.Fprintf(cmd.OutOrStdout(), "Recommended bump: %s\n\nReasons:\n", strings.ToUpper(string(recommendation.Kind)))
+		for _, reason := range recommendation.Reasons {
+			fmt.Fprintf(cmd.OutOrStdout(), "- %s\n", reason)
+		}
+		return nil
+	}}
 	cmd.Flags().BoolVar(&jsonOut, "json", false, "Print JSON output")
 	return cmd
 }

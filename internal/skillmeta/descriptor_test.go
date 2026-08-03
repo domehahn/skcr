@@ -21,7 +21,14 @@ func writeArtifactFixture(t *testing.T) (string, Descriptor, Contract) {
 	contract := NewContract()
 	writeYAML(t, filepath.Join(dir, "skill.yaml"), descriptor)
 	writeYAML(t, filepath.Join(dir, "contract.yaml"), contract)
-	writeYAML(t, filepath.Join(dir, "evals", "baseline.yaml"), NewBaselineEval())
+	writeYAML(t, filepath.Join(dir, "evals", "baseline.yaml"), NewBaselineEvalV2())
+	if err := os.MkdirAll(filepath.Join(dir, "integrations"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	writeYAML(t, filepath.Join(dir, "integrations", "mcp.yaml"), NewMCPDocument())
+	writeYAML(t, filepath.Join(dir, "integrations", "a2a.yaml"), NewA2ADocument("example"))
+	writeYAML(t, filepath.Join(dir, "dependencies.yaml"), NewDependenciesDocument())
+	writeYAML(t, filepath.Join(dir, "assurance.yaml"), NewAssuranceDocument())
 	return dir, descriptor, contract
 }
 
@@ -50,6 +57,32 @@ func TestSecureDefaultsAndValidArtifact(t *testing.T) {
 		*allowed.Secrets.Read || len(contract.Tools.Allow) != 0 {
 		t.Fatal("new contract is not least privilege")
 	}
+	data, err := yaml.Marshal(descriptor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(data), "\nsecurity:") {
+		t.Fatalf("new descriptors must omit deprecated security hints:\n%s", data)
+	}
+}
+
+func TestDeprecatedDescriptorSecurityIsPresenceTrackedAndNonAuthoritative(t *testing.T) {
+	dir, descriptor, contract := writeArtifactFixture(t)
+	descriptor.Security = &spec.SkillSecurity{RequiresNetwork: false}
+	contract.Capabilities.Allowed.Network.Allow = []string{"api.example.com"}
+	writeYAML(t, filepath.Join(dir, "skill.yaml"), descriptor)
+	writeYAML(t, filepath.Join(dir, "contract.yaml"), contract)
+
+	loaded, err := LoadDescriptor(filepath.Join(dir, "skill.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if loaded.Security == nil {
+		t.Fatal("deprecated security field presence was lost")
+	}
+	if errs := ValidateDirectory(dir); len(errs) != 0 {
+		t.Fatalf("deprecated hint must not override the authoritative contract: %v", errs)
+	}
 }
 
 func TestDescriptorReferenceValidation(t *testing.T) {
@@ -58,11 +91,14 @@ func TestDescriptorReferenceValidation(t *testing.T) {
 		mutate func(*Descriptor)
 		want   string
 	}{
-		"missing goal":       {func(d *Descriptor) { d.Goal = nil }, "goal is required"},
-		"blank objective":    {func(d *Descriptor) { d.Goal.Objective = " " }, "goal.objective"},
-		"missing contract":   {func(d *Descriptor) { d.Contract = nil }, "contract reference is required"},
-		"contract traversal": {func(d *Descriptor) { d.Contract.File = "../../outside" }, "contract.file"},
-		"eval traversal":     {func(d *Descriptor) { d.Evals.Directory = "../../outside" }, "evals.directory"},
+		"missing goal":         {func(d *Descriptor) { d.Goal = nil }, "goal is required"},
+		"blank objective":      {func(d *Descriptor) { d.Goal.Objective = " " }, "goal.objective"},
+		"missing contract":     {func(d *Descriptor) { d.Contract = nil }, "contract reference is required"},
+		"contract traversal":   {func(d *Descriptor) { d.Contract.File = "../../outside" }, "contract.file"},
+		"eval traversal":       {func(d *Descriptor) { d.Evals.Directory = "../../outside" }, "evals.directory"},
+		"missing integrations": {func(d *Descriptor) { d.Integrations = nil }, "integrations references are required"},
+		"missing dependencies": {func(d *Descriptor) { d.Dependencies = nil }, "dependencies reference is required"},
+		"missing assurance":    {func(d *Descriptor) { d.Assurance = nil }, "assurance reference is required"},
 	}
 	for name, tc := range tests {
 		t.Run(name, func(t *testing.T) {
@@ -228,7 +264,10 @@ func TestNormalizationDigestAndDiff(t *testing.T) {
 func TestPublicSchemasAreValidJSONAndDeclareVersions(t *testing.T) {
 	root := filepath.Join("..", "..", "schemas")
 	for file, version := range map[string]string{
-		"skill-v2.schema.json": "2", "contract-v1.schema.json": "1", "eval-v1.schema.json": "1",
+		"skill-v2.schema.json": "2", "descriptor-v2.schema.json": "2", "contract-v1.schema.json": "1", "contract-v2.schema.json": "2", "eval-v1.schema.json": "1", "eval-v2.schema.json": "2",
+		"mcp-v1.schema.json": "1", "a2a-v1.schema.json": "1", "dependencies-v1.schema.json": "1",
+		"assurance-v1.schema.json":      "1",
+		"build-manifest-v1.schema.json": "1",
 	} {
 		data, err := os.ReadFile(filepath.Join(root, file))
 		if err != nil {
@@ -240,6 +279,11 @@ func TestPublicSchemasAreValidJSONAndDeclareVersions(t *testing.T) {
 		}
 		if !strings.Contains(string(data), `"const": "`+version+`"`) || schema["$schema"] == nil {
 			t.Fatalf("%s does not declare schema version %s", file, version)
+		}
+		if file == "skill-v2.schema.json" &&
+			(!strings.Contains(string(data), `"deprecated": true`) ||
+				!strings.Contains(string(data), "MUST NOT be used to authorize behavior")) {
+			t.Fatal("descriptor schema does not mark legacy security hints as non-authoritative and deprecated")
 		}
 	}
 }

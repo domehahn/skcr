@@ -2,20 +2,13 @@
 
 Skill Creator (`skcr`) includes a full SDLC-oriented skill set plus review-oriented governance, regulatory, platform, and operations skills.
 
-Category targets can be generated directly:
-
-```text
-skcr bake dora-vait --write
-skcr bake devsecops --write
-skcr bake cloudops-platformops --write
-```
-
-The same categories are available as a bake filter:
+Built-in categories are available through the bake filter:
 
 ```text
 skcr bake --category dora-vait --write
 skcr bake --category devsecops --write
 skcr bake --category llmops --write
+skcr bake --category agent-security --write
 ```
 
 Discover available categories with:
@@ -109,6 +102,22 @@ These skills provide review and evidence orientation for regulatory readiness. T
 - `llmops-security-reviewer`
 - `ai-change-risk-reviewer`
 
+## Agentic Security
+
+- `agent-containment-reviewer`
+- `agent-runtime-enforcement-reviewer`
+- `agent-behavior-eval-engineer`
+- `backdoor-persistence-reviewer`
+- `agentic-threat-modeler`
+- `security-invariant-test-engineer`
+
+These skills treat an agent as a potentially untrusted principal. They design,
+review, and test containment, Contract enforcement, behavior trajectories,
+security invariants, hidden control paths, and persistence. They do not turn
+instructions or Contract declarations into runtime guarantees: independent
+sandboxes, tool gateways, firewalls, monitoring, and kill switches remain
+responsible for enforcement.
+
 ## Delivery and operations
 
 - `release-readiness-reviewer`
@@ -138,4 +147,10 @@ IaC/GitOps:
 
 ```text
 cost-based-planner -> iac-gitops-reviewer -> security-reviewer -> compliance-governance-reviewer -> verification-reviewer
+```
+
+Agentic system:
+
+```text
+agentic-threat-modeler -> agent-containment-reviewer -> agent-runtime-enforcement-reviewer -> security-invariant-test-engineer -> agent-behavior-eval-engineer -> backdoor-persistence-reviewer
 ```

@@ -59,15 +59,22 @@ type BumpResult struct {
 }
 
 type ChangedSkill struct {
-	Name           string   `json:"name"`
-	Path           string   `json:"path"`
-	OldVersion     string   `json:"old_version,omitempty"`
-	CurrentVersion string   `json:"current_version,omitempty"`
-	VersionChanged bool     `json:"version_changed"`
-	Files          []string `json:"files"`
-	ChangeTypes    []string `json:"change_types,omitempty"`
-	ContractImpact string   `json:"contract_impact,omitempty"`
-	Errors         []string `json:"errors,omitempty"`
+	Name            string                     `json:"name"`
+	Path            string                     `json:"path"`
+	OldVersion      string                     `json:"old_version,omitempty"`
+	CurrentVersion  string                     `json:"current_version,omitempty"`
+	VersionChanged  bool                       `json:"version_changed"`
+	Files           []string                   `json:"files"`
+	ChangeTypes     []string                   `json:"change_types,omitempty"`
+	ContractImpact  string                     `json:"contract_impact,omitempty"`
+	ContractChanges []skillmeta.ContractChange `json:"contract_changes,omitempty"`
+	Errors          []string                   `json:"errors,omitempty"`
+}
+
+type VersionRecommendation struct {
+	Kind              BumpKind `json:"kind"`
+	SecurityExpansion bool     `json:"security_expansion"`
+	Reasons           []string `json:"reasons"`
 }
 
 type ReleaseBundle struct {
@@ -157,7 +164,7 @@ func BumpWithOptions(path string, opts BumpOptions) (BumpResult, error) {
 	if err := updateTextFileIfExists(filepath.Join(dir, "VERSION"), next+"\n"); err != nil {
 		return BumpResult{}, err
 	}
-	if err := updateSkillYAMLIfExists(filepath.Join(dir, "skill.yaml"), next); err != nil {
+	if err := updateSkillYAMLIfExists(skillmeta.DescriptorPath(dir), next); err != nil {
 		return BumpResult{}, err
 	}
 	if err := prependChangelogIfExists(filepath.Join(dir, "CHANGELOG.md"), next, date, change); err != nil {
@@ -197,7 +204,7 @@ func SyncArtifacts(path string) (SkillInfo, error) {
 	if err := updateTextFileIfExists(filepath.Join(dir, "VERSION"), fm.Version+"\n"); err != nil {
 		return info, err
 	}
-	if err := updateSkillYAMLIfExists(filepath.Join(dir, "skill.yaml"), fm.Version); err != nil {
+	if err := updateSkillYAMLIfExists(skillmeta.DescriptorPath(dir), fm.Version); err != nil {
 		return info, err
 	}
 	if err := syncChangelogIfExists(filepath.Join(dir, "CHANGELOG.md"), fm.Version, date, change); err != nil {
@@ -354,7 +361,9 @@ func Changed(path string) ([]ChangedSkill, error) {
 			if currentErr == nil && oldErr == nil {
 				oldContract, parseErr := skillmeta.ParseContract(oldBytes)
 				if parseErr == nil {
-					item.ContractImpact = string(skillmeta.DiffContracts(oldContract, currentContract).Classification)
+					diff := skillmeta.DiffContracts(oldContract, currentContract)
+					item.ContractImpact = string(diff.Classification)
+					item.ContractChanges = diff.Changes
 				}
 			} else if os.IsNotExist(currentErr) && oldErr == nil {
 				item.ContractImpact = string(skillmeta.ImpactExpansion)
@@ -371,6 +380,95 @@ func Changed(path string) ([]ChangedSkill, error) {
 	return out, nil
 }
 
+func Recommend(path string) (VersionRecommendation, error) {
+	changed, err := Changed(path)
+	if err != nil {
+		return VersionRecommendation{}, err
+	}
+	if len(changed) == 0 {
+		return VersionRecommendation{Kind: BumpPatch, Reasons: []string{"no material security expansion detected"}}, nil
+	}
+	if len(changed) > 1 {
+		return VersionRecommendation{}, fmt.Errorf("version recommendation requires one skill, found %d", len(changed))
+	}
+	item := changed[0]
+	recommendation := VersionRecommendation{Kind: BumpPatch, Reasons: []string{}}
+	if item.ContractImpact == string(skillmeta.ImpactExpansion) || item.ContractImpact == string(skillmeta.ImpactMixed) {
+		recommendation.Kind = BumpMajor
+		recommendation.SecurityExpansion = true
+		for _, change := range item.ContractChanges {
+			if change.Impact != "expansion" {
+				continue
+			}
+			detail := change.Capability
+			if detail == "" {
+				detail = change.Scope
+			}
+			if detail == "" {
+				detail = change.Tool
+			}
+			if detail == "" {
+				detail = change.Value
+			}
+			recommendation.Reasons = append(recommendation.Reasons, change.Type+": "+detail)
+		}
+		if len(recommendation.Reasons) == 0 {
+			recommendation.Reasons = append(recommendation.Reasons, "contract security boundary expanded")
+		}
+	}
+	if recommendation.Kind != BumpMajor {
+		for _, changeType := range item.ChangeTypes {
+			if changeType == "eval" || changeType == "goal_or_descriptor" || changeType == "integration" || changeType == "dependency" || changeType == "assurance" {
+				recommendation.Kind = BumpMinor
+				recommendation.Reasons = append(recommendation.Reasons, changeType+" source changed")
+			}
+		}
+	}
+	if len(recommendation.Reasons) == 0 {
+		if item.ContractImpact == string(skillmeta.ImpactNarrowing) {
+			recommendation.Reasons = append(recommendation.Reasons, "contract authority narrowed")
+		} else {
+			recommendation.Reasons = append(recommendation.Reasons, "instructions or supporting content changed")
+		}
+	}
+	sort.Strings(recommendation.Reasons)
+	return recommendation, nil
+}
+
+func RecordExpansionApproval(skillDir, approvedBy, justification, date string) error {
+	descriptor, err := skillmeta.LoadDescriptor(skillmeta.DescriptorPath(skillDir))
+	if err != nil {
+		return err
+	}
+	if descriptor.Assurance == nil {
+		return fmt.Errorf("descriptor has no assurance reference")
+	}
+	contract, err := skillmeta.LoadContract(filepath.Join(skillDir, descriptor.Contract.File))
+	if err != nil {
+		return err
+	}
+	contractDigest, err := skillmeta.ContractDigest(contract)
+	if err != nil {
+		return err
+	}
+	assurancePath := filepath.Join(skillDir, descriptor.Assurance.File)
+	assurance, err := skillmeta.LoadAssurance(assurancePath)
+	if err != nil {
+		return err
+	}
+	for _, approval := range assurance.SecurityReview.ExpansionApprovals {
+		if approval.ContractDigest == contractDigest {
+			return nil
+		}
+	}
+	assurance.SecurityReview.ExpansionApprovals = append(assurance.SecurityReview.ExpansionApprovals, skillmeta.ExpansionApproval{ContractDigest: contractDigest, ApprovedBy: approvedBy, ApprovedAt: date, Justification: justification})
+	data, err := yaml.Marshal(assurance)
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(assurancePath, data, 0o644)
+}
+
 func materialChangeType(path string) string {
 	slashPath := filepath.ToSlash(path)
 	switch {
@@ -378,7 +476,13 @@ func materialChangeType(path string) string {
 		return "contract"
 	case strings.Contains(slashPath, "/evals/"):
 		return "eval"
-	case filepath.Base(path) == "skill.yaml":
+	case strings.Contains(slashPath, "/integrations/"):
+		return "integration"
+	case filepath.Base(path) == "dependencies.yaml":
+		return "dependency"
+	case filepath.Base(path) == "assurance.yaml":
+		return "assurance"
+	case filepath.Base(path) == "descriptor.yaml" || filepath.Base(path) == "skill.yaml":
 		return "goal_or_descriptor"
 	case filepath.Base(path) == "SKILL.md":
 		return "instructions"
@@ -648,10 +752,12 @@ func artifactConsistencyErrors(skillPath, version string) []string {
 	} else if ok && got != version {
 		errors = append(errors, fmt.Sprintf("VERSION %q does not match SKILL.md version %q", got, version))
 	}
-	if got, ok, err := skillYAMLVersion(filepath.Join(dir, "skill.yaml")); err != nil {
-		errors = append(errors, fmt.Sprintf("skill.yaml version unreadable: %v", err))
+	descriptorPath := skillmeta.DescriptorPath(dir)
+	descriptorName := filepath.Base(descriptorPath)
+	if got, ok, err := skillYAMLVersion(descriptorPath); err != nil {
+		errors = append(errors, fmt.Sprintf("%s version unreadable: %v", descriptorName, err))
 	} else if ok && got != version {
-		errors = append(errors, fmt.Sprintf("skill.yaml version %q does not match SKILL.md version %q", got, version))
+		errors = append(errors, fmt.Sprintf("%s version %q does not match SKILL.md version %q", descriptorName, got, version))
 	}
 	if got, ok, err := changelogVersion(filepath.Join(dir, "CHANGELOG.md")); err != nil {
 		errors = append(errors, fmt.Sprintf("CHANGELOG.md unreadable: %v", err))

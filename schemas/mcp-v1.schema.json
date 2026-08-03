@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/domehahn/skcr/schemas/mcp-v1.schema.json",
+  "title": "skcr MCP Integration v1",
+  "type": "object", "additionalProperties": false, "required": ["schema_version", "servers"],
+  "properties": {
+    "schema_version": {"const": "1"},
+    "servers": {"type": "array", "items": {"$ref": "#/$defs/server"}}
+  },
+  "$defs": {
+    "strings": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "server": {
+      "type": "object", "additionalProperties": false,
+      "required": ["id", "transport", "endpoint", "authentication", "tools"],
+      "properties": {
+        "id": {"type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"},
+        "transport": {"const": "https"},
+        "endpoint": {"type": "string", "pattern": "^https://"},
+        "authentication": {
+          "type": "object", "additionalProperties": false,
+          "required": ["type", "audience_binding", "token_passthrough"],
+          "properties": {
+            "type": {"enum": ["oauth", "token", "mtls", "none"]},
+            "audience_binding": {"enum": ["required", "optional"]},
+            "token_passthrough": {"enum": ["forbidden", "allowed"]}
+          }
+        },
+        "tools": {"type": "object", "additionalProperties": false, "required": ["allow", "deny"], "properties": {"allow": {"$ref": "#/$defs/strings"}, "deny": {"$ref": "#/$defs/strings"}}}
+      }
+    }
+  }
+}

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/domehahn/skcr/internal/skillmeta"
 	"github.com/domehahn/sklib/spec"
 	"github.com/spf13/cobra"
 )
@@ -180,7 +181,7 @@ func newRenameSkillCommand() *cobra.Command {
 				if err := os.Rename(srcDir, dstDir); err != nil {
 					return fmt.Errorf("move %s/%s → %s/%s: %w", baseDir, oldName, baseDir, newName, err)
 				}
-				for _, file := range []string{"SKILL.md", "skill.yaml"} {
+				for _, file := range []string{"SKILL.md", filepath.Base(skillmeta.DescriptorPath(dstDir))} {
 					if err := replaceTopLevelYAMLName(filepath.Join(dstDir, file), newName); err != nil {
 						return fmt.Errorf("update %s/%s/%s identity: %w", baseDir, newName, file, err)
 					}

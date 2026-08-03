@@ -12,31 +12,58 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const DescriptorSchemaVersion = "2"
+const (
+	DescriptorSchemaVersion  = "2"
+	DescriptorFilename       = "descriptor.yaml"
+	LegacyDescriptorFilename = "skill.yaml"
+)
+
+// DescriptorPath returns the canonical source descriptor when present and
+// falls back to the pre-compiler skill.yaml name for backwards compatibility.
+func DescriptorPath(skillDir string) string {
+	canonical := filepath.Join(skillDir, DescriptorFilename)
+	if _, err := os.Stat(canonical); err == nil {
+		return canonical
+	}
+	return filepath.Join(skillDir, LegacyDescriptorFilename)
+}
 
 // Descriptor identifies a skill, its goal, and its authoritative contract and
 // eval locations. The security boundary itself lives in contract.yaml.
 type Descriptor struct {
-	SchemaVersion  string             `yaml:"schema_version,omitempty" json:"schema_version,omitempty"`
-	Name           string             `yaml:"name" json:"name"`
-	Namespace      string             `yaml:"namespace,omitempty" json:"namespace,omitempty"`
-	Version        string             `yaml:"version" json:"version"`
-	Description    string             `yaml:"description" json:"description"`
-	Owners         []string           `yaml:"owners,omitempty" json:"owners,omitempty"`
-	License        string             `yaml:"license,omitempty" json:"license,omitempty"`
-	Entrypoint     string             `yaml:"entrypoint" json:"entrypoint"`
-	CompatibleWith []spec.Platform    `yaml:"compatible_with" json:"compatible_with"`
-	Tags           []string           `yaml:"tags,omitempty" json:"tags,omitempty"`
-	Security       spec.SkillSecurity `yaml:"security,omitempty" json:"security,omitempty"`
-	Metadata       map[string]string  `yaml:"metadata,omitempty" json:"metadata,omitempty"`
-	Goal           *Goal              `yaml:"goal,omitempty" json:"goal,omitempty"`
-	Contract       *ContractReference `yaml:"contract,omitempty" json:"contract,omitempty"`
-	Evals          *EvalsReference    `yaml:"evals,omitempty" json:"evals,omitempty"`
+	SchemaVersion  string          `yaml:"schema_version,omitempty" json:"schema_version,omitempty"`
+	Name           string          `yaml:"name" json:"name"`
+	Namespace      string          `yaml:"namespace,omitempty" json:"namespace,omitempty"`
+	Version        string          `yaml:"version" json:"version"`
+	Description    string          `yaml:"description" json:"description"`
+	Owners         []string        `yaml:"owners,omitempty" json:"owners,omitempty"`
+	Ownership      *Ownership      `yaml:"ownership,omitempty" json:"ownership,omitempty"`
+	License        string          `yaml:"license,omitempty" json:"license,omitempty"`
+	Entrypoint     string          `yaml:"entrypoint" json:"entrypoint"`
+	CompatibleWith []spec.Platform `yaml:"compatible_with" json:"compatible_with"`
+	Tags           []string        `yaml:"tags,omitempty" json:"tags,omitempty"`
+	// Security is retained only to read legacy descriptor hints without data
+	// loss. It is deprecated and MUST NOT be used to authorize behavior;
+	// contract.yaml is the sole behavioral/security boundary.
+	Security     *spec.SkillSecurity    `yaml:"security,omitempty" json:"security,omitempty"`
+	Metadata     map[string]string      `yaml:"metadata,omitempty" json:"metadata,omitempty"`
+	Goal         *Goal                  `yaml:"goal,omitempty" json:"goal,omitempty"`
+	Contract     *ContractReference     `yaml:"contract,omitempty" json:"contract,omitempty"`
+	Evals        *EvalsReference        `yaml:"evals,omitempty" json:"evals,omitempty"`
+	Integrations *IntegrationReferences `yaml:"integrations,omitempty" json:"integrations,omitempty"`
+	Dependencies *ArtifactReference     `yaml:"dependencies,omitempty" json:"dependencies,omitempty"`
+	Assurance    *ArtifactReference     `yaml:"assurance,omitempty" json:"assurance,omitempty"`
 
 	// LegacyEmbeddedContract is populated only when parsing the short-lived
 	// descriptor-v2 format that embedded the whole contract in skill.yaml.
 	// It is never serialized and retains non-destructive compatibility.
 	LegacyEmbeddedContract *LegacyContract `yaml:"-" json:"-"`
+}
+
+type Ownership struct {
+	Primary     string   `yaml:"primary" json:"primary"`
+	Maintainers []string `yaml:"maintainers" json:"maintainers"`
+	Publisher   string   `yaml:"publisher,omitempty" json:"publisher,omitempty"`
 }
 
 type Goal struct {
@@ -73,6 +100,15 @@ type EvalsReference struct {
 	Directory string `yaml:"directory" json:"directory"`
 }
 
+type ArtifactReference struct {
+	File string `yaml:"file" json:"file"`
+}
+
+type IntegrationReferences struct {
+	MCP ArtifactReference `yaml:"mcp" json:"mcp"`
+	A2A ArtifactReference `yaml:"a2a" json:"a2a"`
+}
+
 func NewDescriptor(name, version, description, license string, owners []string, platforms []spec.Platform) Descriptor {
 	objective := strings.TrimSpace(description)
 	if objective == "" || objective == "Describe what this skill helps an agent do." {
@@ -83,7 +119,7 @@ func NewDescriptor(name, version, description, license string, owners []string, 
 		Name:           name,
 		Version:        version,
 		Description:    description,
-		Owners:         owners,
+		Ownership:      newOwnership(owners),
 		License:        license,
 		Entrypoint:     spec.DefaultEntrypointValue,
 		CompatibleWith: platforms,
@@ -92,9 +128,19 @@ func NewDescriptor(name, version, description, license string, owners []string, 
 			SuccessCriteria:   []GoalCriterion{},
 			FailureConditions: []GoalCriterion{},
 		},
-		Contract: &ContractReference{File: "contract.yaml"},
-		Evals:    &EvalsReference{Directory: "evals"},
+		Contract:     &ContractReference{File: "contract.yaml"},
+		Evals:        &EvalsReference{Directory: "evals"},
+		Integrations: &IntegrationReferences{MCP: ArtifactReference{File: "integrations/mcp.yaml"}, A2A: ArtifactReference{File: "integrations/a2a.yaml"}},
+		Dependencies: &ArtifactReference{File: "dependencies.yaml"},
+		Assurance:    &ArtifactReference{File: "assurance.yaml"},
 	}
+}
+
+func newOwnership(owners []string) *Ownership {
+	if len(owners) == 0 {
+		return &Ownership{Maintainers: []string{}}
+	}
+	return &Ownership{Primary: owners[0], Maintainers: append([]string{}, owners[1:]...)}
 }
 
 func ParseDescriptor(data []byte) (Descriptor, error) {
@@ -127,20 +173,20 @@ func ParseDescriptor(data []byte) (Descriptor, error) {
 	if contractNode != nil && mappingValue(contractNode, "file") == nil {
 		// Compatibility with the previously generated embedded v2 contract.
 		var wire struct {
-			SchemaVersion  string             `yaml:"schema_version"`
-			Name           string             `yaml:"name"`
-			Namespace      string             `yaml:"namespace,omitempty"`
-			Version        string             `yaml:"version"`
-			Description    string             `yaml:"description"`
-			Owners         []string           `yaml:"owners,omitempty"`
-			License        string             `yaml:"license,omitempty"`
-			Entrypoint     string             `yaml:"entrypoint"`
-			CompatibleWith []spec.Platform    `yaml:"compatible_with"`
-			Tags           []string           `yaml:"tags,omitempty"`
-			Security       spec.SkillSecurity `yaml:"security,omitempty"`
-			Metadata       map[string]string  `yaml:"metadata,omitempty"`
-			Goal           *Goal              `yaml:"goal,omitempty"`
-			Contract       *LegacyContract    `yaml:"contract"`
+			SchemaVersion  string              `yaml:"schema_version"`
+			Name           string              `yaml:"name"`
+			Namespace      string              `yaml:"namespace,omitempty"`
+			Version        string              `yaml:"version"`
+			Description    string              `yaml:"description"`
+			Owners         []string            `yaml:"owners,omitempty"`
+			License        string              `yaml:"license,omitempty"`
+			Entrypoint     string              `yaml:"entrypoint"`
+			CompatibleWith []spec.Platform     `yaml:"compatible_with"`
+			Tags           []string            `yaml:"tags,omitempty"`
+			Security       *spec.SkillSecurity `yaml:"security,omitempty"`
+			Metadata       map[string]string   `yaml:"metadata,omitempty"`
+			Goal           *Goal               `yaml:"goal,omitempty"`
+			Contract       *LegacyContract     `yaml:"contract"`
 			Evals          *struct {
 				Directory string `yaml:"directory"`
 				Baseline  string `yaml:"baseline,omitempty"`
@@ -194,13 +240,13 @@ func Parse(data []byte) (Descriptor, error) { return ParseDescriptor(data) }
 func Load(path string) (Descriptor, error) { return LoadDescriptor(path) }
 
 func ValidateDirectory(skillDir string) []string {
-	descriptorPath := filepath.Join(skillDir, "skill.yaml")
+	descriptorPath := DescriptorPath(skillDir)
 	descriptor, err := LoadDescriptor(descriptorPath)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return []string{"missing skill.yaml"}
+			return []string{"missing descriptor.yaml (legacy skill.yaml is also accepted)"}
 		}
-		return []string{fmt.Sprintf("malformed skill.yaml: %v", err)}
+		return []string{fmt.Sprintf("malformed %s: %v", filepath.Base(descriptorPath), err)}
 	}
 	errs := ValidateDescriptor(descriptor, skillDir)
 	var currentContract *Contract
@@ -228,6 +274,21 @@ func ValidateDirectory(skillDir string) []string {
 	if descriptor.Evals != nil && descriptor.LegacyEmbeddedContract == nil {
 		errs = append(errs, ValidateEvalDirectory(skillDir, descriptor.Evals.Directory, descriptor, currentContract)...)
 	}
+	if descriptor.LegacyEmbeddedContract == nil {
+		errs = append(errs, ValidatePhase3Artifacts(skillDir, descriptor, currentContract)...)
+		if descriptor.Assurance != nil {
+			if assurancePath, safe := safeArtifactPath(skillDir, descriptor.Assurance.File); safe {
+				assurance, loadErr := LoadAssurance(assurancePath)
+				if loadErr != nil {
+					errs = append(errs, "malformed assurance requirements: "+loadErr.Error())
+				} else if evalDocuments, evalErr := LoadEvalDocuments(skillDir, descriptor); evalErr != nil {
+					errs = append(errs, "load evals for assurance requirements: "+evalErr.Error())
+				} else {
+					errs = append(errs, ValidateAssurance(assurance, evalDocuments)...)
+				}
+			}
+		}
+	}
 	return errs
 }
 
@@ -252,6 +313,14 @@ func ValidateDescriptor(d Descriptor, skillDir string) []string {
 	}
 	if strings.TrimSpace(d.Description) == "" {
 		errs = append(errs, "description must not be blank")
+	}
+	if d.Ownership != nil {
+		if strings.TrimSpace(d.Ownership.Primary) == "" {
+			errs = append(errs, "ownership.primary must not be blank")
+		}
+		errs = append(errs, validateStringList("ownership.maintainers", d.Ownership.Maintainers, false)...)
+	} else if len(d.Owners) == 0 {
+		errs = append(errs, "ownership.primary is required")
 	}
 	if strings.TrimSpace(d.Entrypoint) == "" {
 		errs = append(errs, "entrypoint must not be blank")
@@ -286,6 +355,29 @@ func ValidateDescriptor(d Descriptor, skillDir string) []string {
 		errs = append(errs, "evals reference is required")
 	} else if _, safe := safeArtifactPath(skillDir, d.Evals.Directory); !safe {
 		errs = append(errs, "evals.directory must be within the skill root")
+	}
+	if d.LegacyEmbeddedContract == nil {
+		if d.Integrations == nil {
+			errs = append(errs, "integrations references are required")
+		} else {
+			for name, reference := range map[string]ArtifactReference{"mcp": d.Integrations.MCP, "a2a": d.Integrations.A2A} {
+				if _, safe := safeArtifactPath(skillDir, reference.File); strings.TrimSpace(reference.File) == "" || !safe {
+					errs = append(errs, "integrations."+name+".file must reference a file within the skill root")
+				}
+			}
+		}
+		if d.Dependencies == nil {
+			errs = append(errs, "dependencies reference is required")
+		} else {
+			if _, safe := safeArtifactPath(skillDir, d.Dependencies.File); strings.TrimSpace(d.Dependencies.File) == "" || !safe {
+				errs = append(errs, "dependencies.file must reference a file within the skill root")
+			}
+		}
+		if d.Assurance == nil {
+			errs = append(errs, "assurance reference is required")
+		} else if _, safe := safeArtifactPath(skillDir, d.Assurance.File); strings.TrimSpace(d.Assurance.File) == "" || !safe {
+			errs = append(errs, "assurance.file must reference a file within the skill root")
+		}
 	}
 	return errs
 }

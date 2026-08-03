@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/domehahn/skcr/schemas/assurance-v1.schema.json",
+  "title": "skcr Assurance Requirements v1",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "asps", "assurance", "security_review"],
+  "properties": {
+    "schema_version": {"const": "1"},
+    "asps": {"type": "object", "additionalProperties": false, "required": ["specification", "version", "required_profiles", "required_properties"], "properties": {"specification": {"const": "ASPS"}, "version": {"const": "1.0"}, "required_profiles": {"$ref": "#/$defs/strings"}, "required_properties": {"$ref": "#/$defs/strings"}}},
+    "assurance": {"type": "object", "additionalProperties": false, "required": ["minimum_requested_level", "requirements"], "properties": {"minimum_requested_level": {"enum": ["A1", "A2", "A3", "A4", "A5"]}, "requirements": {"type": "object", "additionalProperties": false, "required": ["behavioral_eval", "adversarial_eval", "containment", "native_isolation", "provenance"], "properties": {"behavioral_eval": {"type": "boolean"}, "adversarial_eval": {"type": "boolean"}, "containment": {"type": "boolean"}, "native_isolation": {"type": "boolean"}, "provenance": {"type": "boolean"}}}}},
+    "security_review": {"type": "object", "additionalProperties": false, "required": ["expansion_approvals"], "properties": {"expansion_approvals": {"type": "array", "items": {"$ref": "#/$defs/approval"}}}}
+  },
+  "$defs": {
+    "strings": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "approval": {"type": "object", "additionalProperties": false, "required": ["contract_digest", "approved_by", "approved_at", "justification"], "properties": {"contract_digest": {"type": "string", "pattern": "^sha256:[0-9a-f]{64}$"}, "approved_by": {"type": "string", "minLength": 1}, "approved_at": {"type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$"}, "justification": {"type": "string", "minLength": 1}}}
+  }
+}

@@ -322,7 +322,7 @@ func newBakeCommand() *cobra.Command {
 	cmd.Flags().StringVar(&skillsFrom, "skills-from", "", "Read skpm locked skills from agent-skills.lock")
 	cmd.Flags().StringVar(&skillsMode, "skills-mode", "", "Skill integration mode: reference, copy, link, embed")
 	cmd.Flags().StringVar(&platform, "platform", "", "Render only the selected canonical platform")
-	cmd.Flags().StringVar(&category, "category", "", "Render only one built-in skill category (for example dora-vait, devsecops, cloudops-platformops)")
+	cmd.Flags().StringVar(&category, "category", "", "Render only one built-in skill category (for example dora-vait, devsecops, agentic-security)")
 
 	return cmd
 }

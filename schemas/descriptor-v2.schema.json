@@ -1,0 +1,88 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/domehahn/skcr/schemas/descriptor-v2.schema.json",
+  "title": "skcr Source Descriptor v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "name", "version", "description", "ownership", "entrypoint", "compatible_with", "goal", "contract", "evals", "integrations", "dependencies", "assurance"],
+  "properties": {
+    "schema_version": { "const": "2" },
+    "name": { "type": "string", "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$" },
+    "namespace": { "type": "string" },
+    "version": { "type": "string", "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+(?:[-+][0-9A-Za-z.-]+)?$" },
+    "description": { "type": "string", "minLength": 1 },
+    "owners": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+    "ownership": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["primary", "maintainers"],
+      "properties": {
+        "primary": { "type": "string", "minLength": 1 },
+        "maintainers": { "type": "array", "items": { "type": "string", "minLength": 1 }, "uniqueItems": true },
+        "publisher": { "type": "string", "minLength": 1 }
+      }
+    },
+    "license": { "type": "string" },
+    "entrypoint": { "type": "string", "minLength": 1 },
+    "compatible_with": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "tags": { "type": "array", "items": { "type": "string" }, "uniqueItems": true },
+    "security": {
+      "description": "Deprecated compatibility hints retained for legacy descriptors. This field is non-authoritative and MUST NOT be used to authorize behavior; contract.yaml is the sole behavioral/security boundary.",
+      "deprecated": true,
+      "readOnly": true,
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "requires_network": { "type": "boolean" },
+        "requires_secrets": { "type": "boolean" },
+        "writes_files": { "type": "boolean" },
+        "runs_commands": { "type": "boolean" }
+      }
+    },
+    "metadata": { "type": "object", "additionalProperties": { "type": "string" } },
+    "goal": { "$ref": "#/$defs/goal" },
+    "contract": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["file"],
+      "properties": { "file": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$" } }
+    },
+    "evals": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["directory"],
+      "properties": { "directory": { "type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$" } }
+    },
+    "integrations": {
+      "type": "object", "additionalProperties": false, "required": ["mcp", "a2a"],
+      "properties": {
+        "mcp": {"$ref": "#/$defs/fileReference"},
+        "a2a": {"$ref": "#/$defs/fileReference"}
+      }
+    },
+    "dependencies": {"$ref": "#/$defs/fileReference"},
+    "assurance": {"$ref": "#/$defs/fileReference"}
+  },
+  "$defs": {
+    "fileReference": {"type": "object", "additionalProperties": false, "required": ["file"], "properties": {"file": {"type": "string", "pattern": "^(?!/)(?!.*(?:^|/)\\.\\.(?:/|$)).+$"}}},
+    "criterion": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "description"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$" },
+        "description": { "type": "string", "minLength": 1 }
+      }
+    },
+    "goal": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["objective", "success_criteria", "failure_conditions"],
+      "properties": {
+        "objective": { "type": "string", "minLength": 1 },
+        "success_criteria": { "type": "array", "items": { "$ref": "#/$defs/criterion" } },
+        "failure_conditions": { "type": "array", "items": { "$ref": "#/$defs/criterion" } }
+      }
+    }
+  }
+}

@@ -113,6 +113,8 @@ func NewRootCommand() *cobra.Command {
 	root.AddCommand(newFilterByCommand())
 	root.AddCommand(newCopySkillCommand())
 	root.AddCommand(newContractCommand())
+	root.AddCommand(newCompileCommand())
+	root.AddCommand(newASPSCommand())
 
 	return root
 }

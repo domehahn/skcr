@@ -1,0 +1,114 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/domehahn/skcr/schemas/contract-v2.schema.json",
+  "title": "skcr Behavioral Contract v2",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schema_version", "capabilities", "identity", "delegation", "data", "preconditions", "postconditions", "invariants", "human_approval", "effects", "resources", "output"],
+  "properties": {
+    "schema_version": {"const": "2"},
+    "capabilities": {
+      "type": "object", "additionalProperties": false, "required": ["semantic", "runtime"],
+      "properties": {
+        "semantic": {
+          "type": "object", "additionalProperties": false, "required": ["required"],
+          "properties": {"required": {"type": "object", "propertyNames": {"$ref": "#/$defs/identifier"}, "additionalProperties": {"$ref": "#/$defs/strings"}}}
+        },
+        "runtime": {
+          "type": "object", "additionalProperties": false, "required": ["required", "allowed"],
+          "properties": {"required": {"$ref": "#/$defs/runtime"}, "allowed": {"$ref": "#/$defs/runtime"}}
+        }
+      }
+    },
+    "identity": {
+      "type": "object", "additionalProperties": false, "required": ["accepted_principals", "credentials"],
+      "properties": {
+        "accepted_principals": {"$ref": "#/$defs/nonEmptyStrings"},
+        "credentials": {
+          "type": "object", "additionalProperties": false,
+          "required": ["max_ttl_seconds", "require_audience_binding", "allow_token_passthrough", "required_scopes"],
+          "properties": {
+            "max_ttl_seconds": {"type": "integer", "minimum": 1},
+            "require_audience_binding": {"type": "boolean"},
+            "allow_token_passthrough": {"type": "boolean"},
+            "required_scopes": {"$ref": "#/$defs/strings"}
+          }
+        }
+      }
+    },
+    "delegation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["allowed", "max_depth", "require_child_capability_subset", "require_authenticated_origin"],
+      "properties": {
+        "allowed": {"type": "boolean"},
+        "max_depth": {"type": "integer", "minimum": 0},
+        "require_child_capability_subset": {"type": "boolean"},
+        "require_authenticated_origin": {"type": "boolean"}
+      }
+    },
+    "data": {
+      "type": "object", "additionalProperties": false, "required": ["classifications", "policies", "egress", "flows"],
+      "properties": {
+        "classifications": {"$ref": "#/$defs/strings"},
+        "policies": {"type": "array", "items": {"$ref": "#/$defs/dataPolicy"}},
+        "egress": {"type": "object", "additionalProperties": false, "required": ["allow"], "properties": {"allow": {"$ref": "#/$defs/strings"}}},
+        "flows": {"type": "array", "items": {"$ref": "#/$defs/flow"}}
+      }
+    },
+    "preconditions": {"type": "array", "items": {"$ref": "#/$defs/condition"}},
+    "postconditions": {"type": "array", "items": {"$ref": "#/$defs/condition"}},
+    "invariants": {"type": "array", "items": {"$ref": "#/$defs/condition"}},
+    "human_approval": {
+      "type": "object", "additionalProperties": false, "required": ["rules"],
+      "properties": {"rules": {"type": "array", "items": {"$ref": "#/$defs/approval"}}}
+    },
+    "effects": {
+      "type": "object", "additionalProperties": false, "required": ["tools"],
+      "properties": {"tools": {"type": "array", "items": {"$ref": "#/$defs/effect"}}}
+    },
+    "resources": {
+      "type": "object", "additionalProperties": false,
+      "required": ["scope", "max_runtime_seconds", "max_memory_mb", "max_network_bytes", "max_network_requests", "max_tool_calls", "max_steps", "max_replans", "max_delegation_depth", "max_model_tokens", "max_external_mutations"],
+      "properties": {
+        "scope": {"const": "invocation"},
+        "max_runtime_seconds": {"$ref": "#/$defs/limit"}, "max_memory_mb": {"$ref": "#/$defs/limit"},
+        "max_network_bytes": {"$ref": "#/$defs/limit"}, "max_network_requests": {"$ref": "#/$defs/limit"},
+        "max_tool_calls": {"$ref": "#/$defs/limit"}, "max_steps": {"$ref": "#/$defs/limit"},
+        "max_replans": {"$ref": "#/$defs/limit"}, "max_delegation_depth": {"$ref": "#/$defs/limit"},
+        "max_model_tokens": {"$ref": "#/$defs/limit"}, "max_external_mutations": {"$ref": "#/$defs/limit"}
+      }
+    },
+    "output": {
+      "type": "object", "additionalProperties": false, "required": ["format", "required_fields", "forbidden_content"],
+      "properties": {"format": {"type": "string", "minLength": 1}, "required_fields": {"$ref": "#/$defs/strings"}, "forbidden_content": {"$ref": "#/$defs/strings"}}
+    }
+  },
+  "$defs": {
+    "identifier": {"type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"},
+    "strings": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "nonEmptyStrings": {"type": "array", "minItems": 1, "items": {"type": "string", "minLength": 1}, "uniqueItems": true},
+    "limit": {"type": ["integer", "null"], "minimum": 0},
+    "runtime": {
+      "type": "object", "additionalProperties": false,
+      "required": ["filesystem", "network", "commands", "secrets", "environment", "tools", "mcp", "persistence", "agent"],
+      "properties": {
+        "filesystem": {"type": "object", "additionalProperties": false, "required": ["read", "write", "delete"], "properties": {"read": {"$ref": "#/$defs/strings"}, "write": {"$ref": "#/$defs/strings"}, "delete": {"$ref": "#/$defs/strings"}}},
+        "network": {"type": "object", "additionalProperties": false, "required": ["inbound", "outbound", "hosts"], "properties": {"inbound": {"type": "boolean"}, "outbound": {"type": "boolean"}, "hosts": {"$ref": "#/$defs/strings"}}},
+        "commands": {"type": "object", "additionalProperties": false, "required": ["execute", "allow"], "properties": {"execute": {"type": "boolean"}, "allow": {"type": "array", "items": {"$ref": "#/$defs/command"}}}},
+        "secrets": {"type": "object", "additionalProperties": false, "required": ["read", "expose"], "properties": {"read": {"$ref": "#/$defs/strings"}, "expose": {"type": "boolean"}}},
+        "environment": {"type": "object", "additionalProperties": false, "required": ["read"], "properties": {"read": {"$ref": "#/$defs/strings"}}},
+        "tools": {"type": "object", "additionalProperties": false, "required": ["allow", "deny"], "properties": {"allow": {"$ref": "#/$defs/strings"}, "deny": {"$ref": "#/$defs/strings"}}},
+        "mcp": {"type": "object", "additionalProperties": false, "required": ["servers", "tools"], "properties": {"servers": {"$ref": "#/$defs/strings"}, "tools": {"$ref": "#/$defs/strings"}}},
+        "persistence": {"type": "boolean"},
+        "agent": {"type": "object", "additionalProperties": false, "required": ["autonomous_actions", "external_side_effects", "confirm_destructive", "confirm_external", "external_targets"], "properties": {"autonomous_actions": {"type": "boolean"}, "external_side_effects": {"type": "boolean"}, "confirm_destructive": {"type": "boolean"}, "confirm_external": {"type": "boolean"}, "external_targets": {"$ref": "#/$defs/strings"}}}
+      }
+    },
+    "command": {"type": "object", "additionalProperties": false, "required": ["executable"], "properties": {"executable": {"type": "string", "minLength": 1}, "argv_prefix": {"$ref": "#/$defs/strings"}}},
+    "endpoint": {"type": "object", "additionalProperties": false, "properties": {"classification": {"type": "string", "minLength": 1}, "type": {"type": "string", "minLength": 1}, "destination": {"type": "string", "minLength": 1}}},
+    "flow": {"type": "object", "additionalProperties": false, "required": ["source", "sink", "allowed"], "properties": {"source": {"$ref": "#/$defs/endpoint"}, "sink": {"$ref": "#/$defs/endpoint"}, "allowed": {"type": "boolean"}}},
+    "dataPolicy": {"type": "object", "additionalProperties": false, "required": ["id", "sensitivity", "purposes", "retention"], "properties": {"id": {"$ref": "#/$defs/identifier"}, "sensitivity": {"enum": ["public", "internal", "confidential", "restricted"]}, "purposes": {"$ref": "#/$defs/nonEmptyStrings"}, "retention": {"enum": ["invocation", "session", "ephemeral", "persistent"]}}},
+    "condition": {"type": "object", "additionalProperties": false, "required": ["id", "type"], "properties": {"id": {"$ref": "#/$defs/identifier"}, "type": {"$ref": "#/$defs/identifier"}, "description": {"type": "string"}, "capabilities": {"$ref": "#/$defs/strings"}, "classifications": {"$ref": "#/$defs/strings"}}},
+    "approval": {"type": "object", "additionalProperties": false, "required": ["id", "action", "mode"], "properties": {"id": {"$ref": "#/$defs/identifier"}, "action": {"type": "object", "additionalProperties": false, "required": ["capability"], "properties": {"capability": {"$ref": "#/$defs/identifier"}, "tool": {"type": "string", "minLength": 1}}}, "mode": {"enum": ["per_action", "per_invocation", "per_session"]}}},
+    "effect": {"type": "object", "additionalProperties": false, "required": ["tool", "class", "reversible", "idempotent"], "properties": {"tool": {"type": "string", "minLength": 1}, "class": {"enum": ["pure", "read", "reversible_write", "irreversible_write", "external_side_effect", "destructive"]}, "reversible": {"type": "boolean"}, "idempotent": {"type": "boolean"}}}
+  }
+}

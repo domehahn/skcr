@@ -11,25 +11,47 @@ permissions:
   contents: read
 
 jobs:
-  lint-and-test:
+  go:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup uv
-        uses: astral-sh/setup-uv@v3
-
-      - name: Setup Python
-        uses: actions/setup-python@v5
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
         with:
-          python-version: "3.12"
+          go-version-file: go.mod
+          cache: true
+      - run: go mod verify
+      - name: Format
+        run: |
+          git ls-files '*.go' | xargs gofmt -l | tee /tmp/gofmt
+          test ! -s /tmp/gofmt
+      - run: go vet -mod=mod ./...
+      - run: go test -mod=mod -race -coverprofile=coverage.out ./...
+      - run: go build -mod=mod -trimpath -o bin/skcr ./cmd/skcr
 
-      - name: Sync Dependencies
-        run: uv sync
+  schemas:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go test -mod=mod ./internal/skillmeta/... ./internal/compiler/... -count=1
+      - run: go test -mod=mod ./internal/scaffold/... -count=1
 
-      - name: Ruff
-        run: uv run ruff check .
-
-      - name: Pytest
-        run: uv run pytest -q
+  skil-interop:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: go build -mod=mod -o bin/skcr ./cmd/skcr
+      - name: Install pinned skil
+        run: go install github.com/domehahn/skil/cmd/skil@24a5ad6d6089a0c3b3b045e3d106abc9e7142a68
+      - name: Compile interop fixture
+        run: ./bin/skcr compile tests/interop/complete-skill --target skil --output /tmp/compiled --require-lossless
+      - name: Validate with skil
+        run: |
+          skil validate /tmp/compiled/complete-skill
+          skil scan /tmp/compiled/complete-skill --static-only
+          skil verify /tmp/compiled/complete-skill

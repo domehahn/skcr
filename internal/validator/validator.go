@@ -93,7 +93,7 @@ func ValidateProjectWithOptions(target string, opts Options) ([]string, error) {
 				if errMsg := validateSkillMetadataForName(string(text), entry.Name()); errMsg != "" {
 					errors = append(errors, fmt.Sprintf("%s: %s", errMsg, skillFile))
 				}
-				descriptorPath := filepath.Join(filepath.Dir(skillFile), "skill.yaml")
+				descriptorPath := skillmeta.DescriptorPath(filepath.Dir(skillFile))
 				if _, statErr := os.Stat(descriptorPath); statErr == nil {
 					for _, descriptorErr := range skillmeta.ValidateDirectory(filepath.Dir(skillFile)) {
 						errors = append(errors, fmt.Sprintf("Skill %q: %s: %s", entry.Name(), descriptorErr, descriptorPath))

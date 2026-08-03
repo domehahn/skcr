@@ -14,6 +14,7 @@ import (
 	"github.com/domehahn/skcr/internal/renderer"
 	"github.com/domehahn/skcr/internal/scaffold"
 	"github.com/domehahn/skcr/internal/skillmeta"
+	"github.com/domehahn/sklib/spec"
 	"gopkg.in/yaml.v3"
 )
 
@@ -90,15 +91,22 @@ func TestMigrateSkillCreatesDefaultDenySplitArtifact(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	legacy := "name: legacy-skill\nversion: 0.1.0\ndescription: Legacy skill\nentrypoint: SKILL.md\ncompatible_with: [codex]\n"
+	legacy := "name: legacy-skill\nversion: 0.1.0\ndescription: Legacy skill\nentrypoint: SKILL.md\ncompatible_with: [codex]\nsecurity:\n  requires_network: true\n  requires_secrets: false\n  writes_files: false\n  runs_commands: false\n"
+	if err := os.Remove(filepath.Join(skillDir, "descriptor.yaml")); err != nil {
+		t.Fatal(err)
+	}
 	if err := os.WriteFile(filepath.Join(skillDir, "skill.yaml"), []byte(legacy), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.Remove(filepath.Join(skillDir, "contract.yaml")); err != nil {
 		t.Fatal(err)
 	}
-	if err := runRoot("migrate", "skill", "legacy-skill", "--target", dir); err != nil {
+	out, err := runRootOut("migrate", "skill", "legacy-skill", "--target", dir)
+	if err != nil {
 		t.Fatal(err)
+	}
+	if !strings.Contains(out, "deprecated") || !strings.Contains(out, "do not grant permissions") {
+		t.Fatalf("migration did not explain legacy security semantics: %s", out)
 	}
 	afterInstructions, err := os.ReadFile(skillMD)
 	if err != nil || string(afterInstructions) != string(originalInstructions) {
@@ -108,8 +116,148 @@ func TestMigrateSkillCreatesDefaultDenySplitArtifact(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(contract.Capabilities.Allowed.Repository.Write) != 0 || *contract.Capabilities.Allowed.Process.Execute {
+	if contract.SchemaVersion != skillmeta.ContractSchemaVersion || len(contract.Capabilities.Runtime.Allowed.Filesystem.Write) != 0 || *contract.Capabilities.Runtime.Allowed.Commands.Execute {
 		t.Fatal("migration inferred permissions instead of default deny")
+	}
+	evalData, err := os.ReadFile(filepath.Join(skillDir, "evals", "baseline.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	eval, err := skillmeta.ParseEval(evalData)
+	if err != nil || eval.SchemaVersion != skillmeta.EvalSchemaVersion {
+		t.Fatalf("migration did not create Eval v2: %v", err)
+	}
+	descriptor, err := skillmeta.LoadDescriptor(filepath.Join(skillDir, "descriptor.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if descriptor.Security == nil || !descriptor.Security.RequiresNetwork {
+		t.Fatal("migration did not preserve deprecated security hints")
+	}
+}
+
+func TestASPSRequirementsCommands(t *testing.T) {
+	dir := t.TempDir()
+	files, err := scaffold.PlanSkill(scaffold.SkillOptions{Name: "asps-skill", OutputDir: dir, Owner: "security", Platforms: []string{"codex"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range files {
+		if err := os.MkdirAll(filepath.Dir(file.Path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(file.Path, []byte(file.Content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	skillDir := filepath.Join(dir, "asps-skill")
+	for _, tc := range []struct {
+		args []string
+		want string
+	}{{[]string{"asps", "show", "ASP-08.03"}, "Delegation Monotonicity"}, {[]string{"asps", "requirements", skillDir}, "ASP-01.01"}, {[]string{"asps", "coverage", skillDir}, "Source coverage only"}, {[]string{"asps", "validate", skillDir}, "VALID ASPS 1.0"}} {
+		out, err := runRootOut(tc.args...)
+		if err != nil {
+			t.Fatalf("%v: %v", tc.args, err)
+		}
+		if !strings.Contains(out, tc.want) {
+			t.Fatalf("%v missing %q: %s", tc.args, tc.want, out)
+		}
+	}
+}
+
+func TestVersionAutoRequiresAndRecordsSecurityExpansionApproval(t *testing.T) {
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not available")
+	}
+	dir := t.TempDir()
+	runGitCLI(t, dir, "init")
+	runGitCLI(t, dir, "config", "user.email", "test@example.com")
+	runGitCLI(t, dir, "config", "user.name", "Test User")
+	files, err := scaffold.PlanSkill(scaffold.SkillOptions{Name: "expansion-skill", OutputDir: filepath.Join(dir, ".agents", "skills"), Version: "1.0.0", Owner: "security", Platforms: []string{"codex"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, file := range files {
+		if err := os.MkdirAll(filepath.Dir(file.Path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(file.Path, []byte(file.Content), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	runGitCLI(t, dir, "add", ".")
+	runGitCLI(t, dir, "commit", "-m", "initial")
+	skillDir := filepath.Join(dir, ".agents", "skills", "expansion-skill")
+	contractPath := filepath.Join(skillDir, "contract.yaml")
+	contract, err := skillmeta.LoadContract(contractPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	yes := true
+	contract.Capabilities.Runtime.Required.Network.Outbound = &yes
+	contract.Capabilities.Runtime.Required.Network.Hosts = []string{"api.example.com"}
+	contract.Capabilities.Runtime.Allowed.Network.Outbound = &yes
+	contract.Capabilities.Runtime.Allowed.Network.Hosts = []string{"api.example.com"}
+	data, err := yaml.Marshal(contract)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(contractPath, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := runRootOut("version", "bump", skillDir, "--auto", "--change", "Allow reviewed API access"); err == nil || !strings.Contains(err.Error(), "approve-security-expansion") {
+		t.Fatalf("expected expansion approval gate, got %v", err)
+	}
+	if _, err := runRootOut("version", "bump", skillDir, "--auto", "--approve-security-expansion", "--approved-by", "security-team", "--date", "2026-08-02", "--change", "Allow reviewed API access"); err != nil {
+		t.Fatal(err)
+	}
+	version, err := os.ReadFile(filepath.Join(skillDir, "VERSION"))
+	if err != nil || strings.TrimSpace(string(version)) != "2.0.0" {
+		t.Fatalf("expected major bump, got %q, %v", version, err)
+	}
+	assurance, err := skillmeta.LoadAssurance(filepath.Join(skillDir, "assurance.yaml"))
+	if err != nil || len(assurance.SecurityReview.ExpansionApprovals) != 1 {
+		t.Fatalf("approval not recorded: %#v, %v", assurance, err)
+	}
+}
+
+func runGitCLI(t *testing.T, dir string, args ...string) {
+	t.Helper()
+	cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("git %v: %v: %s", args, err, out)
+	}
+}
+
+func TestDoctorWarnsForDeprecatedDescriptorSecurity(t *testing.T) {
+	dir := t.TempDir()
+	if err := runRoot("init", "--target", dir, "--platform", "codex", "--project-name", "DeprecatedSecurity"); err != nil {
+		t.Fatal(err)
+	}
+	if err := runRoot("add", "skill", "deprecated-security", "--target", dir); err != nil {
+		t.Fatal(err)
+	}
+	descriptorPath := filepath.Join(dir, ".agents", "skills", "deprecated-security", "descriptor.yaml")
+	descriptor, err := skillmeta.LoadDescriptor(descriptorPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	descriptor.Security = &spec.SkillSecurity{}
+	data, err := yaml.Marshal(descriptor)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(descriptorPath, data, 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := runRootOut("doctor", "--target", dir)
+	if err != nil {
+		t.Fatalf("deprecated compatibility hints should warn, not fail: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "security is deprecated compatibility metadata") ||
+		!strings.Contains(out, "ignored for authorization") {
+		t.Fatalf("doctor did not report the deprecated field semantics:\n%s", out)
 	}
 }
 
@@ -188,12 +336,12 @@ func TestCompatibilityCommandsAndBakeUseEvidence(t *testing.T) {
 	if strings.TrimSpace(string(versionFile)) != "1.0.0" {
 		t.Fatalf("VERSION not synchronized with SKILL.md: %q", versionFile)
 	}
-	skillYAML, err := os.ReadFile(filepath.Join(skillDir, "skill.yaml"))
+	skillYAML, err := os.ReadFile(filepath.Join(skillDir, "descriptor.yaml"))
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !strings.Contains(string(skillYAML), "version: 1.0.0") {
-		t.Fatalf("skill.yaml not synchronized with SKILL.md: %s", skillYAML)
+		t.Fatalf("descriptor.yaml not synchronized with SKILL.md: %s", skillYAML)
 	}
 	changelog, err := os.ReadFile(filepath.Join(skillDir, "CHANGELOG.md"))
 	if err != nil {
@@ -228,6 +376,44 @@ targets:
 	}
 	if _, err := os.Stat(filepath.Join(dir, ".agents", "skills", "security-reviewer", "SKILL.md")); !os.IsNotExist(err) {
 		t.Fatalf("security-reviewer should not be generated when category filter is active, err=%v", err)
+	}
+}
+
+func TestBakeAgenticSecurityCategory(t *testing.T) {
+	dir := t.TempDir()
+	bakefile := `version: "1"
+targets:
+  default:
+    platforms: [codex]
+    skills: []
+`
+	if err := os.WriteFile(filepath.Join(dir, "agentic.bake.yaml"), []byte(bakefile), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := runRoot("bake", "default", "--target", dir, "--category", "agent-security", "--write"); err != nil {
+		t.Fatalf("bake agentic-security category failed: %v", err)
+	}
+	for _, name := range []string{
+		"agent-containment-reviewer",
+		"agent-runtime-enforcement-reviewer",
+		"agent-behavior-eval-engineer",
+		"backdoor-persistence-reviewer",
+		"agentic-threat-modeler",
+		"security-invariant-test-engineer",
+	} {
+		skillDir := filepath.Join(dir, ".agents", "skills", name)
+		for _, artifact := range []string{"SKILL.md", "descriptor.yaml", "contract.yaml", filepath.Join("evals", "baseline.yaml")} {
+			if _, err := os.Stat(filepath.Join(skillDir, artifact)); err != nil {
+				t.Errorf("%s missing %s: %v", name, artifact, err)
+			}
+		}
+	}
+	content, err := os.ReadFile(filepath.Join(dir, ".agents", "skills", "agent-containment-reviewer", "SKILL.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(content), "transitive path") || !strings.Contains(string(content), "untrusted principal") {
+		t.Fatalf("agent containment skill rendered generic content:\n%s", content)
 	}
 }
 
@@ -365,7 +551,7 @@ func TestScaffoldSkillCommand(t *testing.T) {
 	); err != nil {
 		t.Fatalf("scaffold skill failed: %v", err)
 	}
-	for _, rel := range []string{"SKILL.md", "skill.yaml", "VERSION", "CHANGELOG.md", "README.md", "LICENSE", filepath.Join("scripts", "README.md"), filepath.Join("references", "README.md"), filepath.Join("assets", "README.md"), filepath.Join("tests", "README.md")} {
+	for _, rel := range []string{"SKILL.md", "descriptor.yaml", "VERSION", "CHANGELOG.md", "README.md", "LICENSE", filepath.Join("scripts", "README.md"), filepath.Join("references", "README.md"), filepath.Join("assets", "README.md"), filepath.Join("tests", "README.md")} {
 		if _, err := os.Stat(filepath.Join(dir, "secure-code-review", rel)); err != nil {
 			t.Fatalf("missing %s: %v", rel, err)
 		}
@@ -757,7 +943,7 @@ targets:
 	}
 
 	for _, skillName := range []string{"my-skill", "another-skill"} {
-		for _, rel := range []string{"SKILL.md", "skill.yaml", "VERSION", "CHANGELOG.md", "README.md", "LICENSE", filepath.Join("scripts", "README.md"), filepath.Join("references", "README.md"), filepath.Join("assets", "README.md"), filepath.Join("tests", "README.md")} {
+		for _, rel := range []string{"SKILL.md", "descriptor.yaml", "VERSION", "CHANGELOG.md", "README.md", "LICENSE", filepath.Join("scripts", "README.md"), filepath.Join("references", "README.md"), filepath.Join("assets", "README.md"), filepath.Join("tests", "README.md")} {
 			if _, err := os.Stat(filepath.Join(dir, "skills", skillName, rel)); err != nil {
 				t.Fatalf("missing %s/%s/%s: %v", skillName, rel, skillName, err)
 			}
@@ -1160,7 +1346,7 @@ func TestAddSkillCommand(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(skillDir, "SKILL.md")); err != nil {
 		t.Fatalf("SKILL.md not scaffolded: %v", err)
 	}
-	for _, rel := range []string{"skill.yaml", "contract.yaml", filepath.Join("evals", "baseline.yaml")} {
+	for _, rel := range []string{"descriptor.yaml", "contract.yaml", filepath.Join("evals", "baseline.yaml")} {
 		if _, err := os.Stat(filepath.Join(skillDir, rel)); err != nil {
 			t.Fatalf("%s not scaffolded: %v", rel, err)
 		}
@@ -1226,7 +1412,7 @@ func TestRenameSkillCommand(t *testing.T) {
 	if _, err := os.Stat(filepath.Join(dir, ".agents", "skills", "old-skill")); !os.IsNotExist(err) {
 		t.Fatal("old skill directory still exists after rename")
 	}
-	for _, file := range []string{"SKILL.md", "skill.yaml"} {
+	for _, file := range []string{"SKILL.md", "descriptor.yaml"} {
 		data, err := os.ReadFile(filepath.Join(dir, ".agents", "skills", "new-skill", file))
 		if err != nil {
 			t.Fatal(err)
@@ -1612,8 +1798,8 @@ func TestDoctorSkillYAMLVersionMismatch(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Read the actual version from skill.yaml, then tamper it.
-	yamlPath := filepath.Join(dir, ".agents", "skills", "version-skill", "skill.yaml")
+	// Read the actual version from descriptor.yaml, then tamper it.
+	yamlPath := filepath.Join(dir, ".agents", "skills", "version-skill", "descriptor.yaml")
 	yamlData, err := os.ReadFile(yamlPath)
 	if err != nil {
 		t.Fatal(err)
@@ -1628,7 +1814,7 @@ func TestDoctorSkillYAMLVersionMismatch(t *testing.T) {
 		}
 	}
 	if string(patched) == string(yamlData) {
-		t.Skip("could not locate version field in skill.yaml to tamper")
+		t.Skip("could not locate version field in descriptor.yaml to tamper")
 	}
 	if err := os.WriteFile(yamlPath, patched, 0o644); err != nil {
 		t.Fatal(err)
@@ -1636,7 +1822,7 @@ func TestDoctorSkillYAMLVersionMismatch(t *testing.T) {
 
 	// doctor must return an error for the version mismatch.
 	if err := runRoot("doctor", "--target", dir); err == nil {
-		t.Fatal("expected doctor error for skill.yaml version mismatch")
+		t.Fatal("expected doctor error for descriptor.yaml version mismatch")
 	}
 }
 
@@ -1660,7 +1846,7 @@ func TestSyncCommand(t *testing.T) {
 	}
 
 	canonicalDir := filepath.Join(dir, ".agents", "skills", "sync-skill")
-	descriptorPath := filepath.Join(canonicalDir, "skill.yaml")
+	descriptorPath := filepath.Join(canonicalDir, "descriptor.yaml")
 	descriptor, err := os.ReadFile(descriptorPath)
 	if err != nil {
 		t.Fatal(err)
@@ -1687,10 +1873,19 @@ func TestSyncCommand(t *testing.T) {
 	if err := os.WriteFile(baselinePath, baseline, 0o644); err != nil {
 		t.Fatal(err)
 	}
+	mcpPath := filepath.Join(canonicalDir, "integrations", "mcp.yaml")
+	mcp, err := os.ReadFile(mcpPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mcp = append(mcp, []byte("\n# canonical MCP change\n")...)
+	if err := os.WriteFile(mcpPath, mcp, 0o644); err != nil {
+		t.Fatal(err)
+	}
 	if err := runRoot("sync", "--target", dir); err != nil {
 		t.Fatalf("sync canonical descriptor/evals failed: %v", err)
 	}
-	for _, rel := range []string{"skill.yaml", "contract.yaml", filepath.Join("evals", "baseline.yaml")} {
+	for _, rel := range []string{"descriptor.yaml", "contract.yaml", "dependencies.yaml", "assurance.yaml", filepath.Join("evals", "baseline.yaml"), filepath.Join("integrations", "mcp.yaml"), filepath.Join("integrations", "a2a.yaml")} {
 		canonical, _ := os.ReadFile(filepath.Join(canonicalDir, rel))
 		platform, readErr := os.ReadFile(filepath.Join(dir, ".claude", "skills", "sync-skill", rel))
 		if readErr != nil || string(platform) != string(canonical) {
@@ -2189,7 +2384,7 @@ func TestBakeWritePreservesSplitArtifactIdempotently(t *testing.T) {
 		t.Fatal(err)
 	}
 	paths := []string{
-		filepath.Join(".agents", "skills", "split-artifact", "skill.yaml"),
+		filepath.Join(".agents", "skills", "split-artifact", "descriptor.yaml"),
 		filepath.Join(".agents", "skills", "split-artifact", "contract.yaml"),
 		filepath.Join(".agents", "skills", "split-artifact", "evals", "baseline.yaml"),
 	}

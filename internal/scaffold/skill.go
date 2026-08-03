@@ -60,22 +60,38 @@ func PlanSkill(opts SkillOptions) ([]PlannedFile, error) {
 		owners = []string{opts.Owner}
 	}
 	skillSpec := skillmeta.NewDescriptor(opts.Name, opts.Version, description, opts.License, owners, stringsToSpecPlatforms(opts.Platforms))
-	skillYAMLBytes, err := yaml.Marshal(skillSpec)
+	descriptorYAMLBytes, err := yaml.Marshal(skillSpec)
 	if err != nil {
-		return nil, fmt.Errorf("marshal skill.yaml: %w", err)
+		return nil, fmt.Errorf("marshal descriptor.yaml: %w", err)
 	}
-	contractYAMLBytes, err := yaml.Marshal(skillmeta.NewContract())
+	contractYAMLBytes, err := yaml.Marshal(skillmeta.NewContractV2())
 	if err != nil {
 		return nil, fmt.Errorf("marshal contract.yaml: %w", err)
 	}
-	evalYAMLBytes, err := yaml.Marshal(skillmeta.NewBaselineEval())
+	evalYAMLBytes, err := yaml.Marshal(skillmeta.NewBaselineEvalV2())
 	if err != nil {
 		return nil, fmt.Errorf("marshal evals/baseline.yaml: %w", err)
+	}
+	mcpYAMLBytes, err := yaml.Marshal(skillmeta.NewMCPDocument())
+	if err != nil {
+		return nil, fmt.Errorf("marshal integrations/mcp.yaml: %w", err)
+	}
+	a2aYAMLBytes, err := yaml.Marshal(skillmeta.NewA2ADocument(opts.Name))
+	if err != nil {
+		return nil, fmt.Errorf("marshal integrations/a2a.yaml: %w", err)
+	}
+	dependenciesYAMLBytes, err := yaml.Marshal(skillmeta.NewDependenciesDocument())
+	if err != nil {
+		return nil, fmt.Errorf("marshal dependencies.yaml: %w", err)
+	}
+	assuranceYAMLBytes, err := yaml.Marshal(skillmeta.NewAssuranceDocument())
+	if err != nil {
+		return nil, fmt.Errorf("marshal assurance.yaml: %w", err)
 	}
 
 	return []PlannedFile{
 		{Path: filepath.Join(root, "SKILL.md"), Content: skillMarkdown(opts.Name, description, opts.License, opts.Version, opts.Stability, opts.Owner, opts.Since, opts.Platforms)},
-		{Path: filepath.Join(root, "skill.yaml"), Content: string(skillYAMLBytes)},
+		{Path: filepath.Join(root, skillmeta.DescriptorFilename), Content: string(descriptorYAMLBytes)},
 		{Path: filepath.Join(root, "contract.yaml"), Content: string(contractYAMLBytes)},
 		{Path: filepath.Join(root, "VERSION"), Content: opts.Version + "\n"},
 		{Path: filepath.Join(root, "CHANGELOG.md"), Content: fmt.Sprintf("# Changelog\n\n## %s\n\n- Initial skill scaffold.\n", opts.Version)},
@@ -87,6 +103,10 @@ func PlanSkill(opts SkillOptions) ([]PlannedFile, error) {
 		{Path: filepath.Join(root, "tests", "README.md"), Content: fmt.Sprintf("# %s Tests\n\nAdd implementation, unit, integration, fixtures, and expected-output tests for this skill here. Behavioral agent scenarios belong in `evals/`.\n", opts.Name)},
 		{Path: filepath.Join(root, "evals", "README.md"), Content: evalsReadme(opts.Name)},
 		{Path: filepath.Join(root, "evals", "baseline.yaml"), Content: string(evalYAMLBytes)},
+		{Path: filepath.Join(root, "integrations", "mcp.yaml"), Content: string(mcpYAMLBytes)},
+		{Path: filepath.Join(root, "integrations", "a2a.yaml"), Content: string(a2aYAMLBytes)},
+		{Path: filepath.Join(root, "dependencies.yaml"), Content: string(dependenciesYAMLBytes)},
+		{Path: filepath.Join(root, "assurance.yaml"), Content: string(assuranceYAMLBytes)},
 	}, nil
 }
 
@@ -97,16 +117,18 @@ This is an AI agent skill scaffolded with `+"`skcr`"+`.
 
 ## Authoring workflow
 
-1. Define the Goal in `+"`skill.yaml`"+`.
+1. Define the Goal and identity in `+"`descriptor.yaml`"+`.
 2. Define a least-privilege behavioral/security boundary in `+"`contract.yaml`"+`.
 3. Write model-facing instructions in `+"`SKILL.md`"+`.
-4. Add behavioral and adversarial scenarios in `+"`evals/`"+`.
-5. Run `+"`skcr validate`"+`.
-6. Run `+"`skcr sync`"+`.
-7. Run `+"`skcr version check`"+`.
+4. Declare MCP/A2A trust boundaries and the reviewed execution closure.
+5. Declare ASPS and assurance requirements in `+"`assurance.yaml`"+`.
+6. Add behavioral and adversarial scenarios in `+"`evals/`"+`.
+7. Run `+"`skcr validate`"+` and `+"`skcr asps coverage %s`"+`.
+8. Run `+"`skcr compile %s --target skil`"+`.
+9. Run `+"`skcr sync`"+` and `+"`skcr version recommend %s`"+`.
 
-“Never modify files” in `+"`SKILL.md`"+` is guidance. An empty
-`+"`capabilities.allowed.repository.write`"+` list in `+"`contract.yaml`"+` is
+“Never modify files” in `+"`SKILL.md`"+` is guidance. Empty
+`+"`capabilities.runtime.allowed.filesystem.write`"+` and `+"`delete`"+` lists in `+"`contract.yaml`"+` are
 the authoritative machine-readable boundary. Neither statement alone is runtime
 enforcement. `+"`skcr`"+` declares and validates; an external verifier or
 runtime must observe and enforce.
@@ -126,7 +148,7 @@ skpm validate %s
 skpm package %s
 skpm publish %s
 `+"```"+`
-`, name, version, platformBlock, name, name, name)
+`, name, name, name, name, version, platformBlock, name, name, name)
 }
 
 func evalsReadme(name string) string {
@@ -136,8 +158,9 @@ This directory contains vendor-neutral behavioral and adversarial scenario
 declarations. It is distinct from `+"`tests/`"+`, which contains implementation,
 unit, and integration tests.
 
-Eval v1 documents baseline, goal, boundary, and adversarial scenarios with
-structured assertions. Evals describe expected goal and contract outcomes; they
+Eval v2 documents behavioral and adversarial scenarios with context, tools,
+expected calls, security assertions, stable Goal/Invariant references, and
+containment requirements. These declarations describe expected outcomes; they
 do not execute an agent and are not runtime enforcement.
 
 Example categories:

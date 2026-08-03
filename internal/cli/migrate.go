@@ -92,15 +92,17 @@ func newMigrateSkillCommand() *cobra.Command {
 			if err := ensureMigrationRoot(absTarget, skillDir); err != nil {
 				return err
 			}
-			descriptorPath := filepath.Join(skillDir, "skill.yaml")
-			legacy, err := skillmeta.LoadDescriptor(descriptorPath)
+			legacyPath := skillmeta.DescriptorPath(skillDir)
+			legacy, err := skillmeta.LoadDescriptor(legacyPath)
 			if err != nil {
 				return err
 			}
 			if legacy.SchemaVersion == skillmeta.DescriptorSchemaVersion && legacy.LegacyEmbeddedContract == nil && legacy.Contract != nil {
 				if _, err := os.Stat(filepath.Join(skillDir, legacy.Contract.File)); err == nil {
-					fmt.Fprintln(cmd.OutOrStdout(), "No migration needed — split artifact already exists.")
-					return nil
+					if filepath.Base(legacyPath) == skillmeta.DescriptorFilename {
+						fmt.Fprintln(cmd.OutOrStdout(), "No migration needed — split artifact already exists.")
+						return nil
+					}
 				}
 			}
 			description := legacy.Description
@@ -115,16 +117,27 @@ func newMigrateSkillCommand() *cobra.Command {
 			if legacy.Goal != nil && strings.TrimSpace(legacy.Goal.Objective) != "" {
 				descriptor.Goal = legacy.Goal
 			}
-			contract := skillmeta.NewContract() // explicit default deny; never inferred from prose
-			eval := skillmeta.NewBaselineEval()
+			contract := skillmeta.NewContractV2() // explicit default deny; never inferred from prose
+			eval := skillmeta.NewBaselineEvalV2()
+			mcp := skillmeta.NewMCPDocument()
+			a2a := skillmeta.NewA2ADocument(descriptor.Name)
+			dependencies := skillmeta.NewDependenciesDocument()
+			assurance := skillmeta.NewAssuranceDocument()
+			if legacy.Security != nil {
+				fmt.Fprintln(cmd.OutOrStdout(), "Warning: preserved deprecated skill.yaml security hints for compatibility; they do not grant permissions and contract.yaml remains authoritative.")
+			}
 			files := []struct {
 				path      string
 				value     any
 				overwrite bool
 			}{
-				{descriptorPath, descriptor, true},
+				{filepath.Join(skillDir, skillmeta.DescriptorFilename), descriptor, true},
 				{filepath.Join(skillDir, "contract.yaml"), contract, false},
 				{filepath.Join(skillDir, "evals", "baseline.yaml"), eval, false},
+				{filepath.Join(skillDir, "integrations", "mcp.yaml"), mcp, false},
+				{filepath.Join(skillDir, "integrations", "a2a.yaml"), a2a, false},
+				{filepath.Join(skillDir, "dependencies.yaml"), dependencies, false},
+				{filepath.Join(skillDir, "assurance.yaml"), assurance, false},
 			}
 			if dryRun {
 				for _, file := range files {
@@ -133,6 +146,9 @@ func newMigrateSkillCommand() *cobra.Command {
 					} else {
 						fmt.Fprintf(cmd.OutOrStdout(), "would write  %s\n", file.path)
 					}
+				}
+				if filepath.Base(legacyPath) == skillmeta.LegacyDescriptorFilename {
+					fmt.Fprintf(cmd.OutOrStdout(), "would remove  %s after successful rename\n", legacyPath)
 				}
 				return nil
 			}
@@ -157,6 +173,11 @@ func newMigrateSkillCommand() *cobra.Command {
 					return err
 				}
 			}
+			if filepath.Base(legacyPath) == skillmeta.LegacyDescriptorFilename {
+				if err := os.Remove(legacyPath); err != nil && !os.IsNotExist(err) {
+					return fmt.Errorf("remove migrated legacy descriptor %s: %w", legacyPath, err)
+				}
+			}
 			fmt.Fprintln(cmd.OutOrStdout(), "Migrated skill with a default-deny Contract; review TODO Goal and capability scopes explicitly.")
 			return nil
 		},
@@ -179,7 +200,7 @@ func ensureMigrationRoot(projectRoot, skillDir string) error {
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return fmt.Errorf("skill directory resolves outside project root")
 	}
-	for _, path := range []string{filepath.Join(skillDir, "contract.yaml"), filepath.Join(skillDir, "evals")} {
+	for _, path := range []string{filepath.Join(skillDir, "contract.yaml"), filepath.Join(skillDir, "evals"), filepath.Join(skillDir, "integrations"), filepath.Join(skillDir, "dependencies.yaml"), filepath.Join(skillDir, "assurance.yaml")} {
 		if info, err := os.Lstat(path); err == nil && info.Mode()&os.ModeSymlink != 0 {
 			return fmt.Errorf("migration refuses symlinked artifact path: %s", path)
 		}

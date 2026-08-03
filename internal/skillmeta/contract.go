@@ -12,27 +12,124 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-const ContractSchemaVersion = "1"
+const (
+	ContractSchemaVersion       = "2"
+	LegacyContractSchemaVersion = "1"
+)
 
 var identifierRE = regexp.MustCompile(`^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$`)
 
 type Contract struct {
-	SchemaVersion  string               `yaml:"schema_version" json:"schema_version"`
-	Capabilities   ContractCapabilities `yaml:"capabilities" json:"capabilities"`
-	Tools          Tools                `yaml:"tools" json:"tools"`
-	Data           DataBoundary         `yaml:"data" json:"data"`
-	Preconditions  []Condition          `yaml:"preconditions" json:"preconditions"`
-	Postconditions []Condition          `yaml:"postconditions" json:"postconditions"`
-	Invariants     []Condition          `yaml:"invariants" json:"invariants"`
-	HumanApproval  HumanApproval        `yaml:"human_approval" json:"human_approval"`
-	Limits         Limits               `yaml:"limits" json:"limits"`
-	Output         Output               `yaml:"output" json:"output"`
+	SchemaVersion  string                 `yaml:"schema_version" json:"schema_version"`
+	Capabilities   ContractCapabilities   `yaml:"capabilities" json:"capabilities"`
+	Identity       IdentityRequirements   `yaml:"identity,omitempty" json:"identity,omitempty"`
+	Delegation     DelegationRequirements `yaml:"delegation,omitempty" json:"delegation,omitempty"`
+	Tools          Tools                  `yaml:"tools,omitempty" json:"tools,omitempty"`
+	Data           DataBoundary           `yaml:"data" json:"data"`
+	Preconditions  []Condition            `yaml:"preconditions" json:"preconditions"`
+	Postconditions []Condition            `yaml:"postconditions" json:"postconditions"`
+	Invariants     []Condition            `yaml:"invariants" json:"invariants"`
+	HumanApproval  HumanApproval          `yaml:"human_approval" json:"human_approval"`
+	Limits         Limits                 `yaml:"limits,omitempty" json:"limits,omitempty"`
+	Effects        Effects                `yaml:"effects,omitempty" json:"effects,omitempty"`
+	Resources      Resources              `yaml:"resources,omitempty" json:"resources,omitempty"`
+	Output         Output                 `yaml:"output" json:"output"`
 	presence       map[string]bool
 }
 
 type ContractCapabilities struct {
-	Required CapabilitySet `yaml:"required" json:"required"`
-	Allowed  CapabilitySet `yaml:"allowed" json:"allowed"`
+	Required CapabilitySet               `yaml:"required,omitempty" json:"required,omitempty"`
+	Allowed  CapabilitySet               `yaml:"allowed,omitempty" json:"allowed,omitempty"`
+	Semantic SemanticCapabilities        `yaml:"semantic,omitempty" json:"semantic,omitempty"`
+	Runtime  RuntimeContractCapabilities `yaml:"runtime,omitempty" json:"runtime,omitempty"`
+}
+
+type IdentityRequirements struct {
+	AcceptedPrincipals []string               `yaml:"accepted_principals" json:"accepted_principals"`
+	Credentials        CredentialRequirements `yaml:"credentials" json:"credentials"`
+}
+
+func (i IdentityRequirements) IsZero() bool {
+	return i.AcceptedPrincipals == nil && i.Credentials.MaxTTLSeconds == nil
+}
+
+type CredentialRequirements struct {
+	MaxTTLSeconds          *int     `yaml:"max_ttl_seconds" json:"max_ttl_seconds"`
+	RequireAudienceBinding *bool    `yaml:"require_audience_binding" json:"require_audience_binding"`
+	AllowTokenPassthrough  *bool    `yaml:"allow_token_passthrough" json:"allow_token_passthrough"`
+	RequiredScopes         []string `yaml:"required_scopes" json:"required_scopes"`
+}
+
+type DelegationRequirements struct {
+	Allowed                      *bool `yaml:"allowed" json:"allowed"`
+	MaxDepth                     *int  `yaml:"max_depth" json:"max_depth"`
+	RequireChildCapabilitySubset *bool `yaml:"require_child_capability_subset" json:"require_child_capability_subset"`
+	RequireAuthenticatedOrigin   *bool `yaml:"require_authenticated_origin" json:"require_authenticated_origin"`
+}
+
+func (d DelegationRequirements) IsZero() bool { return d.Allowed == nil }
+
+type SemanticCapabilities struct {
+	Required map[string][]string `yaml:"required" json:"required"`
+}
+
+func (s SemanticCapabilities) IsZero() bool { return s.Required == nil }
+func (r RuntimeContractCapabilities) IsZero() bool {
+	return r.Required.Persistence == nil && r.Allowed.Persistence == nil
+}
+
+type RuntimeContractCapabilities struct {
+	Required RuntimeCapabilitySet `yaml:"required" json:"required"`
+	Allowed  RuntimeCapabilitySet `yaml:"allowed" json:"allowed"`
+}
+
+type RuntimeCapabilitySet struct {
+	Filesystem  RuntimeFilesystem  `yaml:"filesystem" json:"filesystem"`
+	Network     RuntimeNetwork     `yaml:"network" json:"network"`
+	Commands    RuntimeCommands    `yaml:"commands" json:"commands"`
+	Secrets     RuntimeSecrets     `yaml:"secrets" json:"secrets"`
+	Environment RuntimeEnvironment `yaml:"environment" json:"environment"`
+	Tools       Tools              `yaml:"tools" json:"tools"`
+	MCP         RuntimeMCP         `yaml:"mcp" json:"mcp"`
+	Persistence *bool              `yaml:"persistence" json:"persistence"`
+	Agent       RuntimeAgent       `yaml:"agent" json:"agent"`
+}
+
+type RuntimeFilesystem struct {
+	Read   []string `yaml:"read" json:"read"`
+	Write  []string `yaml:"write" json:"write"`
+	Delete []string `yaml:"delete" json:"delete"`
+}
+type RuntimeNetwork struct {
+	Inbound  *bool    `yaml:"inbound" json:"inbound"`
+	Outbound *bool    `yaml:"outbound" json:"outbound"`
+	Hosts    []string `yaml:"hosts" json:"hosts"`
+}
+type RuntimeCommands struct {
+	Execute *bool         `yaml:"execute" json:"execute"`
+	Allow   []CommandRule `yaml:"allow" json:"allow"`
+}
+type CommandRule struct {
+	Executable string   `yaml:"executable" json:"executable"`
+	ArgvPrefix []string `yaml:"argv_prefix,omitempty" json:"argv_prefix,omitempty"`
+}
+type RuntimeSecrets struct {
+	Read   []string `yaml:"read" json:"read"`
+	Expose *bool    `yaml:"expose" json:"expose"`
+}
+type RuntimeEnvironment struct {
+	Read []string `yaml:"read" json:"read"`
+}
+type RuntimeMCP struct {
+	Servers []string `yaml:"servers" json:"servers"`
+	Tools   []string `yaml:"tools" json:"tools"`
+}
+type RuntimeAgent struct {
+	AutonomousActions   *bool    `yaml:"autonomous_actions" json:"autonomous_actions"`
+	ExternalSideEffects *bool    `yaml:"external_side_effects" json:"external_side_effects"`
+	ConfirmDestructive  *bool    `yaml:"confirm_destructive" json:"confirm_destructive"`
+	ConfirmExternal     *bool    `yaml:"confirm_external" json:"confirm_external"`
+	ExternalTargets     []string `yaml:"external_targets" json:"external_targets"`
 }
 
 type CapabilitySet struct {
@@ -64,10 +161,20 @@ type Tools struct {
 	Allow []string `yaml:"allow" json:"allow"`
 	Deny  []string `yaml:"deny" json:"deny"`
 }
+
+func (t Tools) IsZero() bool { return t.Allow == nil && t.Deny == nil }
+
 type DataBoundary struct {
-	Classifications []string   `yaml:"classifications" json:"classifications"`
-	Egress          DataEgress `yaml:"egress" json:"egress"`
-	Flows           []DataFlow `yaml:"flows" json:"flows"`
+	Classifications []string     `yaml:"classifications" json:"classifications"`
+	Policies        []DataPolicy `yaml:"policies,omitempty" json:"policies,omitempty"`
+	Egress          DataEgress   `yaml:"egress" json:"egress"`
+	Flows           []DataFlow   `yaml:"flows" json:"flows"`
+}
+type DataPolicy struct {
+	ID          string   `yaml:"id" json:"id"`
+	Sensitivity string   `yaml:"sensitivity" json:"sensitivity"`
+	Purposes    []string `yaml:"purposes" json:"purposes"`
+	Retention   string   `yaml:"retention" json:"retention"`
 }
 type DataEgress struct {
 	Allow []string `yaml:"allow" json:"allow"`
@@ -107,6 +214,36 @@ type Limits struct {
 	MaxRuntimeSeconds  *int   `yaml:"max_runtime_seconds" json:"max_runtime_seconds"`
 	MaxNetworkRequests *int   `yaml:"max_network_requests" json:"max_network_requests"`
 }
+
+func (l Limits) IsZero() bool {
+	return l.Scope == "" && l.MaxToolCalls == nil && l.MaxRuntimeSeconds == nil && l.MaxNetworkRequests == nil
+}
+
+type Resources struct {
+	Scope                string `yaml:"scope" json:"scope"`
+	MaxRuntimeSeconds    *int   `yaml:"max_runtime_seconds" json:"max_runtime_seconds"`
+	MaxMemoryMB          *int   `yaml:"max_memory_mb" json:"max_memory_mb"`
+	MaxNetworkBytes      *int   `yaml:"max_network_bytes" json:"max_network_bytes"`
+	MaxNetworkRequests   *int   `yaml:"max_network_requests" json:"max_network_requests"`
+	MaxToolCalls         *int   `yaml:"max_tool_calls" json:"max_tool_calls"`
+	MaxSteps             *int   `yaml:"max_steps" json:"max_steps"`
+	MaxReplans           *int   `yaml:"max_replans" json:"max_replans"`
+	MaxDelegationDepth   *int   `yaml:"max_delegation_depth" json:"max_delegation_depth"`
+	MaxModelTokens       *int   `yaml:"max_model_tokens" json:"max_model_tokens"`
+	MaxExternalMutations *int   `yaml:"max_external_mutations" json:"max_external_mutations"`
+}
+type Effects struct {
+	Tools []ToolEffect `yaml:"tools" json:"tools"`
+}
+
+func (e Effects) IsZero() bool { return e.Tools == nil }
+
+type ToolEffect struct {
+	Tool       string `yaml:"tool" json:"tool"`
+	Class      string `yaml:"class" json:"class"`
+	Reversible bool   `yaml:"reversible" json:"reversible"`
+	Idempotent bool   `yaml:"idempotent" json:"idempotent"`
+}
 type Output struct {
 	Format           string   `yaml:"format" json:"format"`
 	RequiredFields   []string `yaml:"required_fields" json:"required_fields"`
@@ -127,7 +264,7 @@ func emptyCapabilitySet() CapabilitySet {
 
 func NewContract() Contract {
 	contract := Contract{
-		SchemaVersion: ContractSchemaVersion,
+		SchemaVersion: LegacyContractSchemaVersion,
 		Capabilities: ContractCapabilities{
 			Required: emptyCapabilitySet(),
 			Allowed:  emptyCapabilitySet(),
@@ -155,6 +292,43 @@ func NewContract() Contract {
 	contract.presence = requiredContractPresence()
 	return contract
 }
+
+func emptyRuntimeCapabilitySet() RuntimeCapabilitySet {
+	return RuntimeCapabilitySet{
+		Filesystem:  RuntimeFilesystem{Read: []string{}, Write: []string{}, Delete: []string{}},
+		Network:     RuntimeNetwork{Inbound: boolPtr(false), Outbound: boolPtr(false), Hosts: []string{}},
+		Commands:    RuntimeCommands{Execute: boolPtr(false), Allow: []CommandRule{}},
+		Secrets:     RuntimeSecrets{Read: []string{}, Expose: boolPtr(false)},
+		Environment: RuntimeEnvironment{Read: []string{}}, Tools: Tools{Allow: []string{}, Deny: []string{}},
+		MCP: RuntimeMCP{Servers: []string{}, Tools: []string{}}, Persistence: boolPtr(false),
+		Agent: RuntimeAgent{AutonomousActions: boolPtr(false), ExternalSideEffects: boolPtr(false), ConfirmDestructive: boolPtr(true), ConfirmExternal: boolPtr(true), ExternalTargets: []string{}},
+	}
+}
+
+func NewContractV2() Contract {
+	contract := NewContract()
+	contract.SchemaVersion = ContractSchemaVersion
+	contract.Capabilities = ContractCapabilities{
+		Semantic: SemanticCapabilities{Required: map[string][]string{}},
+		Runtime:  RuntimeContractCapabilities{Required: emptyRuntimeCapabilitySet(), Allowed: emptyRuntimeCapabilitySet()},
+	}
+	contract.Tools = Tools{}
+	contract.Limits = Limits{}
+	contract.Identity = IdentityRequirements{AcceptedPrincipals: []string{"agent", "human"}, Credentials: CredentialRequirements{MaxTTLSeconds: intPtr(900), RequireAudienceBinding: boolPtr(true), AllowTokenPassthrough: boolPtr(false), RequiredScopes: []string{}}}
+	contract.Delegation = DelegationRequirements{Allowed: boolPtr(false), MaxDepth: intPtr(0), RequireChildCapabilitySubset: boolPtr(true), RequireAuthenticatedOrigin: boolPtr(true)}
+	contract.Data.Policies = []DataPolicy{
+		{ID: "secret", Sensitivity: "restricted", Purposes: []string{"task-execution"}, Retention: "invocation"},
+		{ID: "credential", Sensitivity: "restricted", Purposes: []string{"authentication"}, Retention: "invocation"},
+		{ID: "source-code", Sensitivity: "internal", Purposes: []string{"task-execution"}, Retention: "invocation"},
+		{ID: "personal-data", Sensitivity: "confidential", Purposes: []string{"task-execution"}, Retention: "invocation"},
+	}
+	contract.Effects = Effects{Tools: []ToolEffect{}}
+	contract.Resources = Resources{Scope: "invocation"}
+	contract.presence = requiredContractV2Presence()
+	return contract
+}
+
+func intPtr(value int) *int { return &value }
 
 func ParseContract(data []byte) (Contract, error) {
 	var contract Contract
@@ -184,7 +358,10 @@ func LoadContract(path string) (Contract, error) {
 }
 
 func ValidateContract(c Contract) []string {
-	if c.SchemaVersion != ContractSchemaVersion {
+	if c.SchemaVersion == ContractSchemaVersion {
+		return validateContractV2(c)
+	}
+	if c.SchemaVersion != LegacyContractSchemaVersion {
 		return []string{fmt.Sprintf("unsupported contract schema_version %q", c.SchemaVersion)}
 	}
 	var errs []string
@@ -446,7 +623,10 @@ func validateNormalizedDuplicates(path string, values []string, cleanPath, lower
 func KnownCapability(value string) bool {
 	switch value {
 	case "repository.read", "repository.write", "filesystem.read", "filesystem.write",
-		"network.connect", "process.execute", "secrets.read", "tool.invoke":
+		"filesystem.delete", "network.connect", "network.inbound", "network.outbound",
+		"process.execute", "commands.execute", "secrets.read", "secrets.expose",
+		"environment.read", "tool.invoke", "mcp.invoke", "persistence.write",
+		"agent.autonomous", "agent.external_side_effect":
 		return true
 	default:
 		return false

@@ -2,6 +2,7 @@ package cli
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -50,7 +51,7 @@ func newDoctorCommand() *cobra.Command {
 			cfg, err := cliLoadBakeFile(bakePath)
 			if err != nil {
 				add("error", "bakefile", fmt.Sprintf("cannot parse agentic.bake.yaml: %v", err))
-				printDoctorFindings(findings)
+				printDoctorFindings(cmd.OutOrStdout(), findings)
 				return doctorExitCode(findings)
 			}
 			add("ok", "bakefile", "agentic.bake.yaml is valid")
@@ -143,19 +144,27 @@ func newDoctorCommand() *cobra.Command {
 				}
 
 				descriptorPresent := false
-				if yamlData, err := os.ReadFile(filepath.Join(skillDir, "skill.yaml")); err != nil {
-					add("error", "skills", fmt.Sprintf("%s/%s/skill.yaml missing", agentsBase, name))
+				descriptorPath := skillmeta.DescriptorPath(skillDir)
+				descriptorName := filepath.Base(descriptorPath)
+				if yamlData, err := os.ReadFile(descriptorPath); err != nil {
+					add("error", "skills", fmt.Sprintf("%s/%s/descriptor.yaml missing", agentsBase, name))
 				} else {
 					descriptorPresent = true
 					if readErr == nil {
 						if fm, ok := parseFrontmatterDates(string(skillMDContent)); ok && fm.Version != "" {
 							if yamlVersion := extractYAMLStringKey(string(yamlData), "version"); yamlVersion != "" && yamlVersion != fm.Version {
-								add("error", "skills", fmt.Sprintf("%s/%s/skill.yaml version %q does not match SKILL.md version %q", agentsBase, name, yamlVersion, fm.Version))
+								add("error", "skills", fmt.Sprintf("%s/%s/%s version %q does not match SKILL.md version %q", agentsBase, name, descriptorName, yamlVersion, fm.Version))
 							}
 						}
 					}
 				}
 				if descriptorPresent {
+					if descriptor, loadErr := skillmeta.LoadDescriptor(descriptorPath); loadErr == nil && descriptor.Security != nil {
+						add("warn", "contract", fmt.Sprintf(
+							"%s/%s/%s: security is deprecated compatibility metadata and is ignored for authorization; declare the boundary only in contract.yaml",
+							agentsBase, name, descriptorName,
+						))
+					}
 					for _, descriptorErr := range skillmeta.ValidateDirectory(skillDir) {
 						add("error", "contract", fmt.Sprintf("%s/%s: %s", agentsBase, name, descriptorErr))
 					}
@@ -230,7 +239,7 @@ func newDoctorCommand() *cobra.Command {
 				add("ok", "lockfile", ".agentic-template.lock present")
 			}
 
-			printDoctorFindings(findings)
+			printDoctorFindings(cmd.OutOrStdout(), findings)
 			return doctorExitCode(findings)
 		},
 	}
@@ -239,10 +248,10 @@ func newDoctorCommand() *cobra.Command {
 	return cmd
 }
 
-func printDoctorFindings(findings []doctorFinding) {
+func printDoctorFindings(w io.Writer, findings []doctorFinding) {
 	icons := map[string]string{"ok": "✓", "warn": "!", "error": "✗"}
 	for _, f := range findings {
-		fmt.Printf("  %s  [%-9s]  %s\n", icons[f.level], f.check, f.msg)
+		fmt.Fprintf(w, "  %s  [%-9s]  %s\n", icons[f.level], f.check, f.msg)
 	}
 	errors, warns := 0, 0
 	for _, f := range findings {
@@ -253,9 +262,9 @@ func printDoctorFindings(findings []doctorFinding) {
 			warns++
 		}
 	}
-	fmt.Println()
+	fmt.Fprintln(w)
 	if errors == 0 && warns == 0 {
-		fmt.Println("Everything looks healthy.")
+		fmt.Fprintln(w, "Everything looks healthy.")
 	} else {
 		parts := []string{}
 		if errors > 0 {
@@ -264,7 +273,7 @@ func printDoctorFindings(findings []doctorFinding) {
 		if warns > 0 {
 			parts = append(parts, fmt.Sprintf("%d warning(s)", warns))
 		}
-		fmt.Printf("%s found.\n", strings.Join(parts, ", "))
+		fmt.Fprintf(w, "%s found.\n", strings.Join(parts, ", "))
 	}
 }
 

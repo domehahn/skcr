@@ -1,0 +1,22 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/domehahn/skcr/schemas/a2a-v1.schema.json",
+  "title": "skcr A2A Integration v1",
+  "type": "object", "additionalProperties": false,
+  "required": ["schema_version", "agent", "delegation", "trust"],
+  "properties": {
+    "schema_version": {"const": "1"},
+    "agent": {"type": "object", "additionalProperties": false, "required": ["id"], "properties": {"id": {"type": "string", "pattern": "^[a-z][a-z0-9]*(?:[._-][a-z0-9]+)*$"}}},
+    "delegation": {
+      "type": "object", "additionalProperties": false,
+      "required": ["accept_from", "delegate_to", "max_depth", "require_authenticated_origin", "require_capability_subset"],
+      "properties": {
+        "accept_from": {"$ref": "#/$defs/strings"}, "delegate_to": {"$ref": "#/$defs/strings"},
+        "max_depth": {"type": "integer", "minimum": 0},
+        "require_authenticated_origin": {"type": "boolean"}, "require_capability_subset": {"type": "boolean"}
+      }
+    },
+    "trust": {"type": "object", "additionalProperties": false, "required": ["incoming_outputs", "promotion_requires"], "properties": {"incoming_outputs": {"const": "untrusted"}, "promotion_requires": {"$ref": "#/$defs/strings"}}}
+  },
+  "$defs": {"strings": {"type": "array", "items": {"type": "string", "minLength": 1}, "uniqueItems": true}}
+}

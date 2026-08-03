@@ -2,7 +2,7 @@
 
 ## SDLC / DevSecOps Skill Library
 
-The built-in SDLC and DevSecOps skill library is registered as inline Go templates. The current production-ready library contains the core SDLC skills plus DORA/regulatory/audit, documentation/evidence, DevSecOps, CloudOps/PlatformOps, AIOps/MLOps/LLMOps, and additional security/governance reviewers.
+The built-in SDLC and DevSecOps skill library is registered as inline Go templates. The current production-ready library contains the core SDLC skills plus DORA/regulatory/audit, documentation/evidence, DevSecOps, CloudOps/PlatformOps, AIOps/MLOps/LLMOps, Agentic Security, and additional security/governance reviewers.
 
 Core SDLC skills:
 
@@ -32,6 +32,7 @@ Extended review skills:
 - DevSecOps: `devsecops-maturity-reviewer`, `pipeline-security-architect`, `software-supply-chain-architect`, `policy-as-code-engineer`, `secure-developer-platform-reviewer`, `vulnerability-management-coordinator`
 - CloudOps / PlatformOps: `cloud-landing-zone-reviewer`, `cloud-governance-reviewer`, `finops-reviewer`, `sre-reliability-reviewer`, `kubernetes-platform-reviewer`, `gitops-operations-reviewer`
 - AIOps / MLOps / LLMOps: `aiops-signal-correlation-reviewer`, `alert-quality-reviewer`, `auto-remediation-reviewer`, `mlops-governance-reviewer`, `llmops-security-reviewer`, `ai-change-risk-reviewer`
+- Agentic Security: `agent-containment-reviewer`, `agent-runtime-enforcement-reviewer`, `agent-behavior-eval-engineer`, `backdoor-persistence-reviewer`, `agentic-threat-modeler`, `security-invariant-test-engineer`
 - Security & Compliance: `privacy-data-protection-reviewer`, `api-contract-reviewer`, `secure-design-reviewer`, `policy-as-code-reviewer`, `container-security-reviewer`, `identity-access-reviewer`, `risk-acceptance-reviewer`, `secure-code-reviewer`, `performance-scalability-reviewer`, `migration-change-reviewer`, `sbom-vulnerability-management-reviewer`, `developer-experience-reviewer`, `resilience-reviewer`, `backup-restore-reviewer`
 
 ## Framework-Ready
@@ -87,12 +88,16 @@ The `universal-skill-creator` is held to an additional rule: it must never creat
 
 ## Source Of Truth
 
-For built-in SDLC and DevSecOps skills, the source of truth is `internal/scaffold/skill_templates.go`.
+For built-in SDLC and DevSecOps skills, the source of truth is
+`internal/scaffold/skill_templates.go`. Hand-authored Agentic Security content
+is kept in `internal/scaffold/agentic_security_templates.go` and merged by the
+same renderer.
 
 The inline registry contains:
 
 - `SDLCSkillNames`: the ordered list of built-in skill names.
 - `sdlcSkillContent`: the domain-specific content for each skill.
+- `agenticSecuritySkillContent`: precision content for the Agentic Security category.
 - `skillBodies`: the rendered template map used by scaffolding.
 - `renderSkillTemplate`: the renderer used by `PlanSkill`.
 - `skillFrontmatter`: the shared metadata baseline for all built-in skills.
@@ -115,7 +120,9 @@ Do not hand-edit per-skill platform versions. Keep a platform at `"unknown"` unt
 To add a new built-in skill template:
 
 1. Add the skill name to `SDLCSkillNames`.
-2. Add a matching `skillContent` entry in `sdlcSkillContent`.
+2. Add a matching `skillContent` entry in `sdlcSkillContent`, or in the
+   dedicated hand-authored category map when the domain requires an isolated
+   source file.
 3. Fill every required section with domain-specific content.
 4. Keep shared DevSecOps guardrails generic enough to apply broadly, but make the review scope, checklist, decision rules, finding categories, severity guidance, output requirements, acceptance criteria, and anti-patterns specific to the skill.
 5. Add domain-term assertions when the skill has non-negotiable vocabulary or risk areas.

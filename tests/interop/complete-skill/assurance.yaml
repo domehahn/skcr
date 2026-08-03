@@ -1,0 +1,16 @@
+schema_version: "1"
+asps:
+  specification: ASPS
+  version: "1.0"
+  required_profiles: [asps-core@1.0]
+  required_properties: []
+assurance:
+  minimum_requested_level: A1
+  requirements:
+    behavioral_eval: true
+    adversarial_eval: false
+    containment: false
+    native_isolation: false
+    provenance: true
+security_review:
+  expansion_approvals: []
