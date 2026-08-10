@@ -2,6 +2,8 @@ package cli
 
 import (
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/domehahn/skcr/internal/catalog"
 	"github.com/spf13/cobra"
@@ -26,13 +28,41 @@ func newListTargetsSubCommand() *cobra.Command {
 }
 
 func newListCategoriesCommand() *cobra.Command {
-	return &cobra.Command{
+	var scope string
+	cmd := &cobra.Command{
 		Use:   "categories",
 		Short: "List built-in skill categories",
-		Run: func(cmd *cobra.Command, args []string) {
-			for _, category := range catalog.CategoryNames() {
+		RunE: func(cmd *cobra.Command, args []string) error {
+			categories, err := categoryNamesForScope(scope)
+			if err != nil {
+				return err
+			}
+			for _, category := range categories {
 				fmt.Fprintf(cmd.OutOrStdout(), "%-28s  %d skill(s)\n", category, len(catalog.SkillCategories[category]))
 			}
+			return nil
 		},
+	}
+	cmd.Flags().StringVar(&scope, "scope", "all", "category scope: all, semantic, or cncf")
+	return cmd
+}
+
+func categoryNamesForScope(scope string) ([]string, error) {
+	switch strings.ToLower(strings.TrimSpace(scope)) {
+	case "all":
+		return catalog.CategoryNames(), nil
+	case "semantic":
+		return catalog.SemanticCategoryNames(), nil
+	case "cncf":
+		var names []string
+		for _, name := range catalog.CategoryNames() {
+			if name == "cncf" || strings.HasPrefix(name, "cncf-") {
+				names = append(names, name)
+			}
+		}
+		sort.Strings(names)
+		return names, nil
+	default:
+		return nil, fmt.Errorf("unknown category scope %q (available: all, semantic, cncf)", scope)
 	}
 }

@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+
+	"github.com/domehahn/skcr/internal/cncf"
 )
 
 var CoreSkills = []string{
@@ -101,8 +103,50 @@ var paymentSkills = []string{
 	"adyen-integration-engineer",
 }
 
+var languageSkills = []string{
+	"java-reviewer",
+	"golang-reviewer",
+	"python-reviewer",
+	"ruby-reviewer",
+	"javascript-reviewer",
+	"typescript-reviewer",
+	"rust-reviewer",
+	"csharp-reviewer",
+	"kotlin-reviewer",
+	"php-reviewer",
+}
+
+var frameworkSkills = []string{
+	"spring-boot-reviewer",
+	"quarkus-reviewer",
+	"angular-reviewer",
+	"react-reviewer",
+	"vuejs-reviewer",
+	"nodejs-reviewer",
+	"nextjs-reviewer",
+	"django-reviewer",
+	"fastapi-reviewer",
+	"ruby-on-rails-reviewer",
+}
+
+var infrastructureSkills = []string{
+	"kubernetes-platform-reviewer",
+	"aws-cloud-reviewer",
+	"azure-cloud-reviewer",
+	"gcp-cloud-reviewer",
+	"terraform-reviewer",
+	"opentofu-reviewer",
+	"ansible-reviewer",
+	"vagrant-reviewer",
+	"virtualization-reviewer",
+	"helm-reviewer",
+}
+
 var SkillCategories = map[string][]string{
-	"payments": paymentSkills,
+	"payments":       paymentSkills,
+	"languages":      languageSkills,
+	"frameworks":     frameworkSkills,
+	"infrastructure": infrastructureSkills,
 	"dora-vait": {
 		"dora-readiness-reviewer",
 		"ict-risk-management-reviewer",
@@ -181,17 +225,17 @@ var SkillCategoryAliases = map[string]string{
 	"evidence":                   "documentation-evidence",
 	"cloudops":                   "cloudops-platformops",
 	"platformops":                "cloudops-platformops",
-	"cloud":                      "cloudops-platformops",
-	"platform":                   "cloudops-platformops",
+	"cloud":                      "cloud-platform",
+	"platform":                   "cloud-platform",
 	"aiops":                      "aiops-mlops-llmops",
 	"mlops":                      "aiops-mlops-llmops",
 	"llmops":                     "aiops-mlops-llmops",
 	"agent-security":             "agentic-security",
 	"agentic":                    "agentic-security",
 	"agentic-security":           "agentic-security",
-	"security":                   "security-governance",
-	"governance":                 "security-governance",
-	"security-compliance":        "security-governance",
+	"security":                   "security",
+	"governance":                 "governance-compliance",
+	"security-compliance":        "governance-compliance",
 	"security-and-governance":    "security-governance",
 	"documentation-and-evidence": "documentation-evidence",
 	"cloudops-platformops":       "cloudops-platformops",
@@ -204,6 +248,37 @@ var SkillCategoryAliases = map[string]string{
 	"stripe":                     "payments",
 	"paypal":                     "payments",
 	"adyen":                      "payments",
+	"language":                   "languages",
+	"programming-language":       "languages",
+	"programming-languages":      "languages",
+	"framework":                  "frameworks",
+	"technology":                 "infrastructure",
+	"technologies":               "infrastructure",
+	"infra":                      "infrastructure",
+	"cncf-all":                   "cncf-landscape",
+	"landscape":                  "cncf-landscape",
+	"cncf-landscape":             "cncf-landscape",
+	"cncf-projects":              "cncf",
+	"runtime":                    "runtime-containers",
+	"containers":                 "runtime-containers",
+	"networking":                 "networking-service-mesh",
+	"service-mesh":               "networking-service-mesh",
+	"iac":                        "infrastructure-as-code",
+	"ci-cd":                      "cicd-gitops",
+	"gitops":                     "cicd-gitops",
+	"observability-monitoring":   "observability",
+	"reliability":                "reliability-operations",
+	"backup":                     "backup-disaster-recovery",
+	"disaster-recovery":          "backup-disaster-recovery",
+	"database":                   "databases",
+	"messaging":                  "messaging-streaming",
+	"ai":                         "ai-ml-data",
+	"machine-learning":           "ai-ml-data",
+	"members":                    "organizations-members",
+	"organizations":              "organizations-members",
+	"providers":                  "service-providers",
+	"service-provider":           "service-providers",
+	"third-party-risk":           "provider-risk",
 }
 
 func CategoryNames() []string {
@@ -327,14 +402,79 @@ var additionalSkillDescriptions = map[string]string{
 	"stripe-integration-engineer":            "Design and review Stripe PaymentIntents or Checkout, idempotency, signed webhooks, Connect or Billing boundaries, versions, and tests.",
 	"paypal-integration-engineer":            "Design and review PayPal Orders and Captures, PayPal-Request-Id, OAuth boundaries, verified webhooks, refunds, and sandbox tests.",
 	"adyen-integration-engineer":             "Design and review Adyen Checkout, merchant references, idempotency, HMAC webhooks, asynchronous results, modifications, and tests.",
+	"java-reviewer":                          "Review modern Java code, JVM behavior, concurrency, APIs, testing, performance, and maintainability.",
+	"golang-reviewer":                        "Review Go code for idioms, concurrency, context propagation, errors, interfaces, modules, tests, and performance.",
+	"python-reviewer":                        "Review Python code for typing, packaging, async behavior, resource safety, tests, security, and maintainability.",
+	"ruby-reviewer":                          "Review Ruby code for idioms, object design, metaprogramming boundaries, Bundler hygiene, tests, and performance.",
+	"javascript-reviewer":                    "Review modern JavaScript for async behavior, modules, runtime correctness, security, tests, and performance.",
+	"typescript-reviewer":                    "Review TypeScript strictness, narrowing, generics, declarations, runtime validation, and compiler configuration.",
+	"rust-reviewer":                          "Review Rust ownership, lifetimes, unsafe boundaries, concurrency, error handling, Cargo dependencies, and tests.",
+	"csharp-reviewer":                        "Review C# and .NET code for async correctness, dependency injection, resource disposal, nullable types, tests, and performance.",
+	"kotlin-reviewer":                        "Review Kotlin code for null safety, coroutines, sealed models, Java interop, Gradle configuration, and tests.",
+	"php-reviewer":                           "Review modern PHP code for type safety, Composer hygiene, framework boundaries, security, tests, and performance.",
+	"spring-boot-reviewer":                   "Review Spring Boot dependency injection, transactions, persistence, security, configuration, Actuator, and migrations.",
+	"quarkus-reviewer":                       "Review Quarkus build-time behavior, CDI, reactive paths, native images, configuration, security, and tests.",
+	"angular-reviewer":                       "Review Angular components, signals, RxJS, forms, routing, state, accessibility, testing, and bundle performance.",
+	"react-reviewer":                         "Review React components, hooks, state, rendering, accessibility, Server Components, testing, and performance.",
+	"vuejs-reviewer":                         "Review Vue.js Composition API, reactivity, components, state, routing, accessibility, tests, and performance.",
+	"nodejs-reviewer":                        "Review Node.js services for event-loop safety, async behavior, modules, streams, HTTP security, dependencies, and operations.",
+	"nextjs-reviewer":                        "Review Next.js routing, Server and Client Components, caching, data fetching, security, deployment, and performance.",
+	"django-reviewer":                        "Review Django models, migrations, ORM usage, authentication, middleware, settings, tests, and deployment safety.",
+	"fastapi-reviewer":                       "Review FastAPI schemas, dependency injection, async paths, authentication, validation, OpenAPI, tests, and operations.",
+	"ruby-on-rails-reviewer":                 "Review Rails models, controllers, jobs, migrations, Active Record behavior, security, tests, and deployment safety.",
+	"aws-cloud-reviewer":                     "Review AWS accounts, IAM, networking, compute, storage, databases, observability, security, cost, and resilience.",
+	"azure-cloud-reviewer":                   "Review Azure tenants, subscriptions, identities, networks, compute, data services, Policy, monitoring, cost, and resilience.",
+	"gcp-cloud-reviewer":                     "Review GCP organizations, projects, IAM, networking, compute, data services, observability, cost, and resilience.",
+	"terraform-reviewer":                     "Review Terraform modules, providers, plans, state, drift, lifecycle, IAM, tests, and safe apply or destroy boundaries.",
+	"opentofu-reviewer":                      "Review OpenTofu modules, providers, plans, state, drift, lifecycle, tests, and safe apply or destroy boundaries.",
+	"ansible-reviewer":                       "Review Ansible inventories, roles, playbooks, idempotency, secrets, privilege escalation, testing, and rollout safety.",
+	"vagrant-reviewer":                       "Review Vagrant environments, providers, networking, provisioning, shared folders, reproducibility, and isolation.",
+	"virtualization-reviewer":                "Review VM and virtualization architecture, images, isolation, networking, storage, snapshots, patching, and capacity.",
+	"helm-reviewer":                          "Review Helm charts, templates, values, dependencies, hooks, secrets, schema validation, upgrades, and rollbacks.",
 }
 
 func init() {
-	CoreSkills = append(CoreSkills, additionalCoreSkills...)
-	CoreSkills = append(CoreSkills, paymentSkills...)
+	CoreSkills = appendUnique(CoreSkills, additionalCoreSkills...)
+	CoreSkills = appendUnique(CoreSkills, paymentSkills...)
+	CoreSkills = appendUnique(CoreSkills, languageSkills...)
+	CoreSkills = appendUnique(CoreSkills, frameworkSkills...)
+	CoreSkills = appendUnique(CoreSkills, infrastructureSkills...)
 	for name, desc := range additionalSkillDescriptions {
 		SkillDescriptions[name] = desc
 	}
+	registerSemanticCategories()
+	for category, skills := range cncf.SkillCategories() {
+		SkillCategories[category] = mergeUniqueSkills(SkillCategories[category], skills)
+	}
+	for _, entry := range cncf.MustEntries() {
+		CoreSkills = appendUnique(CoreSkills, entry.SkillName)
+		SkillDescriptions[entry.SkillName] = cncfSkillDescription(entry)
+	}
+}
+
+func appendUnique(target []string, values ...string) []string {
+	seen := make(map[string]bool, len(target)+len(values))
+	for _, value := range target {
+		seen[value] = true
+	}
+	for _, value := range values {
+		if !seen[value] {
+			target = append(target, value)
+			seen[value] = true
+		}
+	}
+	return target
+}
+
+func cncfSkillDescription(entry cncf.Entry) string {
+	classification := "CNCF Landscape"
+	if len(entry.Placements) > 0 {
+		classification = entry.Placements[0].Category + " / " + entry.Placements[0].Subcategory
+	}
+	if entry.Description != "" {
+		return fmt.Sprintf("Review %s using its official documentation and repository in the %s category. %s", entry.Name, classification, entry.Description)
+	}
+	return fmt.Sprintf("Review %s using its official documentation and repository in the %s category.", entry.Name, classification)
 }
 
 var BaseRules = map[string]any{
