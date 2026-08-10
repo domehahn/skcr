@@ -7,9 +7,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/domehahn/skcr/internal/bake"
-	"github.com/domehahn/skcr/internal/renderer"
-	"github.com/domehahn/skcr/internal/skilllock"
+	"github.com/domehahn/skcr/v2/internal/bake"
+	"github.com/domehahn/skcr/v2/internal/renderer"
+	"github.com/domehahn/skcr/v2/internal/skilllock"
 	"github.com/spf13/cobra"
 )
 

@@ -6,7 +6,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/domehahn/skcr/internal/models"
+	"github.com/domehahn/skcr/v2/internal/models"
 	"gopkg.in/yaml.v3"
 )
 

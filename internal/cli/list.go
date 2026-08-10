@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/domehahn/skcr/internal/catalog"
+	"github.com/domehahn/skcr/v2/internal/catalog"
 	"github.com/spf13/cobra"
 )
 

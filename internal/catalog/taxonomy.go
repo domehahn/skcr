@@ -3,7 +3,7 @@ package catalog
 import (
 	"sort"
 
-	"github.com/domehahn/skcr/internal/cncf"
+	"github.com/domehahn/skcr/v2/internal/cncf"
 )
 
 var builtInSemanticCategories = map[string][]string{

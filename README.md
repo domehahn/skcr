@@ -259,7 +259,7 @@ make install
 go install ./cmd/skcr
 
 # From GitHub
-go install github.com/domehahn/skcr/cmd/skcr@latest
+go install github.com/domehahn/skcr/v2/cmd/skcr@latest
 ```
 
 ## Quick start

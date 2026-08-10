@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/domehahn/skcr/internal/asps"
-	"github.com/domehahn/skcr/internal/skillmeta"
+	"github.com/domehahn/skcr/v2/internal/asps"
+	"github.com/domehahn/skcr/v2/internal/skillmeta"
 	"github.com/spf13/cobra"
 )
 

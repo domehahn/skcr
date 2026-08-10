@@ -7,8 +7,8 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/domehahn/skcr/internal/cncf"
-	platformcompat "github.com/domehahn/skcr/internal/platforms"
+	"github.com/domehahn/skcr/v2/internal/cncf"
+	platformcompat "github.com/domehahn/skcr/v2/internal/platforms"
 )
 
 type skillTemplateData struct {

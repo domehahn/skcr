@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/domehahn/skcr/internal/scaffold"
-	"github.com/domehahn/skcr/internal/skillmeta"
+	"github.com/domehahn/skcr/v2/internal/scaffold"
+	"github.com/domehahn/skcr/v2/internal/skillmeta"
 	"gopkg.in/yaml.v3"
 )
 

@@ -4,7 +4,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/domehahn/skcr/internal/scaffold"
+	"github.com/domehahn/skcr/v2/internal/scaffold"
 )
 
 func TestCoreSkillsMatchSDLCSkillNames(t *testing.T) {
