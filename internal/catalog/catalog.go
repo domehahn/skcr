@@ -82,7 +82,27 @@ var additionalCoreSkills = []string{
 	"backup-restore-reviewer",
 }
 
+var paymentSkills = []string{
+	"payment-integration-engineer",
+	"payment-security-reviewer",
+	"payment-webhook-reviewer",
+	"payment-flow-tester",
+	"refund-dispute-handler",
+	"payment-reconciliation-reviewer",
+	"subscription-billing-engineer",
+	"sca-3ds-reviewer",
+	"payment-fraud-risk-reviewer",
+	"payment-observability-reviewer",
+	"payment-provider-migration-reviewer",
+	"payment-compliance-reviewer",
+	"payment-operations-agent",
+	"stripe-integration-engineer",
+	"paypal-integration-engineer",
+	"adyen-integration-engineer",
+}
+
 var SkillCategories = map[string][]string{
+	"payments": paymentSkills,
 	"dora-vait": {
 		"dora-readiness-reviewer",
 		"ict-risk-management-reviewer",
@@ -178,6 +198,12 @@ var SkillCategoryAliases = map[string]string{
 	"aiops-mlops-llmops":         "aiops-mlops-llmops",
 	"dora-vait":                  "dora-vait",
 	"devsecops":                  "devsecops",
+	"payment":                    "payments",
+	"payments":                   "payments",
+	"billing":                    "payments",
+	"stripe":                     "payments",
+	"paypal":                     "payments",
+	"adyen":                      "payments",
 }
 
 func CategoryNames() []string {
@@ -285,10 +311,27 @@ var additionalSkillDescriptions = map[string]string{
 	"developer-experience-reviewer":          "Review setup, local development, error messages, Makefiles or scripts, onboarding, tooling consistency, and practicality for teams.",
 	"resilience-reviewer":                    "Review timeouts, retries, circuit breakers, failover, backpressure, degraded modes, and resilience behavior.",
 	"backup-restore-reviewer":                "Review restore tests, RPO/RTO, data integrity, backup protection, recoverability, and disaster recovery.",
+	"payment-integration-engineer":           "Design and implement provider-neutral payment integrations with explicit state machines, idempotency, failure recovery, and auditable order linkage.",
+	"payment-security-reviewer":              "Review payment data flows, tokenization, credential boundaries, PCI DSS scope, authorization, sensitive logging, and checkout abuse cases.",
+	"payment-webhook-reviewer":               "Review payment webhooks for signature verification, replay and duplicate handling, ordering, durable processing, retries, and reconciliation.",
+	"payment-flow-tester":                    "Test authorization, capture, settlement, cancellation, refund, timeout, decline, authentication, webhook delay, and provider outage paths.",
+	"refund-dispute-handler":                 "Guide controlled refunds, reversals, chargebacks, and disputes with eligibility checks, evidence, deadlines, approval, and audit trails.",
+	"payment-reconciliation-reviewer":        "Reconcile orders, provider transactions, fees, refunds, chargebacks, settlements, payouts, and ledger entries.",
+	"subscription-billing-engineer":          "Design subscription billing for plans, trials, invoices, proration, usage, renewals, dunning, cancellation, and entitlements.",
+	"sca-3ds-reviewer":                       "Review Strong Customer Authentication and 3-D Secure challenge, exemption, liability, fallback, accessibility, and state handling.",
+	"payment-fraud-risk-reviewer":            "Review payment fraud signals, velocity controls, risk rules, step-up actions, manual review, false positives, and feedback loops.",
+	"payment-observability-reviewer":         "Review payment conversion, authorization, webhook, refund, reconciliation, latency, provider health, alerts, and privacy-safe telemetry.",
+	"payment-provider-migration-reviewer":    "Review payment-provider migrations for parity, token portability, dual processing, routing, reconciliation, rollback, and decommissioning.",
+	"payment-compliance-reviewer":            "Review payment controls and evidence for PCI DSS, privacy, SCA, retention, access, auditability, outsourcing, and exceptions.",
+	"payment-operations-agent":               "Support controlled capture, cancellation, refund, resend, and lookup operations with approval, limits, idempotency, and audit records.",
+	"stripe-integration-engineer":            "Design and review Stripe PaymentIntents or Checkout, idempotency, signed webhooks, Connect or Billing boundaries, versions, and tests.",
+	"paypal-integration-engineer":            "Design and review PayPal Orders and Captures, PayPal-Request-Id, OAuth boundaries, verified webhooks, refunds, and sandbox tests.",
+	"adyen-integration-engineer":             "Design and review Adyen Checkout, merchant references, idempotency, HMAC webhooks, asynchronous results, modifications, and tests.",
 }
 
 func init() {
 	CoreSkills = append(CoreSkills, additionalCoreSkills...)
+	CoreSkills = append(CoreSkills, paymentSkills...)
 	for name, desc := range additionalSkillDescriptions {
 		SkillDescriptions[name] = desc
 	}

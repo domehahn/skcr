@@ -43,6 +43,22 @@ go install ./cmd/skcr
 ./skcr bake default --target . --write
 ```
 
+## Keep project skills current
+
+Use the catalog workflow after installing a newer `skcr` binary:
+
+```bash
+./skcr update --target .
+./skcr upgrade --target . --dry-run
+./skcr upgrade --target .
+```
+
+The update step records catalog and installed instruction digests in
+`.skcr/catalog.lock.yaml`. Upgrade then creates newly added built-in skills,
+repairs missing scaffolds, and refreshes outdated templates that are still
+unchanged from their recorded installed digest. Locally edited skills are
+preserved unless `--force` is explicitly supplied.
+
 Default platforms when `--platform` and `--preset` are not provided:
 
 - `codex`

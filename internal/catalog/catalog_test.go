@@ -77,6 +77,15 @@ func TestSkillCategories(t *testing.T) {
 		t.Fatalf("unexpected agentic-security skills: %#v", agentic)
 	}
 
+	payments, err := SkillsForCategory("stripe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(payments) != 16 || payments[0] != "payment-integration-engineer" ||
+		payments[15] != "adyen-integration-engineer" {
+		t.Fatalf("unexpected payment skills: %#v", payments)
+	}
+
 	if _, err := SkillsForCategory("not-a-category"); err == nil {
 		t.Fatal("expected unknown category error")
 	}

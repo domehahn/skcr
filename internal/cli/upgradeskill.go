@@ -14,17 +14,31 @@ func newUpgradeSkillCommand() *cobra.Command {
 	var target string
 	var message string
 	var dryRun bool
+	var force bool
 
 	cmd := &cobra.Command{
 		Use:   "upgrade <skill> <version>",
-		Short: "Bump a skill's version and record a changelog entry in SKILL.md",
-		Long: `Sets version: in SKILL.md frontmatter to <version> and appends a new entry
+		Short: "Install catalog updates or bump one skill to an explicit version",
+		Long: `With no positional arguments, compares the project with the refreshed built-in
+skill catalog, registers and scaffolds newly available skills, and refreshes
+outdated skcr-managed templates. Locally modified skills are preserved unless
+--force is supplied.
+
+With <skill> <version>, sets version: in SKILL.md frontmatter and appends a new entry
 to the changelog: list in the same frontmatter block.
 
 This is the combined equivalent of running 'skcr pin' followed by editing the
 changelog: block manually.`,
-		Args: cobra.ExactArgs(2),
+		Args: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 || len(args) == 2 {
+				return nil
+			}
+			return fmt.Errorf("accepts either no arguments for catalog upgrade or <skill> <version>")
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				return runCatalogUpgrade(cmd, target, dryRun, force)
+			}
 			skillName, version := args[0], args[1]
 
 			abs, err := filepath.Abs(target)
@@ -76,6 +90,7 @@ changelog: block manually.`,
 	cmd.Flags().StringVar(&target, "target", ".", "Path to the repository root containing agentic.bake.yaml")
 	cmd.Flags().StringVar(&message, "message", "", "Changelog entry message (default: 'Upgrade to <version>')")
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview without writing")
+	cmd.Flags().BoolVar(&force, "force", false, "Replace locally modified built-in skill instruction bodies during catalog upgrade")
 	return cmd
 }
 

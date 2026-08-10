@@ -153,6 +153,38 @@ skill_sources:
       description: "Review timeouts, retries, circuit breakers, failover, backpressure, degraded modes, and resilience behavior."
     - name: backup-restore-reviewer
       description: "Review restore tests, RPO/RTO, data integrity, backup protection, recoverability, and disaster recovery."
+    - name: payment-integration-engineer
+      description: "Design provider-neutral payment integrations with state machines, idempotency, recovery, and auditable order linkage."
+    - name: payment-security-reviewer
+      description: "Review payment data flows, tokenization, credential boundaries, PCI DSS scope, authorization, logging, and checkout abuse cases."
+    - name: payment-webhook-reviewer
+      description: "Review payment webhooks for signature verification, replay and duplicate handling, ordering, durable processing, retries, and reconciliation."
+    - name: payment-flow-tester
+      description: "Test authorization, capture, settlement, cancellation, refund, timeout, decline, authentication, webhook delay, and provider outage paths."
+    - name: refund-dispute-handler
+      description: "Guide controlled refunds, reversals, chargebacks, and disputes with eligibility, evidence, deadlines, approval, and audit trails."
+    - name: payment-reconciliation-reviewer
+      description: "Reconcile orders, provider transactions, fees, refunds, chargebacks, settlements, payouts, and ledger entries."
+    - name: subscription-billing-engineer
+      description: "Design subscription billing for plans, trials, invoices, proration, usage, renewals, dunning, cancellation, and entitlements."
+    - name: sca-3ds-reviewer
+      description: "Review Strong Customer Authentication and 3-D Secure challenge, exemption, liability, fallback, accessibility, and state handling."
+    - name: payment-fraud-risk-reviewer
+      description: "Review payment fraud signals, velocity controls, risk rules, step-up actions, manual review, false positives, and feedback loops."
+    - name: payment-observability-reviewer
+      description: "Review payment conversion, authorization, webhook, refund, reconciliation, latency, provider health, alerts, and privacy-safe telemetry."
+    - name: payment-provider-migration-reviewer
+      description: "Review payment-provider migrations for parity, token portability, dual processing, routing, reconciliation, rollback, and decommissioning."
+    - name: payment-compliance-reviewer
+      description: "Review payment controls and evidence for PCI DSS, privacy, SCA, retention, access, auditability, outsourcing, and exceptions."
+    - name: payment-operations-agent
+      description: "Support controlled payment operations with approval, limits, idempotency, immutable audit records, and post-operation reconciliation."
+    - name: stripe-integration-engineer
+      description: "Design Stripe PaymentIntents or Checkout, idempotency, signed webhooks, Connect or Billing boundaries, versions, and tests."
+    - name: paypal-integration-engineer
+      description: "Design PayPal Orders and Captures, PayPal-Request-Id, OAuth boundaries, verified webhooks, refunds, and sandbox tests."
+    - name: adyen-integration-engineer
+      description: "Design Adyen Checkout, merchant references, idempotency, HMAC webhooks, asynchronous results, modifications, and tests."
 targets:
   codex:
     description: Codex AGENTS.md and project skills
@@ -239,6 +271,22 @@ targets:
     - developer-experience-reviewer
     - resilience-reviewer
     - backup-restore-reviewer
+    - payment-integration-engineer
+    - payment-security-reviewer
+    - payment-webhook-reviewer
+    - payment-flow-tester
+    - refund-dispute-handler
+    - payment-reconciliation-reviewer
+    - subscription-billing-engineer
+    - sca-3ds-reviewer
+    - payment-fraud-risk-reviewer
+    - payment-observability-reviewer
+    - payment-provider-migration-reviewer
+    - payment-compliance-reviewer
+    - payment-operations-agent
+    - stripe-integration-engineer
+    - paypal-integration-engineer
+    - adyen-integration-engineer
     flows: []
     rules:
       no_direct_push: true

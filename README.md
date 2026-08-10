@@ -29,6 +29,12 @@ deprecated compatibility metadata and never grants or denies permissions;
 skcr init
   → creates agentic.bake.yaml; without --platform it includes every known concrete platform
 
+skcr update
+  → compares the embedded skill catalog with the project and records available/installed template digests
+
+skcr upgrade [--dry-run] [--force]
+  → registers and scaffolds new catalog skills and refreshes clean outdated templates
+
 skcr add skill <name>
   → adds skill to all bakefile targets and scaffolds immediately
 
@@ -291,6 +297,8 @@ skcr version release-bundle .agents/skills --changed --json
 | Command | Description |
 | --- | --- |
 | `skcr init` | Create `agentic.bake.yaml` |
+| `skcr update` | Refresh the local built-in catalog state and report new, missing, outdated, or modified skills |
+| `skcr upgrade` | Register and scaffold new skills and refresh safely managed outdated templates |
 | `skcr add skill <name>` | Add a skill to all bakefile targets and scaffold its directories |
 | `skcr remove skill <name>` | Remove a skill from bakefile targets, optionally deleting directories |
 | `skcr rename skill <old> <new>` | Rename a skill across bakefile targets and all platform directories |
@@ -318,6 +326,32 @@ skcr version release-bundle .agents/skills --changed --json
 | `skcr contract diff <old> <new>` | Classify semantic Contract changes, with optional JSON output |
 | `skcr contract digest <path>` | Hash a normalized Contract deterministically |
 | `skcr version` | Show version, commit, and build date |
+
+## Catalog update and upgrade
+
+`skcr update` is the catalog-discovery step. It compares the built-in catalog
+from the installed `skcr` binary with `agentic.bake.yaml` and canonical skill
+sources, then writes `.skcr/catalog.lock.yaml`. No skill content is changed.
+
+```bash
+skcr update
+skcr upgrade --dry-run
+skcr upgrade
+```
+
+`skcr upgrade` adds newly available skills to the primary catalog-bearing bake
+target and `skill_sources`, scaffolds missing directories for configured
+platforms, and refreshes an outdated instruction body only when its installed
+digest proves that it has not been edited locally. Locally modified or initially
+unmanaged skills are preserved and reported. `--force` explicitly replaces
+their instruction bodies; frontmatter identity is preserved and a patch version
+plus changelog entry is created for every refreshed skill.
+
+The existing explicit version command remains available:
+
+```bash
+skcr upgrade <skill> <version>
+```
 
 ## Bakefile format (`agentic.bake.yaml`)
 

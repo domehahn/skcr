@@ -37,6 +37,7 @@ var expectedSDLCSkills = []string{
 
 func init() {
 	expectedSDLCSkills = append(expectedSDLCSkills, AdditionalSDLCSkillNames...)
+	expectedSDLCSkills = append(expectedSDLCSkills, PaymentSkillNames...)
 }
 
 var requiredSections = []string{
@@ -212,6 +213,17 @@ func TestRequiredDomainTerms(t *testing.T) {
 		},
 		"privacy-data-protection-reviewer": {"personal data", "purpose limitation", "GDPR", "sensitive logging", "deletion"},
 		"secure-code-reviewer":             {"injection", "path traversal", "SSRF", "XSS", "race condition"},
+		"payment-integration-engineer":     {"idempotency", "minor units", "ambiguous timeouts", "duplicate charges", "state transitions"},
+		"payment-security-reviewer":        {"PCI DSS", "PAN or CVV", "tokenization", "amount tampering", "cardholder data"},
+		"payment-webhook-reviewer":         {"signature verification", "raw payload", "out-of-order", "deduplicate", "reconciliation"},
+		"refund-dispute-handler":           {"chargeback", "refund eligibility", "approval", "dispute deadline", "money movement"},
+		"payment-reconciliation-reviewer":  {"settlement", "payout", "fees", "ledger", "unmatched"},
+		"subscription-billing-engineer":    {"proration", "dunning", "entitlement", "renewal", "invoice"},
+		"sca-3ds-reviewer":                 {"Strong Customer Authentication", "3-D Secure", "challenge", "exemption", "liability"},
+		"payment-operations-agent":         {"human approval", "immutable audit", "live payment", "idempotency", "amount and currency"},
+		"stripe-integration-engineer":      {"PaymentIntent", "Stripe-Signature", "Connect", "API version", "test mode"},
+		"paypal-integration-engineer":      {"PayPal-Request-Id", "Orders", "Captures", "OAuth", "sandbox"},
+		"adyen-integration-engineer":       {"merchantReference", "pspReference", "HMAC", "idempotency-key", "Checkout"},
 	}
 	for name, terms := range cases {
 		rendered := renderForTest(t, name)

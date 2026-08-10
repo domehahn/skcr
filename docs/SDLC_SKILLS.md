@@ -9,6 +9,7 @@ skcr bake --category dora-vait --write
 skcr bake --category devsecops --write
 skcr bake --category llmops --write
 skcr bake --category agent-security --write
+skcr bake --category payments --write
 ```
 
 Discover available categories with:
@@ -124,6 +125,30 @@ responsible for enforcement.
 - `observability-reviewer`
 - `incident-postmortem-assistant`
 
+## Payments
+
+- `payment-integration-engineer`
+- `payment-security-reviewer`
+- `payment-webhook-reviewer`
+- `payment-flow-tester`
+- `refund-dispute-handler`
+- `payment-reconciliation-reviewer`
+- `subscription-billing-engineer`
+- `sca-3ds-reviewer`
+- `payment-fraud-risk-reviewer`
+- `payment-observability-reviewer`
+- `payment-provider-migration-reviewer`
+- `payment-compliance-reviewer`
+- `payment-operations-agent`
+- `stripe-integration-engineer`
+- `paypal-integration-engineer`
+- `adyen-integration-engineer`
+
+Payment skills default to sandbox or test mode. Live captures, cancellations,
+refunds, disputes, or other monetary mutations require exact-scope human
+approval, least-privilege credentials, idempotency, reconciliation, and an
+immutable audit record.
+
 ## Knowledge and reuse
 
 - `documentation-maintainer`
@@ -153,4 +178,10 @@ Agentic system:
 
 ```text
 agentic-threat-modeler -> agent-containment-reviewer -> agent-runtime-enforcement-reviewer -> security-invariant-test-engineer -> agent-behavior-eval-engineer -> backdoor-persistence-reviewer
+```
+
+Payment integration:
+
+```text
+payment-integration-engineer -> payment-security-reviewer -> payment-webhook-reviewer -> payment-flow-tester -> payment-reconciliation-reviewer -> payment-observability-reviewer
 ```
