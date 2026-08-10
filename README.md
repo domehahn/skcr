@@ -540,6 +540,12 @@ Or use the category filter with any target:
 skcr bake --category dora-vait --write
 skcr bake --category devsecops --write
 skcr bake --category llmops --write
+skcr bake --category languages --write
+skcr bake --category frameworks --write
+skcr bake --category infrastructure-as-code --write
+skcr bake --category runtime-containers --write
+skcr bake --category storage --write
+skcr bake --category cncf --write
 ```
 
 `skcr bake` does **not** call `skpm`, write `agent-skills.lock`, or talk to any registry.
@@ -619,17 +625,42 @@ Lists built-in skill categories that can be used with `skcr bake --category`.
 
 ```bash
 skcr list categories
+skcr list categories --scope semantic
+skcr list categories --scope cncf
 ```
 
-Built-in categories:
+`--scope semantic` shows the concise, cross-source taxonomy intended for normal
+selection. `--scope cncf` shows CNCF maturity groups plus every official
+Landscape top-level and subcategory filter. The default `all` shows both.
 
-- `dora-vait`
-- `documentation-evidence`
-- `devsecops`
-- `cloudops-platformops`
-- `aiops-mlops-llmops`
-- `agentic-security`
-- `security-governance`
+The semantic taxonomy is split into focused domains:
+
+- software: `languages`, `frameworks`, `software-development`,
+  `planning-architecture`, `testing-quality`, `developer-tools`,
+  `developer-platforms`, `api-integration`
+- infrastructure: `cloud-platform`, `kubernetes`, `infrastructure-as-code`,
+  `runtime-containers`, `networking-service-mesh`, `orchestration-scheduling`,
+  `serverless`, `edge-iot`, `wasm`
+- data: `storage`, `databases`, `messaging-streaming`, `ai-ml-data`,
+  `distributed-systems`
+- delivery and operations: `supply-chain`, `cicd-gitops`, `observability`,
+  `reliability-operations`, `reliability-chaos`, `backup-disaster-recovery`,
+  `performance-finops`, `release-feature-management`
+- trust and governance: `security`, `identity-secrets`,
+  `governance-compliance`, `privacy-risk`, `provider-risk`,
+  `documentation-evidence`
+- ecosystem: `organizations-members`, `service-providers`,
+  `training-certification`, `payments`, `ai-agents`
+
+The embedded CNCF snapshot currently contains 2,413 source rows and produces
+2,407 unique `cncf-…-reviewer` skills, including the CNCF Members category.
+`cncf` deliberately selects only the 227 active graduated, incubating, or
+sandbox projects. `cncf-landscape` selects all 2,407 entries. Separate
+`cncf-graduated`, `cncf-incubating`, `cncf-sandbox`, and `cncf-archived`
+filters are also available. Landscape inclusion is classification metadata and
+is not presented as CNCF endorsement, certification, maturity, or security
+assurance. Maintainers refresh the official snapshot with
+`go generate ./internal/cncf`.
 
 ## `skcr doctor`
 

@@ -3,9 +3,11 @@ package scaffold
 import (
 	"bytes"
 	"fmt"
+	"strconv"
 	"strings"
 	"text/template"
 
+	"github.com/domehahn/skcr/internal/cncf"
 	platformcompat "github.com/domehahn/skcr/internal/platforms"
 )
 
@@ -57,17 +59,17 @@ func RenderRegisteredSkillMarkdownWithCompatibility(name, title, description, ve
 }
 
 const skillFrontmatter = `---
-name: "{{.Name}}"
-description: "{{.Description}}"
-version: "{{.Version}}"
-since: "{{.Since}}"
-last_modified: "{{.LastModified}}"
+name: {{quote .Name}}
+description: {{quote .Description}}
+version: {{quote .Version}}
+since: {{quote .Since}}
+last_modified: {{quote .LastModified}}
 authors:
-  - "{{.Owner}}"
-stability: "{{.Stability}}"
+  - {{quote .Owner}}
+stability: {{quote .Stability}}
 min_platform_version:
 {{- range .MinPlatforms }}
-  {{.Name}}: "{{.MinVersion}}"
+  {{.Name}}: {{quote .MinVersion}}
 {{- end }}
 deprecated_since:
 replaces:
@@ -189,7 +191,44 @@ var PaymentSkillNames = []string{
 	"adyen-integration-engineer",
 }
 
-var SDLCSkillNames = append(append(append([]string{}, baseSDLCSkillNames...), AdditionalSDLCSkillNames...), PaymentSkillNames...)
+var LanguageSkillNames = []string{
+	"java-reviewer", "golang-reviewer", "python-reviewer", "ruby-reviewer", "javascript-reviewer",
+	"typescript-reviewer", "rust-reviewer", "csharp-reviewer", "kotlin-reviewer", "php-reviewer",
+}
+
+var FrameworkSkillNames = []string{
+	"spring-boot-reviewer", "quarkus-reviewer", "angular-reviewer", "react-reviewer", "vuejs-reviewer",
+	"nodejs-reviewer", "nextjs-reviewer", "django-reviewer", "fastapi-reviewer", "ruby-on-rails-reviewer",
+}
+
+var InfrastructureSkillNames = []string{
+	"kubernetes-platform-reviewer", "aws-cloud-reviewer", "azure-cloud-reviewer", "gcp-cloud-reviewer",
+	"terraform-reviewer", "opentofu-reviewer", "ansible-reviewer", "vagrant-reviewer",
+	"virtualization-reviewer", "helm-reviewer",
+}
+
+var SDLCSkillNames = buildSDLCSkillNames()
+
+func buildSDLCSkillNames() []string {
+	names := []string{}
+	for _, group := range [][]string{baseSDLCSkillNames, AdditionalSDLCSkillNames, PaymentSkillNames, LanguageSkillNames, FrameworkSkillNames, InfrastructureSkillNames, cncf.SkillNames()} {
+		for _, name := range group {
+			if !containsSkillName(names, name) {
+				names = append(names, name)
+			}
+		}
+	}
+	return names
+}
+
+func containsSkillName(names []string, target string) bool {
+	for _, name := range names {
+		if name == target {
+			return true
+		}
+	}
+	return false
+}
 
 var sharedDevSecOpsGuardrails = []string{
 	"Do not read secrets, `.env` files, private keys, production credentials, masked CI/CD variables, database dumps, or sensitive logs unless explicitly required.",
@@ -1156,6 +1195,39 @@ var paymentSkillSeeds = []additionalSkillSeed{
 	{Name: "adyen-integration-engineer", Description: "Design, implement, and review Adyen Checkout integrations using merchant references, idempotency-key requests, HMAC-verified webhooks, asynchronous result handling, captures, refunds, and test-environment validation.", Domain: "Adyen payment integration", Artifacts: []string{"Adyen Checkout payment request", "merchantReference mapping", "Adyen idempotency-key", "HMAC webhook validator", "pspReference state mapping", "capture or refund modification"}, Risks: []string{"duplicate Adyen payment modification", "invalid HMAC acceptance", "merchantReference collision", "out-of-order webhook regression", "regional idempotency assumption", "test-live HMAC key mix-up"}, Signals: []string{"Adyen test payment trace", "HMAC validation result", "eventCode and pspReference deduplication", "idempotent retry response", "capture or refund reconciliation", "Customer Area test webhook"}, Outputs: []string{"Adyen integration design", "Checkout state mapping", "HMAC webhook review", "idempotency and retry policy", "Adyen test matrix"}},
 }
 
+type technologySkillDefinition struct {
+	Name        string
+	Description string
+	Domain      string
+	Focus       []string
+}
+
+var technologySkillDefinitions = []technologySkillDefinition{
+	{Name: "golang-reviewer", Description: "Review Go code for idioms, concurrency, context propagation, errors, interfaces, modules, tests, and performance.", Domain: "Go engineering", Focus: []string{"goroutines and channels", "context cancellation", "error wrapping", "interfaces", "modules", "race detection"}},
+	{Name: "python-reviewer", Description: "Review Python code for typing, packaging, async behavior, resource safety, tests, security, and maintainability.", Domain: "Python engineering", Focus: []string{"type annotations", "packaging", "asyncio", "context managers", "pytest", "dependency hygiene"}},
+	{Name: "ruby-reviewer", Description: "Review Ruby code for idioms, object design, metaprogramming boundaries, Bundler hygiene, tests, and performance.", Domain: "Ruby engineering", Focus: []string{"object design", "blocks and enumerables", "metaprogramming", "Bundler", "RSpec", "runtime performance"}},
+	{Name: "rust-reviewer", Description: "Review Rust ownership, lifetimes, unsafe boundaries, concurrency, error handling, Cargo dependencies, and tests.", Domain: "Rust engineering", Focus: []string{"ownership and borrowing", "lifetimes", "unsafe code", "Send and Sync", "Result handling", "Cargo"}},
+	{Name: "csharp-reviewer", Description: "Review C# and .NET code for async correctness, dependency injection, resource disposal, nullable types, tests, and performance.", Domain: "C# and .NET engineering", Focus: []string{"async and await", "dependency injection", "IDisposable", "nullable reference types", "LINQ", "NuGet"}},
+	{Name: "kotlin-reviewer", Description: "Review Kotlin code for null safety, coroutines, sealed models, Java interop, Gradle configuration, and tests.", Domain: "Kotlin engineering", Focus: []string{"null safety", "coroutines", "sealed classes", "Java interop", "Gradle", "testing"}},
+	{Name: "php-reviewer", Description: "Review modern PHP code for type safety, Composer hygiene, framework boundaries, security, tests, and performance.", Domain: "PHP engineering", Focus: []string{"strict types", "Composer", "PSR standards", "request validation", "PHPUnit", "runtime performance"}},
+	{Name: "quarkus-reviewer", Description: "Review Quarkus build-time behavior, CDI, reactive paths, native images, configuration, security, and tests.", Domain: "Quarkus applications", Focus: []string{"CDI", "build-time initialization", "Mutiny", "GraalVM native images", "configuration", "Dev Services"}},
+	{Name: "vuejs-reviewer", Description: "Review Vue.js Composition API, reactivity, components, state, routing, accessibility, tests, and performance.", Domain: "Vue.js applications", Focus: []string{"Composition API", "reactivity", "Pinia", "Vue Router", "accessibility", "Vitest"}},
+	{Name: "nodejs-reviewer", Description: "Review Node.js services for event-loop safety, async behavior, modules, streams, HTTP security, dependencies, and operations.", Domain: "Node.js services", Focus: []string{"event loop", "Promises", "ESM and CommonJS", "streams", "HTTP lifecycle", "npm dependencies"}},
+	{Name: "nextjs-reviewer", Description: "Review Next.js routing, Server and Client Components, caching, data fetching, security, deployment, and performance.", Domain: "Next.js applications", Focus: []string{"App Router", "Server Components", "caching", "data fetching", "route handlers", "deployment runtime"}},
+	{Name: "django-reviewer", Description: "Review Django models, migrations, ORM usage, authentication, middleware, settings, tests, and deployment safety.", Domain: "Django applications", Focus: []string{"models and migrations", "ORM queries", "authentication", "middleware", "settings", "deployment checks"}},
+	{Name: "fastapi-reviewer", Description: "Review FastAPI schemas, dependency injection, async paths, authentication, validation, OpenAPI, tests, and operations.", Domain: "FastAPI services", Focus: []string{"Pydantic models", "dependency injection", "async endpoints", "authentication", "OpenAPI", "ASGI operations"}},
+	{Name: "ruby-on-rails-reviewer", Description: "Review Rails models, controllers, jobs, migrations, Active Record behavior, security, tests, and deployment safety.", Domain: "Ruby on Rails applications", Focus: []string{"Active Record", "migrations", "controllers", "background jobs", "security defaults", "RSpec"}},
+	{Name: "aws-cloud-reviewer", Description: "Review AWS accounts, IAM, networking, compute, storage, databases, observability, security, cost, and resilience.", Domain: "AWS cloud architecture", Focus: []string{"Organizations and accounts", "IAM", "VPC", "compute", "data services", "CloudTrail and CloudWatch"}},
+	{Name: "azure-cloud-reviewer", Description: "Review Azure tenants, subscriptions, identities, networks, compute, data services, Policy, monitoring, cost, and resilience.", Domain: "Azure cloud architecture", Focus: []string{"tenants and subscriptions", "Entra ID and RBAC", "virtual networks", "compute", "data services", "Azure Policy and Monitor"}},
+	{Name: "gcp-cloud-reviewer", Description: "Review GCP organizations, projects, IAM, networking, compute, data services, observability, cost, and resilience.", Domain: "Google Cloud architecture", Focus: []string{"organizations and projects", "IAM", "VPC", "compute", "data services", "Cloud Audit Logs and Monitoring"}},
+	{Name: "terraform-reviewer", Description: "Review Terraform modules, providers, plans, state, drift, lifecycle, IAM, tests, and safe apply or destroy boundaries.", Domain: "Terraform infrastructure as code", Focus: []string{"modules", "providers", "plan changes", "remote state", "lifecycle", "tests"}},
+	{Name: "opentofu-reviewer", Description: "Review OpenTofu modules, providers, plans, state, drift, lifecycle, tests, and safe apply or destroy boundaries.", Domain: "OpenTofu infrastructure as code", Focus: []string{"modules", "providers", "plan changes", "state encryption", "lifecycle", "tests"}},
+	{Name: "ansible-reviewer", Description: "Review Ansible inventories, roles, playbooks, idempotency, secrets, privilege escalation, testing, and rollout safety.", Domain: "Ansible automation", Focus: []string{"inventories", "roles", "playbooks", "idempotency", "Ansible Vault", "Molecule"}},
+	{Name: "vagrant-reviewer", Description: "Review Vagrant environments, providers, networking, provisioning, shared folders, reproducibility, and isolation.", Domain: "Vagrant development environments", Focus: []string{"Vagrantfile", "providers", "networking", "provisioners", "shared folders", "base boxes"}},
+	{Name: "virtualization-reviewer", Description: "Review VM and virtualization architecture, images, isolation, networking, storage, snapshots, patching, and capacity.", Domain: "virtualization platforms", Focus: []string{"hypervisors", "VM images", "isolation", "virtual networking", "storage and snapshots", "capacity"}},
+	{Name: "helm-reviewer", Description: "Review Helm charts, templates, values, dependencies, hooks, secrets, schema validation, upgrades, and rollbacks.", Domain: "Helm package management", Focus: []string{"Chart.yaml", "templates", "values schema", "dependencies", "hooks", "upgrade and rollback"}},
+}
+
 func init() {
 	for _, seed := range additionalSkillSeeds {
 		sdlcSkillContent[seed.Name] = generatedAdditionalSkillContent(seed)
@@ -1163,6 +1235,157 @@ func init() {
 	for _, seed := range paymentSkillSeeds {
 		sdlcSkillContent[seed.Name] = generatedPaymentSkillContent(seed)
 	}
+	for _, definition := range technologySkillDefinitions {
+		sdlcSkillContent[definition.Name] = generatedTechnologySkillContent(definition)
+	}
+	for _, entry := range cncf.MustEntries() {
+		sdlcSkillContent[entry.SkillName] = generatedCNCFSkillContent(entry)
+	}
+}
+
+func generatedTechnologySkillContent(definition technologySkillDefinition) skillContent {
+	focus := strings.Join(definition.Focus, ", ")
+	content := skillContent{
+		Purpose: definition.Description,
+		When: []string{
+			"Source code, configuration, dependencies, tests, deployment artifacts, or runtime behavior in " + definition.Domain + " change.",
+			"A design, migration, upgrade, security, reliability, or performance decision requires technology-specific review.",
+		},
+		Operating: []string{
+			"Inspect the repository version, dependency lockfiles, build configuration, runtime target, and deployment environment before applying version-sensitive guidance.",
+			"Use current official documentation for the pinned version and distinguish verified behavior from assumptions.",
+			"Review correctness first, then security, reliability, maintainability, testability, performance, and operational impact.",
+		},
+		ReviewScope: []string{focus, "dependency and supply-chain boundaries", "configuration, secrets, identity, networking, data, observability, deployment, upgrade, and rollback behavior"},
+		Checklist: []string{
+			"Identify concrete versions, supported runtimes, dependency managers, build tools, and deployment targets.",
+			"Check idiomatic API use, lifecycle boundaries, error handling, concurrency or asynchronous behavior, resource cleanup, and data consistency.",
+			"Check input validation, authorization, secret handling, dependency provenance, insecure defaults, and sensitive logging.",
+			"Check unit, integration, failure-path, upgrade, rollback, and operational test evidence.",
+			"Check observability, capacity, performance, compatibility, deprecations, and migration impact.",
+		},
+		DecisionRules: []string{
+			"Do not recommend an API, option, or migration from memory when behavior is version-sensitive; verify it against official documentation for the detected version.",
+			"Do not run deployments, applies, destroys, migrations, or production mutations without explicit authorization for the exact target.",
+			"Treat unsupported versions, ambiguous state changes, missing rollback, broad credentials, and untested destructive transitions as release blockers by impact.",
+		},
+		FindingCategories: []string{"Correctness or lifecycle defect.", "Security, identity, secret, dependency, or isolation weakness.", "Reliability, data integrity, upgrade, rollback, or operational gap.", "Testing, observability, maintainability, compatibility, or performance gap."},
+		SeverityGuidance: []string{
+			"Critical: enables remote compromise, unrestricted privilege, secret disclosure, destructive production change, or material data loss.",
+			"High: causes exploitable authorization or isolation failure, sustained outage, corrupt state, or unsafe upgrade and rollback behavior.",
+			"Medium: creates a bounded correctness, reliability, compatibility, test, observability, or performance risk.",
+			"Low: improves clarity, idiomatic usage, maintainability, or evidence without changing material behavior.",
+		},
+		OutputRequirements: []string{"List detected versions and evidence sources.", "Return prioritized findings with affected files or resources, impact, evidence, and concrete remediation.", "Include validation commands, migration and rollback notes, and unresolved version-sensitive assumptions."},
+		AcceptanceCriteria: []string{"Guidance matches the detected technology version and official documentation.", "Material correctness, security, reliability, test, upgrade, and rollback risks have evidence-backed disposition.", "No production mutation or destructive action is performed without exact-scope approval."},
+		AntiPatterns:       []string{"Giving generic advice without inspecting versions or artifacts.", "Inventing configuration keys, APIs, defaults, test results, or compatibility claims.", "Treating a successful build as proof of security, runtime correctness, upgrade safety, or operability."},
+	}
+	completeGeneratedSkillContent(&content, definition.Domain)
+	return content
+}
+
+func generatedCNCFSkillContent(entry cncf.Entry) skillContent {
+	placements := make([]string, 0, len(entry.Placements))
+	member := false
+	for _, placement := range entry.Placements {
+		placements = append(placements, placement.Category+" / "+placement.Subcategory)
+		if placement.Category == "CNCF Members" {
+			member = true
+		}
+	}
+	source := entry.HomepageURL
+	if entry.RepoURL != "" {
+		source = entry.RepoURL
+	}
+	if source == "" {
+		source = cncf.SourceURL
+	}
+	if member {
+		content := skillContent{
+			Purpose:            "Review " + entry.Name + " as an organization listed in the CNCF Landscape using current first-party evidence and explicit procurement, governance, security, portability, and operational criteria.",
+			When:               []string{"The organization, its cloud-native products, support, partnership, procurement, outsourcing, or exit strategy is being assessed.", "Claims about CNCF membership or capabilities need current verification."},
+			Operating:          []string{"Treat CNCF Landscape inclusion as classification metadata, not endorsement, certification, security assurance, or proof of product fitness.", "Verify current claims against the organization's first-party material and the official CNCF Landscape entry.", "Separate organization-level membership from the maturity or CNCF status of individual projects."},
+			ReviewScope:        []string{"CNCF classification: " + strings.Join(placements, "; "), "First-party source: " + source, "product scope, ownership, support, security, compliance, portability, commercial dependencies, concentration risk, and exit strategy"},
+			Checklist:          []string{"Confirm legal and product identity, current CNCF classification, offered services, support boundaries, regions, data handling, and shared responsibilities.", "Check security documentation, incident handling, vulnerability disclosure, support SLAs, audit evidence, subcontractors, portability, and termination assistance.", "Identify proprietary dependencies, lock-in, pricing or licensing constraints, migration paths, and operational ownership."},
+			DecisionRules:      []string{"Do not infer CNCF project status, certification, security, or endorsement from membership.", "Do not make procurement or legal conclusions without the applicable current contract and accountable reviewers.", "Require an exit path and evidence for material capability or compliance claims."},
+			FindingCategories:  []string{"Identity, scope, classification, or claim mismatch.", "Security, compliance, support, responsibility, or incident-management gap.", "Portability, concentration, licensing, cost, contract, or exit-strategy risk."},
+			OutputRequirements: []string{"State the Landscape snapshot classification and sources checked.", "Return an evidence-backed capability and risk assessment with open questions, owners, and expiry dates."},
+			AcceptanceCriteria: []string{"Membership is not presented as endorsement or project maturity.", "Material claims, responsibilities, dependencies, and exit assumptions are traceable to current evidence."},
+			AntiPatterns:       []string{"Equating a Landscape logo with CNCF certification or technical approval.", "Inventing product features, contract terms, regions, certifications, or support commitments."},
+		}
+		completeGeneratedSkillContent(&content, entry.Name)
+		return content
+	}
+	projectStatus := entry.Project
+	if projectStatus == "" {
+		projectStatus = "not specified"
+	}
+	content := skillContent{
+		Purpose:            "Review and operate " + entry.Name + " using current official documentation, repository evidence, and its CNCF Landscape classification without treating Landscape inclusion as endorsement.",
+		When:               []string{"" + entry.Name + " code, configuration, APIs, deployment, integrations, dependencies, upgrades, or operations are in scope.", "A technology choice or migration involving " + entry.Name + " requires evidence-backed assessment."},
+		Operating:          []string{"Detect the installed or proposed version and deployment model before giving version-sensitive guidance.", "Use current official documentation and repository evidence; use the CNCF Landscape only for classification metadata.", "Inspect boundaries with identity, secrets, network, storage, dependencies, observability, upgrades, rollback, and disaster recovery."},
+		ReviewScope:        []string{"CNCF classification: " + strings.Join(placements, "; "), "CNCF project maturity field: " + projectStatus, "First-party source: " + source, "configuration, APIs, architecture, security, reliability, performance, lifecycle, deployment, upgrade, rollback, and operations"},
+		Checklist:          []string{"Confirm product identity, version, edition, license, repository, deployment model, and supported dependencies.", "Check secure defaults, authentication, authorization, secret handling, network exposure, tenant isolation, data protection, and supply-chain provenance.", "Check resource limits, scaling, availability, state consistency, backup and restore, failure handling, observability, upgrades, compatibility, and rollback.", "Check official tests, project-specific validation, negative paths, operational runbooks, and deprecation or migration notices."},
+		DecisionRules:      []string{"Do not infer CNCF project maturity, security, compatibility, or endorsement when the Landscape project field is absent.", "Do not invent commands, configuration, APIs, defaults, or compatibility; verify version-sensitive behavior in first-party sources.", "Do not deploy, mutate clusters or cloud resources, migrate data, or change production state without exact-scope authorization and rollback evidence."},
+		FindingCategories:  []string{"Version, identity, API, configuration, or lifecycle mismatch.", "Security, identity, secret, network, isolation, data, or supply-chain weakness.", "Reliability, scaling, state, backup, upgrade, rollback, observability, or operational gap.", "Landscape classification, maturity, licensing, maintenance, adoption, or migration assumption."},
+		SeverityGuidance:   []string{"Critical: enables broad compromise, secret disclosure, destructive production action, cluster or tenant escape, or material data loss.", "High: causes exploitable access, sustained outage, corrupt state, unsafe upgrade, or loss of recovery capability.", "Medium: creates a bounded correctness, reliability, compatibility, observability, maintenance, or performance risk.", "Low: improves documentation, classification, idiomatic configuration, or validation evidence."},
+		OutputRequirements: []string{"State detected versions, deployment model, Landscape classification, project field, and first-party sources checked.", "Return prioritized findings with affected artifacts, evidence, impact, remediation, validation, upgrade, and rollback guidance.", "Distinguish verified facts, source-derived inferences, and unresolved assumptions."},
+		AcceptanceCriteria: []string{"Recommendations match the detected version and deployment model.", "Landscape inclusion is not presented as endorsement, certification, or security assurance.", "Material security, reliability, data, upgrade, rollback, and operational risks have evidence-backed disposition."},
+		AntiPatterns:       []string{"Generating generic product advice without checking the installed version or repository artifacts.", "Copying marketing claims into architecture or security conclusions.", "Running production commands or destructive examples merely to validate a recommendation."},
+	}
+	completeGeneratedSkillContent(&content, entry.Name)
+	return content
+}
+
+func completeGeneratedSkillContent(content *skillContent, subject string) {
+	appendUntil := func(target *[]string, minimum int, candidates []string) {
+		for _, candidate := range candidates {
+			if len(*target) >= minimum {
+				return
+			}
+			*target = append(*target, candidate)
+		}
+	}
+	appendUntil(&content.Checklist, 10, []string{
+		"Trace " + subject + " inputs, outputs, identities, trust boundaries, external dependencies, and persistent state.",
+		"Check " + subject + " defaults, configuration precedence, environment separation, and drift from reviewed source.",
+		"Check " + subject + " least privilege, credential rotation, audit events, policy enforcement, and break-glass behavior.",
+		"Check " + subject + " resource ownership, cleanup, quotas, rate limits, timeouts, retries, and backpressure.",
+		"Check " + subject + " release notes, supported upgrade paths, schema or API compatibility, and rollback constraints.",
+		"Check " + subject + " dashboards, alerts, health signals, incident procedures, backup evidence, and recovery exercises.",
+		"Check " + subject + " license, maintenance state, vulnerability handling, provenance, signatures, and dependency pinning.",
+		"Check " + subject + " documentation, ownership, support boundaries, known limitations, and decommissioning plan.",
+	})
+	appendUntil(&content.DecisionRules, 5, []string{
+		"If " + subject + " identity, version, edition, or deployment model cannot be established, report the uncertainty before recommending a change.",
+		"If a " + subject + " change can affect availability, security boundaries, persistent data, or external consumers, require staged validation and explicit rollback criteria.",
+		"If first-party evidence conflicts with generated guidance for " + subject + ", follow the pinned first-party documentation and report catalog drift.",
+	})
+	appendUntil(&content.FindingCategories, 5, []string{
+		"" + subject + " documentation, ownership, maintenance, licensing, provenance, or evidence gap.",
+		"" + subject + " integration, dependency, compatibility, migration, or decommissioning risk.",
+	})
+	appendUntil(&content.SeverityGuidance, 4, []string{
+		"Critical: " + subject + " can enable broad compromise, destructive production mutation, tenant escape, secret exposure, or material data loss.",
+		"High: " + subject + " can cause exploitable access, sustained outage, corrupt state, unsafe upgrade, or loss of recovery capability.",
+		"Medium: " + subject + " has a bounded correctness, reliability, compatibility, observability, maintenance, or performance risk.",
+		"Low: " + subject + " needs documentation, classification, idiomatic configuration, or validation-evidence improvement.",
+	})
+	appendUntil(&content.OutputRequirements, 5, []string{
+		"Include a " + subject + " architecture and dependency summary with trust boundaries and persistent state.",
+		"Include " + subject + " validation commands or tests that are safe for the stated environment.",
+		"Include " + subject + " ownership, rollout, rollback, monitoring, and follow-up actions.",
+	})
+	appendUntil(&content.AcceptanceCriteria, 5, []string{
+		"" + subject + " identity, version, configuration, dependencies, and deployment assumptions are explicit.",
+		"" + subject + " failure, upgrade, rollback, observability, and recovery paths have proportionate evidence.",
+		"" + subject + " security boundaries, credentials, network exposure, data handling, and supply-chain risks are addressed.",
+	})
+	appendUntil(&content.AntiPatterns, 5, []string{
+		"Assuming Landscape inclusion or popularity proves that " + subject + " is secure, supported, compatible, or suitable.",
+		"Using an unpinned latest version of " + subject + " as the basis for migration or production guidance.",
+		"Ignoring " + subject + " operational ownership, data lifecycle, upgrade constraints, rollback, and decommissioning.",
+	})
 }
 
 func generatedPaymentSkillContent(seed additionalSkillSeed) skillContent {
@@ -1406,6 +1629,12 @@ func buildSkillBodies() map[string]string {
 	for _, seed := range paymentSkillSeeds {
 		sdlcSkillContent[seed.Name] = generatedPaymentSkillContent(seed)
 	}
+	for _, definition := range technologySkillDefinitions {
+		sdlcSkillContent[definition.Name] = generatedTechnologySkillContent(definition)
+	}
+	for _, entry := range cncf.MustEntries() {
+		sdlcSkillContent[entry.SkillName] = generatedCNCFSkillContent(entry)
+	}
 	for name, content := range agenticSecuritySkillContent {
 		sdlcSkillContent[name] = content
 	}
@@ -1472,7 +1701,7 @@ func renderSkillTemplate(name string, data skillTemplateData) (string, error) {
 		data.MinPlatforms = platformcompat.AllMinVersions()
 	}
 	full := skillFrontmatter + body
-	tmpl, err := template.New(name).Parse(full)
+	tmpl, err := template.New(name).Funcs(template.FuncMap{"quote": strconv.Quote}).Parse(full)
 	if err != nil {
 		return "", err
 	}

@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/domehahn/skcr/internal/platforms"
+	"gopkg.in/yaml.v3"
 )
 
 const testSince = "2026-06-10"
@@ -36,8 +37,7 @@ var expectedSDLCSkills = []string{
 }
 
 func init() {
-	expectedSDLCSkills = append(expectedSDLCSkills, AdditionalSDLCSkillNames...)
-	expectedSDLCSkills = append(expectedSDLCSkills, PaymentSkillNames...)
+	expectedSDLCSkills = append([]string(nil), SDLCSkillNames...)
 }
 
 var requiredSections = []string{
@@ -87,6 +87,14 @@ func TestEveryRegisteredSkillRendersProductionReadySkillMD(t *testing.T) {
 			rendered := renderForTest(t, name)
 			if !strings.HasPrefix(rendered, "---\n") {
 				t.Fatalf("rendered skill %q does not start with YAML frontmatter", name)
+			}
+			parts := strings.SplitN(rendered, "---\n", 3)
+			if len(parts) != 3 {
+				t.Fatalf("rendered skill %q has malformed frontmatter boundaries", name)
+			}
+			var frontmatter map[string]any
+			if err := yaml.Unmarshal([]byte(parts[1]), &frontmatter); err != nil {
+				t.Fatalf("rendered skill %q has invalid YAML frontmatter: %v", name, err)
 			}
 			for _, field := range requiredFrontmatterFields {
 				if !strings.Contains(rendered, field) {
@@ -148,7 +156,13 @@ func TestEverySkillMeetsMinimumContentCounts(t *testing.T) {
 
 func TestSkillBodiesAreNotNearlyIdentical(t *testing.T) {
 	for i := 0; i < len(expectedSDLCSkills); i++ {
+		if isGeneratedCatalogSkill(expectedSDLCSkills[i]) {
+			continue
+		}
 		for j := i + 1; j < len(expectedSDLCSkills); j++ {
+			if isGeneratedCatalogSkill(expectedSDLCSkills[j]) {
+				continue
+			}
 			a := normalizedBody(renderForTest(t, expectedSDLCSkills[i]))
 			b := normalizedBody(renderForTest(t, expectedSDLCSkills[j]))
 			if a == b {
@@ -156,6 +170,29 @@ func TestSkillBodiesAreNotNearlyIdentical(t *testing.T) {
 			}
 			if similarity(a, b) > 0.92 {
 				t.Fatalf("skills %q and %q are too similar", expectedSDLCSkills[i], expectedSDLCSkills[j])
+			}
+		}
+	}
+}
+
+func isGeneratedCatalogSkill(name string) bool {
+	if strings.HasPrefix(name, "cncf-") {
+		return true
+	}
+	for _, definition := range technologySkillDefinitions {
+		if definition.Name == name {
+			return true
+		}
+	}
+	return false
+}
+
+func TestGeneratedTechnologySkillsRetainSpecificFocus(t *testing.T) {
+	for _, definition := range technologySkillDefinitions {
+		rendered := strings.ToLower(renderForTest(t, definition.Name))
+		for _, focus := range definition.Focus {
+			if !strings.Contains(rendered, strings.ToLower(focus)) {
+				t.Errorf("skill %q missing focus %q", definition.Name, focus)
 			}
 		}
 	}

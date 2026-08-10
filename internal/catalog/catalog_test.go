@@ -1,6 +1,7 @@
 package catalog
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/domehahn/skcr/internal/scaffold"
@@ -89,4 +90,98 @@ func TestSkillCategories(t *testing.T) {
 	if _, err := SkillsForCategory("not-a-category"); err == nil {
 		t.Fatal("expected unknown category error")
 	}
+
+	for category, expected := range map[string]string{
+		"languages":      "python-reviewer",
+		"frameworks":     "quarkus-reviewer",
+		"infrastructure": "opentofu-reviewer",
+		"cncf":           "cncf-prometheus-reviewer",
+		"cncf-runtime":   "cncf-containerd-reviewer",
+	} {
+		skills, err := SkillsForCategory(category)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !containsCatalogSkill(skills, expected) {
+			t.Errorf("category %q missing %q", category, expected)
+		}
+	}
+
+	cncfSkills, err := SkillsForCategory("landscape")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(cncfSkills) < 2400 {
+		t.Fatalf("expected complete CNCF Landscape category, got %d skills", len(cncfSkills))
+	}
+}
+
+func TestCoreSkillsAreUniqueAndGeneratedNamesAreBounded(t *testing.T) {
+	seen := map[string]bool{}
+	for _, name := range CoreSkills {
+		if seen[name] {
+			t.Fatalf("duplicate core skill %q", name)
+		}
+		seen[name] = true
+		if strings.HasPrefix(name, "cncf-") && len(name) > 64 {
+			t.Fatalf("CNCF skill name exceeds 64 characters: %q", name)
+		}
+	}
+}
+
+func TestEveryCoreSkillHasSemanticCategory(t *testing.T) {
+	semantic := SemanticCategoryNames()
+	for _, skill := range CoreSkills {
+		found := false
+		for _, category := range semantic {
+			if containsCatalogSkill(SkillCategories[category], skill) {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("core skill %q has no semantic category", skill)
+		}
+	}
+}
+
+func TestSemanticCategoriesSplitLandscapeByDomain(t *testing.T) {
+	cases := map[string]string{
+		"security":                   "cncf-trivy-reviewer",
+		"storage":                    "cncf-ceph-reviewer",
+		"runtime-containers":         "cncf-containerd-reviewer",
+		"networking-service-mesh":    "cncf-cilium-reviewer",
+		"observability":              "cncf-prometheus-reviewer",
+		"organizations-members":      "cncf-red-hat-member-reviewer",
+		"service-providers":          "cncf-syseleven-kcsp-reviewer",
+		"infrastructure-as-code":     "terraform-reviewer",
+		"backup-disaster-recovery":   "backup-restore-reviewer",
+		"release-feature-management": "release-readiness-reviewer",
+	}
+	for category, skill := range cases {
+		if !containsCatalogSkill(SkillCategories[category], skill) {
+			t.Errorf("category %q missing representative skill %q", category, skill)
+		}
+	}
+	if len(SkillCategories["cncf"]) >= 300 {
+		t.Fatalf("cncf should contain only active official projects, got %d skills", len(SkillCategories["cncf"]))
+	}
+	if len(SkillCategories["cncf-landscape"]) < 2400 {
+		t.Fatalf("cncf-landscape should retain every Landscape entry, got %d", len(SkillCategories["cncf-landscape"]))
+	}
+	if len(SkillCategories["storage"]) >= 120 {
+		t.Fatalf("storage should not absorb the separate database category, got %d skills", len(SkillCategories["storage"]))
+	}
+	if len(SkillCategories["kubernetes"]) >= 300 {
+		t.Fatalf("kubernetes should not absorb provider and training directories, got %d skills", len(SkillCategories["kubernetes"]))
+	}
+}
+
+func containsCatalogSkill(skills []string, target string) bool {
+	for _, skill := range skills {
+		if skill == target {
+			return true
+		}
+	}
+	return false
 }
