@@ -8,7 +8,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/domehahn/skcr/internal/models"
+	"github.com/domehahn/skcr/v2/internal/models"
 )
 
 func stringSliceContains(values []string, want string) bool {

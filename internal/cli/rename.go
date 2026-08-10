@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/domehahn/skcr/internal/skillmeta"
+	"github.com/domehahn/skcr/v2/internal/skillmeta"
 	"github.com/domehahn/sklib/spec"
 	"github.com/spf13/cobra"
 )

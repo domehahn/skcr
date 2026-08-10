@@ -10,7 +10,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/domehahn/skcr/internal/skillmeta"
+	"github.com/domehahn/skcr/v2/internal/skillmeta"
 	"gopkg.in/yaml.v3"
 )
 

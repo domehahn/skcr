@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/domehahn/skcr/internal/bake"
-	"github.com/domehahn/skcr/internal/models"
+	"github.com/domehahn/skcr/v2/internal/bake"
+	"github.com/domehahn/skcr/v2/internal/models"
 )
 
 func TestTemplateRootAndHelpers(t *testing.T) {

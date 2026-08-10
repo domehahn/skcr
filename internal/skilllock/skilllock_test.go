@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/domehahn/skcr/internal/models"
+	"github.com/domehahn/skcr/v2/internal/models"
 )
 
 func TestLoadFilterReferencesAndSkillFiles(t *testing.T) {

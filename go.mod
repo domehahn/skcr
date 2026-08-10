@@ -1,4 +1,4 @@
-module github.com/domehahn/skcr
+module github.com/domehahn/skcr/v2
 
 go 1.22
 

@@ -11,7 +11,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/domehahn/skcr/internal/skillversion"
+	"github.com/domehahn/skcr/v2/internal/skillversion"
 	"github.com/spf13/cobra"
 )
 

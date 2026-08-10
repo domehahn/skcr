@@ -5,7 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/domehahn/skcr/internal/lockfile"
+	"github.com/domehahn/skcr/v2/internal/lockfile"
 	"github.com/spf13/cobra"
 )
 

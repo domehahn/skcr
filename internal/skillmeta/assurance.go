@@ -7,7 +7,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/domehahn/skcr/internal/asps"
+	"github.com/domehahn/skcr/v2/internal/asps"
 )
 
 const AssuranceSchemaVersion = "1"

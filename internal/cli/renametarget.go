@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/domehahn/skcr/internal/models"
+	"github.com/domehahn/skcr/v2/internal/models"
 	"github.com/spf13/cobra"
 )
 

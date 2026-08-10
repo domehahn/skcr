@@ -12,8 +12,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/domehahn/skcr/internal/skillmeta"
-	"github.com/domehahn/skcr/internal/validator"
+	"github.com/domehahn/skcr/v2/internal/skillmeta"
+	"github.com/domehahn/skcr/v2/internal/validator"
 	"github.com/domehahn/sklib/spec"
 	"gopkg.in/yaml.v3"
 )

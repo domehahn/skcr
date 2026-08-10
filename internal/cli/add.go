@@ -10,10 +10,10 @@ import (
 	"strings"
 
 	"github.com/domehahn/sklib/spec"
-	"github.com/domehahn/skcr/internal/bake"
-	"github.com/domehahn/skcr/internal/catalog"
-	"github.com/domehahn/skcr/internal/models"
-	"github.com/domehahn/skcr/internal/scaffold"
+	"github.com/domehahn/skcr/v2/internal/bake"
+	"github.com/domehahn/skcr/v2/internal/catalog"
+	"github.com/domehahn/skcr/v2/internal/models"
+	"github.com/domehahn/skcr/v2/internal/scaffold"
 	"github.com/spf13/cobra"
 )
 

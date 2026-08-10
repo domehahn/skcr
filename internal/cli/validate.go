@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"sort"
 
-	"github.com/domehahn/skcr/internal/skillmeta"
-	"github.com/domehahn/skcr/internal/skillversion"
-	"github.com/domehahn/skcr/internal/validator"
+	"github.com/domehahn/skcr/v2/internal/skillmeta"
+	"github.com/domehahn/skcr/v2/internal/skillversion"
+	"github.com/domehahn/skcr/v2/internal/validator"
 	"github.com/spf13/cobra"
 )
 

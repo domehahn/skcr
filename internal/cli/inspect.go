@@ -8,9 +8,9 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/domehahn/skcr/internal/bake"
-	"github.com/domehahn/skcr/internal/renderer"
-	"github.com/domehahn/skcr/internal/skillversion"
+	"github.com/domehahn/skcr/v2/internal/bake"
+	"github.com/domehahn/skcr/v2/internal/renderer"
+	"github.com/domehahn/skcr/v2/internal/skillversion"
 	"github.com/spf13/cobra"
 	"gopkg.in/yaml.v3"
 )

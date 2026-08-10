@@ -7,9 +7,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/domehahn/skcr/internal/models"
-	platformcompat "github.com/domehahn/skcr/internal/platforms"
-	"github.com/domehahn/skcr/internal/skillmeta"
+	"github.com/domehahn/skcr/v2/internal/models"
+	platformcompat "github.com/domehahn/skcr/v2/internal/platforms"
+	"github.com/domehahn/skcr/v2/internal/skillmeta"
 	"github.com/domehahn/sklib/spec"
 	"gopkg.in/yaml.v3"
 )

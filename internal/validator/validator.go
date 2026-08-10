@@ -8,12 +8,12 @@ import (
 	"slices"
 	"strings"
 
-	"github.com/domehahn/skcr/internal/bake"
-	"github.com/domehahn/skcr/internal/lockfile"
-	"github.com/domehahn/skcr/internal/models"
-	"github.com/domehahn/skcr/internal/renderer"
-	"github.com/domehahn/skcr/internal/skilllock"
-	"github.com/domehahn/skcr/internal/skillmeta"
+	"github.com/domehahn/skcr/v2/internal/bake"
+	"github.com/domehahn/skcr/v2/internal/lockfile"
+	"github.com/domehahn/skcr/v2/internal/models"
+	"github.com/domehahn/skcr/v2/internal/renderer"
+	"github.com/domehahn/skcr/v2/internal/skilllock"
+	"github.com/domehahn/skcr/v2/internal/skillmeta"
 	"github.com/domehahn/sklib/spec"
 	"gopkg.in/yaml.v3"
 )

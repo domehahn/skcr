@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/domehahn/skcr/internal/platforms"
+	"github.com/domehahn/skcr/v2/internal/platforms"
 	"gopkg.in/yaml.v3"
 )
 

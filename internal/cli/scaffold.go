@@ -4,8 +4,8 @@ import (
 	"fmt"
 	"path/filepath"
 
-	"github.com/domehahn/skcr/internal/models"
-	"github.com/domehahn/skcr/internal/scaffold"
+	"github.com/domehahn/skcr/v2/internal/models"
+	"github.com/domehahn/skcr/v2/internal/scaffold"
 	"github.com/spf13/cobra"
 )
 

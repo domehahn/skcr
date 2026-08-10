@@ -5,7 +5,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/domehahn/skcr/internal/cncf"
+	"github.com/domehahn/skcr/v2/internal/cncf"
 )
 
 var CoreSkills = []string{

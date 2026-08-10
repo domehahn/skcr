@@ -1,6 +1,6 @@
 package main
 
-import "github.com/domehahn/skcr/internal/cli"
+import "github.com/domehahn/skcr/v2/internal/cli"
 
 func main() {
 	cli.Execute()

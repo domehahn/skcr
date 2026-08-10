@@ -10,11 +10,11 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/domehahn/skcr/internal/catalog"
-	"github.com/domehahn/skcr/internal/models"
-	"github.com/domehahn/skcr/internal/renderer"
-	"github.com/domehahn/skcr/internal/scaffold"
-	"github.com/domehahn/skcr/internal/skillmeta"
+	"github.com/domehahn/skcr/v2/internal/catalog"
+	"github.com/domehahn/skcr/v2/internal/models"
+	"github.com/domehahn/skcr/v2/internal/renderer"
+	"github.com/domehahn/skcr/v2/internal/scaffold"
+	"github.com/domehahn/skcr/v2/internal/skillmeta"
 	"github.com/domehahn/sklib/spec"
 	"gopkg.in/yaml.v3"
 )
