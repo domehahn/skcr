@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"sync"
 
 	"github.com/domehahn/skcr/v2/internal/bake"
 	"github.com/domehahn/skcr/v2/internal/lockfile"
@@ -534,8 +535,22 @@ func ValidateSkillWarnings(content string) []string {
 	return dedupeStrings(warnings)
 }
 
+// markdownHeadingRECache memoizes the compiled regexp per heading text.
+// hasMarkdownHeading is called once per (artifact, heading) pair — with a
+// fixed, small heading set (skillReadinessHeadings) but a potentially large
+// number of artifacts, recompiling the regex on every call turned a bake/
+// validate pass over many skills into the dominant cost of the whole
+// operation (each MustCompile parses and builds an NFA from scratch).
+var markdownHeadingRECache sync.Map // heading string -> *regexp.Regexp
+
 func hasMarkdownHeading(body, heading string) bool {
-	re := regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(heading) + `\s*$`)
+	var re *regexp.Regexp
+	if cached, ok := markdownHeadingRECache.Load(heading); ok {
+		re = cached.(*regexp.Regexp)
+	} else {
+		re = regexp.MustCompile(`(?m)^` + regexp.QuoteMeta(heading) + `\s*$`)
+		markdownHeadingRECache.Store(heading, re)
+	}
 	return re.MatchString(body)
 }
 

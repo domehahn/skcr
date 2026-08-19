@@ -94,11 +94,11 @@ Use --fail-under <pct> to exit non-zero when coverage falls below a threshold (C
 
 			if jsonOut {
 				out := map[string]any{
-					"skills":        rows,
-					"covered":       covered,
-					"total":         len(rows),
-					"percent":       pct,
-					"total_cases":   totalCases,
+					"skills":      rows,
+					"covered":     covered,
+					"total":       len(rows),
+					"percent":     pct,
+					"total_cases": totalCases,
 				}
 				data, _ := json.MarshalIndent(out, "", "  ")
 				fmt.Fprintln(cmd.OutOrStdout(), string(data))

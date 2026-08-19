@@ -207,4 +207,3 @@ func newTagDeleteCommand() *cobra.Command {
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview without deleting")
 	return cmd
 }
-

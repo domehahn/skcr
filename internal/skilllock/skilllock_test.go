@@ -222,13 +222,13 @@ func TestNormalizeStringList(t *testing.T) {
 
 func TestPlatformSkillDestination_KnownPlatforms(t *testing.T) {
 	cases := map[string]string{
-		"codex":         ".agents/skills/my-skill/SKILL.md",
-		"claude-code":   ".claude/skills/my-skill/SKILL.md",
-		"gitlab-duo":    "skills/my-skill/SKILL.md",
+		"codex":          ".agents/skills/my-skill/SKILL.md",
+		"claude-code":    ".claude/skills/my-skill/SKILL.md",
+		"gitlab-duo":     "skills/my-skill/SKILL.md",
 		"github-copilot": ".github/prompts/my-skill.prompt.md",
-		"cursor":        ".agentic/skills/my-skill/SKILL.md",
-		"windsurf":      ".agentic/skills/my-skill/SKILL.md",
-		"generic":       ".agentic/skills/my-skill/SKILL.md",
+		"cursor":         ".agentic/skills/my-skill/SKILL.md",
+		"windsurf":       ".agentic/skills/my-skill/SKILL.md",
+		"generic":        ".agentic/skills/my-skill/SKILL.md",
 	}
 	for platform, want := range cases {
 		got := PlatformSkillDestination(platform, "my-skill")
@@ -250,7 +250,7 @@ func TestParseSkillsMapFormat(t *testing.T) {
 	raw := map[string]any{
 		"skills": map[string]any{
 			"my-skill": map[string]any{
-				"version":        "1.0.0",
+				"version":         "1.0.0",
 				"compatible_with": []any{"codex"},
 				"installed_paths": []any{".agents/skills/my-skill"},
 			},

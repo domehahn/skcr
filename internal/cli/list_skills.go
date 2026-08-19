@@ -66,10 +66,10 @@ func newListSkillsCommand() *cobra.Command {
 			sort.Strings(names)
 
 			type skillEntry struct {
-				Name      string   `json:"name"`
-				Version   string   `json:"version,omitempty"`
-				Targets   []string `json:"targets,omitempty"`
-				Scaffolded bool    `json:"scaffolded"`
+				Name       string   `json:"name"`
+				Version    string   `json:"version,omitempty"`
+				Targets    []string `json:"targets,omitempty"`
+				Scaffolded bool     `json:"scaffolded"`
 			}
 
 			// --orphaned: skills on disk not in any bakefile target.

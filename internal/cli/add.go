@@ -9,11 +9,11 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/domehahn/sklib/spec"
 	"github.com/domehahn/skcr/v2/internal/bake"
 	"github.com/domehahn/skcr/v2/internal/catalog"
 	"github.com/domehahn/skcr/v2/internal/models"
 	"github.com/domehahn/skcr/v2/internal/scaffold"
+	"github.com/domehahn/sklib/spec"
 	"github.com/spf13/cobra"
 )
 

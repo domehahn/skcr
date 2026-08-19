@@ -103,13 +103,13 @@ func newStatsCommand() *cobra.Command {
 			}
 
 			type statsOutput struct {
-				TotalSkills    int      `json:"total_skills"`
-				TotalTargets   int      `json:"total_targets"`
-				Scaffolded     int      `json:"scaffolded"`
-				CoveragePct    int      `json:"coverage_pct"`
-				VersionDrift   int      `json:"version_drift"`
-				Platforms      []string `json:"platforms"`
-				AvgAgedays     float64  `json:"avg_age_days,omitempty"`
+				TotalSkills  int      `json:"total_skills"`
+				TotalTargets int      `json:"total_targets"`
+				Scaffolded   int      `json:"scaffolded"`
+				CoveragePct  int      `json:"coverage_pct"`
+				VersionDrift int      `json:"version_drift"`
+				Platforms    []string `json:"platforms"`
+				AvgAgedays   float64  `json:"avg_age_days,omitempty"`
 			}
 
 			out := statsOutput{

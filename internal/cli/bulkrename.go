@@ -137,4 +137,3 @@ all target and flow references in agentic.bake.yaml.`,
 	cmd.Flags().BoolVar(&dryRun, "dry-run", false, "Preview without making changes")
 	return cmd
 }
-

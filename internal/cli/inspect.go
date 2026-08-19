@@ -173,13 +173,13 @@ func newInspectSkillCommand() *cobra.Command {
 
 			if jsonOut {
 				out := map[string]any{
-					"name":         name,
-					"path":         skillDir,
-					"in_targets":   inTargets,
-					"version_file": versionFile,
-					"frontmatter":  frontmatter,
+					"name":          name,
+					"path":          skillDir,
+					"in_targets":    inTargets,
+					"version_file":  versionFile,
+					"frontmatter":   frontmatter,
 					"skill_sources": sourceEntry,
-					"changelog":    changelog,
+					"changelog":     changelog,
 				}
 				enc := json.NewEncoder(cmd.OutOrStdout())
 				enc.SetIndent("", "  ")
