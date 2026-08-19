@@ -1,0 +1,23 @@
+schema_version: "2"
+name: network-tool-skill
+version: 1.0.0
+description: Fetch a remote API and run a git command on the result.
+ownership:
+  primary: platform-engineering
+  maintainers: []
+entrypoint: SKILL.md
+compatible_with:
+  - codex
+goal:
+  objective: Fetch remote data and summarize it via a scoped git command.
+  success_criteria: []
+  failure_conditions: []
+contract:
+  file: contract.yaml
+evals:
+  directory: evals
+integrations:
+  mcp: {file: integrations/mcp.yaml}
+  a2a: {file: integrations/a2a.yaml}
+dependencies: {file: dependencies.yaml}
+assurance: {file: assurance.yaml}

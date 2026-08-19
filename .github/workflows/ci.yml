@@ -48,10 +48,17 @@ jobs:
       - run: go build -mod=mod -o bin/skcr ./cmd/skcr
       - name: Install pinned skil
         run: go install github.com/domehahn/skil/cmd/skil@24a5ad6d6089a0c3b3b045e3d106abc9e7142a68
-      - name: Compile interop fixture
-        run: ./bin/skcr compile tests/interop/complete-skill --target skil --output /tmp/compiled --require-lossless
-      - name: Validate with skil
+      - name: Compile and validate every interop fixture
         run: |
-          skil validate /tmp/compiled/complete-skill
-          skil scan /tmp/compiled/complete-skill --static-only
-          skil verify /tmp/compiled/complete-skill
+          set -euo pipefail
+          for fixture in tests/interop/*/; do
+            fixture="${fixture%/}"
+            name=$(basename "$fixture")
+            echo "::group::$name"
+            out="/tmp/compiled/$name"
+            ./bin/skcr compile "$fixture" --target skil --output "$out" --require-lossless
+            skil validate "$out/$name"
+            skil scan "$out/$name" --static-only
+            skil verify "$out/$name"
+            echo "::endgroup::"
+          done
