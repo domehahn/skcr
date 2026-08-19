@@ -21,9 +21,9 @@ builds:
       - arm64
     ldflags:
       - -s -w
-      - -X github.com/agentic-template-kit/skcr/internal/cli.Version={{.Version}}
-      - -X github.com/agentic-template-kit/skcr/internal/cli.Commit={{.Commit}}
-      - -X github.com/agentic-template-kit/skcr/internal/cli.Date={{.Date}}
+      - -X github.com/domehahn/skcr/v2/internal/cli.Version={{.Version}}
+      - -X github.com/domehahn/skcr/v2/internal/cli.Commit={{.Commit}}
+      - -X github.com/domehahn/skcr/v2/internal/cli.Date={{.Date}}
 
 archives:
   - id: skcr

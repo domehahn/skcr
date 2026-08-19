@@ -2,7 +2,7 @@
 
 BINARY   := skcr
 DIST_DIR := dist
-MODULE   := github.com/agentic-template-kit/skcr
+MODULE   := github.com/domehahn/skcr/v2
 VERSION  ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 LDFLAGS  := -ldflags "-X $(MODULE)/internal/cli.Version=$(VERSION) -X $(MODULE)/internal/cli.Commit=$(shell git rev-parse --short HEAD 2>/dev/null || echo none) -X $(MODULE)/internal/cli.Date=$(shell date -u +%Y-%m-%dT%H:%M:%SZ) -s -w"
 
