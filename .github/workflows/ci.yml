@@ -69,16 +69,15 @@ jobs:
         with:
           go-version-file: go.mod
       - run: go build -mod=mod -o bin/skcr ./cmd/skcr
-      - name: Install pinned skil
-        # Pinned to a specific commit, not a tag: skil has no tagged
-        # releases yet (see its own docs/toolchain.md). The previous pin
-        # (24a5ad6d) predated a skil-side schema-resolution fix and made
-        # this job fail unconditionally on every single fixture — verified
-        # locally that this commit's skil validates the existing
-        # complete-skill fixture cleanly. Bump deliberately when skil
-        # changes something this job should exercise; don't let it drift
-        # silently.
-        run: go install github.com/domehahn/skil/cmd/skil@0af857dc58b35d5fe15fcf6bf1c967a2a7a07193
+      - name: Install stable skil
+        # Pinned to skil's latest tagged release (v0.2.0), not a raw
+        # commit: this is the "skcr current x skil stable" cell of the
+        # cross-repo compatibility matrix (see COMPATIBILITY.md). Verified
+        # locally that v0.2.0's skil validates every tests/interop/*
+        # fixture cleanly before bumping this pin. Bump deliberately when
+        # skil cuts a new stable release that this job should track; don't
+        # let it drift silently.
+        run: go install github.com/domehahn/skil/cmd/skil@v0.2.0
       - name: Compile and validate every interop fixture
         run: |
           set -euo pipefail
