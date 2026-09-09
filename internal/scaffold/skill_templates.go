@@ -211,7 +211,7 @@ var SDLCSkillNames = buildSDLCSkillNames()
 
 func buildSDLCSkillNames() []string {
 	names := []string{}
-	for _, group := range [][]string{baseSDLCSkillNames, AdditionalSDLCSkillNames, PaymentSkillNames, LanguageSkillNames, FrameworkSkillNames, InfrastructureSkillNames, cncf.SkillNames()} {
+	for _, group := range [][]string{baseSDLCSkillNames, AdditionalSDLCSkillNames, PaymentSkillNames, LanguageSkillNames, FrameworkSkillNames, InfrastructureSkillNames} {
 		for _, name := range group {
 			if !containsSkillName(names, name) {
 				names = append(names, name)

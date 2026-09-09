@@ -447,7 +447,6 @@ func init() {
 		SkillCategories[category] = mergeUniqueSkills(SkillCategories[category], skills)
 	}
 	for _, entry := range cncf.MustEntries() {
-		CoreSkills = appendUnique(CoreSkills, entry.SkillName)
 		SkillDescriptions[entry.SkillName] = cncfSkillDescription(entry)
 	}
 }

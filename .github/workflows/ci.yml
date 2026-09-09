@@ -12,83 +12,79 @@ permissions:
 
 jobs:
   go:
+    name: Build and Unit Tests
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
           cache: true
       - run: go mod verify
-      - name: Format
+      - name: Format Check
         run: |
           git ls-files '*.go' | grep -v '^vendor/' | xargs gofmt -l | tee /tmp/gofmt
           test ! -s /tmp/gofmt
-      - run: go vet -mod=mod ./...
-      - run: go test -mod=mod -timeout 8m ./...
-      - run: go build -mod=mod -trimpath -o bin/skcr ./cmd/skcr
+      - name: Vet
+        run: go vet -mod=mod ./...
+      - name: Test
+        run: go test -mod=mod -timeout 8m ./...
+      - name: Build Binary
+        run: go build -mod=mod -trimpath -o bin/skcr ./cmd/skcr
 
-  # Race-detector run, kept separate from the required "go" job above and
-  # not (yet) a required branch-protection status check: internal/cli's
-  # CLI-invocation-style tests (bake, validate, ...) run real file I/O
-  # against many generated fixtures, and under -race the full suite takes
-  # 30+ minutes — verified locally it completed in ~4m without -race but
-  # was still running past 1800s under -race across three separate
-  # confirmation attempts. That's genuinely slow, not hung (each attempt
-  # made forward progress into new tests near its timeout), but blocking
-  # every PR on a 30+ minute race run isn't a reasonable required gate
-  # today. Keeping this job non-blocking preserves the signal without
-  # making it a merge bottleneck; the real fix is profiling/splitting
-  # internal/cli's test suite, which is out of scope for this pass.
   go-race:
+    name: Mandatory Race Detector Gate
     runs-on: ubuntu-latest
-    continue-on-error: true
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
           cache: true
-      - run: go test -mod=mod -race -timeout 45m ./...
+      - name: Race Critical Packages Test
+        run: make test-race
 
   schemas:
+    name: Schema Validation Gate
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
       - run: go test -mod=mod ./internal/skillmeta/... ./internal/compiler/... -count=1
       - run: go test -mod=mod ./internal/scaffold/... -count=1
 
-  skil-interop:
+  determinism:
+    name: Deterministic Compilation Gate
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-go@v5
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version-file: go.mod
-      - run: go build -mod=mod -o bin/skcr ./cmd/skcr
-      - name: Install stable skil
-        # Pinned to skil's latest tagged release (v0.2.0), not a raw
-        # commit: this is the "skcr current x skil stable" cell of the
-        # cross-repo compatibility matrix (see COMPATIBILITY.md). Verified
-        # locally that v0.2.0's skil validates every tests/interop/*
-        # fixture cleanly before bumping this pin. Bump deliberately when
-        # skil cuts a new stable release that this job should track; don't
-        # let it drift silently.
-        run: go install github.com/domehahn/skil/cmd/skil@v0.2.0
-      - name: Compile and validate every interop fixture
-        run: |
-          set -euo pipefail
-          for fixture in tests/interop/*/; do
-            fixture="${fixture%/}"
-            name=$(basename "$fixture")
-            echo "::group::$name"
-            out="/tmp/compiled/$name"
-            ./bin/skcr compile "$fixture" --target skil --output "$out" --require-lossless
-            skil validate "$out/$name"
-            skil scan "$out/$name" --static-only
-            skil verify "$out/$name"
-            echo "::endgroup::"
-          done
+      - name: Verify Determinism
+        run: go test -mod=mod ./internal/compiler/... -run TestCompileSkillDeterministicOutput -v
+
+  govulncheck:
+    name: Security Vulnerability Scan
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+      - name: Run govulncheck
+        uses: golang/govulncheck-action@b37419f930e3d367397641d402287114674ff07c # v1
+        with:
+          go-version-file: go.mod

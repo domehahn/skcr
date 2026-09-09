@@ -665,3 +665,37 @@ func dedupeStrings(values []string) []string {
 	}
 	return result
 }
+
+// SanitizeRelativePath verifies that joining baseDir and targetRelPath stays strictly within baseDir.
+// It prevents path traversal, absolute path escape, and output outside the target root.
+func SanitizeRelativePath(baseDir, targetRelPath string) (string, error) {
+	if filepath.IsAbs(targetRelPath) {
+		return "", fmt.Errorf("absolute path escape rejected: %s", targetRelPath)
+	}
+	cleanedRel := filepath.Clean(targetRelPath)
+	if strings.HasPrefix(cleanedRel, ".."+string(filepath.Separator)) || cleanedRel == ".." {
+		return "", fmt.Errorf("path traversal attack rejected: %s", targetRelPath)
+	}
+	absBase, err := filepath.Abs(baseDir)
+	if err != nil {
+		return "", fmt.Errorf("invalid base directory %s: %w", baseDir, err)
+	}
+	fullPath := filepath.Join(absBase, cleanedRel)
+	rel, err := filepath.Rel(absBase, fullPath)
+	if err != nil || strings.HasPrefix(rel, ".."+string(filepath.Separator)) || rel == ".." {
+		return "", fmt.Errorf("path escapes output root boundary: %s", targetRelPath)
+	}
+	return fullPath, nil
+}
+
+// ValidateOutputDirectory checks that outDir is valid and safely contained.
+func ValidateOutputDirectory(outDir string) error {
+	if strings.TrimSpace(outDir) == "" {
+		return fmt.Errorf("output directory must not be empty")
+	}
+	cleaned := filepath.Clean(outDir)
+	if cleaned == "/" || cleaned == "." || cleaned == ".." {
+		return fmt.Errorf("unsafe output directory root: %s", outDir)
+	}
+	return nil
+}

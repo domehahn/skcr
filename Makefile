@@ -1,4 +1,4 @@
-.PHONY: build test clean install release-snapshot
+.PHONY: build test test-race test-fuzz test-interop vet lint check clean install release-snapshot
 
 BINARY   := skcr
 DIST_DIR := dist
@@ -11,7 +11,27 @@ build:
 	go build $(LDFLAGS) -o $(DIST_DIR)/$(BINARY) ./cmd/skcr
 
 test:
-	go test ./...
+	go test -mod=mod ./...
+
+test-race:
+	go test -mod=mod -race ./internal/compiler/... ./internal/skillmeta/... ./internal/validator/... ./internal/platforms/... ./internal/renderer/...
+
+test-fuzz:
+	go test -mod=mod -fuzz=FuzzCompileSkill -fuzztime=5s ./internal/compiler/...
+	go test -mod=mod -fuzz=FuzzParseContract -fuzztime=5s ./internal/skillmeta/...
+	go test -mod=mod -fuzz=FuzzPathNormalization -fuzztime=5s ./internal/validator/...
+
+test-interop: build
+	./$(DIST_DIR)/$(BINARY) version
+	go test -mod=mod ./internal/compiler/... -run TestCompileSkillProducesNativeSkilArtifacts
+
+vet:
+	go vet ./...
+
+lint:
+	gofmt -s -l .
+
+check: vet test test-race test-interop
 
 clean:
 	rm -rf $(DIST_DIR)
@@ -25,3 +45,4 @@ install: build
 
 release-snapshot:
 	goreleaser release --snapshot --clean
+

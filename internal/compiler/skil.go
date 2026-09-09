@@ -29,11 +29,18 @@ type Result struct {
 }
 
 type Manifest struct {
-	SchemaVersion string          `json:"schema_version"`
-	Source        SourceDigests   `json:"source"`
-	Target        TargetMetadata  `json:"target"`
-	Mapping       Mapping         `json:"mapping"`
-	Provenance    BuildProvenance `json:"provenance"`
+	SchemaVersion   string          `json:"schema_version"`
+	Tool            string          `json:"tool,omitempty"`
+	ToolVersion     string          `json:"tool_version,omitempty"`
+	SourceDigest    string          `json:"source_digest,omitempty"`
+	CompiledDigest  string          `json:"compiled_digest,omitempty"`
+	TargetName      string          `json:"target_name,omitempty"`
+	ContractVersion string          `json:"contract_version,omitempty"`
+	BuildParameters map[string]any  `json:"build_parameters,omitempty"`
+	Source          SourceDigests   `json:"source"`
+	Target          TargetMetadata  `json:"target"`
+	Mapping         Mapping         `json:"mapping"`
+	Provenance      BuildProvenance `json:"provenance"`
 }
 
 type SourceDigests struct {
@@ -47,6 +54,14 @@ type SourceDigests struct {
 }
 
 type BuildProvenance struct {
+	SchemaVersion        string           `json:"schema_version,omitempty"`
+	Tool                 string           `json:"tool,omitempty"`
+	ToolVersion          string           `json:"tool_version,omitempty"`
+	SourceDigest         string           `json:"source_digest,omitempty"`
+	CompiledDigest       string           `json:"compiled_digest,omitempty"`
+	Target               string           `json:"target,omitempty"`
+	ContractVersion      string           `json:"contract_version,omitempty"`
+	BuildParameters      map[string]any   `json:"build_parameters,omitempty"`
 	Compiler             CompilerIdentity `json:"compiler"`
 	SourceArtifactDigest string           `json:"source_artifact_digest"`
 	MappingDigest        string           `json:"mapping_digest"`
@@ -280,17 +295,46 @@ func CompileSkill(skillDir string, opts Options) (Result, error) {
 		artifactParts = append(artifactParts, []byte(item.name), item.data)
 	}
 	source := SourceDigests{DescriptorDigest: digest(descriptorBytes), ContractDigest: digest(contractSource), EvalDigest: evalDigest, InstructionsDigest: digest(instructions), IntegrationsDigest: integrationsDigest, DependenciesDigest: dependenciesDigest, AssuranceDigest: assuranceDigest}
-	mappingBytes, _ := json.Marshal(mapping)
 	compilerVersion := opts.CompilerVersion
 	if compilerVersion == "" {
 		compilerVersion = "dev"
 	}
+	sourceDigest := digest(join([]byte(source.DescriptorDigest), []byte(source.ContractDigest), []byte(source.EvalDigest), []byte(source.InstructionsDigest), []byte(source.IntegrationsDigest), []byte(source.DependenciesDigest), []byte(source.AssuranceDigest)))
+	compiledDigest := digest(join(artifactParts...))
+	buildParams := map[string]any{
+		"require_lossless": opts.RequireLossless,
+	}
+	contractVersion := contract.SchemaVersion
+	if contractVersion == "" {
+		contractVersion = "1"
+	}
+	mappingBytes, _ := json.Marshal(mapping)
+	provenance := BuildProvenance{
+		SchemaVersion:        "1.0.0",
+		Tool:                 "skcr",
+		ToolVersion:          compilerVersion,
+		SourceDigest:         sourceDigest,
+		CompiledDigest:       compiledDigest,
+		Target:               Target,
+		ContractVersion:      contractVersion,
+		BuildParameters:      buildParams,
+		Compiler:             CompilerIdentity{Name: "skcr", Version: compilerVersion},
+		SourceArtifactDigest: sourceDigest,
+		MappingDigest:        digest(mappingBytes),
+	}
 	manifest := Manifest{
-		SchemaVersion: "1",
-		Source:        source,
-		Target:        TargetMetadata{Type: Target, ContractSchema: "1", EvalSchema: "1", ArtifactDigest: digest(join(artifactParts...))},
-		Mapping:       mapping,
-		Provenance:    BuildProvenance{Compiler: CompilerIdentity{Name: "skcr", Version: compilerVersion}, SourceArtifactDigest: digest(join([]byte(source.DescriptorDigest), []byte(source.ContractDigest), []byte(source.EvalDigest), []byte(source.InstructionsDigest), []byte(source.IntegrationsDigest), []byte(source.DependenciesDigest), []byte(source.AssuranceDigest))), MappingDigest: digest(mappingBytes)},
+		SchemaVersion:   "1.0.0",
+		Tool:            "skcr",
+		ToolVersion:     compilerVersion,
+		SourceDigest:    sourceDigest,
+		CompiledDigest:  compiledDigest,
+		TargetName:      Target,
+		ContractVersion: contractVersion,
+		BuildParameters: buildParams,
+		Source:          source,
+		Target:          TargetMetadata{Type: Target, ContractSchema: "1", EvalSchema: "1", ArtifactDigest: compiledDigest},
+		Mapping:         mapping,
+		Provenance:      provenance,
 	}
 	manifestBytes, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {

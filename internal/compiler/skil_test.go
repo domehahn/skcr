@@ -117,3 +117,44 @@ func TestCompileSkillRejectsInconsistentLegacySecuritySummary(t *testing.T) {
 		t.Fatalf("expected inconsistent security posture error, got %v", err)
 	}
 }
+
+func TestCompileSkillDeterministicOutput(t *testing.T) {
+	source := sourceSkill(t)
+	outA := filepath.Join(t.TempDir(), "buildA")
+	outB := filepath.Join(t.TempDir(), "buildB")
+
+	resA, err := compiler.CompileSkill(source, compiler.Options{OutputRoot: outA, CompilerVersion: "1.0.0"})
+	if err != nil {
+		t.Fatalf("compile A failed: %v", err)
+	}
+	resB, err := compiler.CompileSkill(source, compiler.Options{OutputRoot: outB, CompilerVersion: "1.0.0"})
+	if err != nil {
+		t.Fatalf("compile B failed: %v", err)
+	}
+
+	checksumsA, err := os.ReadFile(filepath.Join(resA.OutputDir, "checksums.txt"))
+	if err != nil {
+		t.Fatalf("read checksums A: %v", err)
+	}
+	checksumsB, err := os.ReadFile(filepath.Join(resB.OutputDir, "checksums.txt"))
+	if err != nil {
+		t.Fatalf("read checksums B: %v", err)
+	}
+
+	if string(checksumsA) != string(checksumsB) {
+		t.Fatalf("deterministic compilation failure: checksums mismatch:\nA:\n%s\nB:\n%s", checksumsA, checksumsB)
+	}
+
+	manifestA, err := os.ReadFile(filepath.Join(resA.OutputDir, "build-manifest.json"))
+	if err != nil {
+		t.Fatalf("read build-manifest A: %v", err)
+	}
+	manifestB, err := os.ReadFile(filepath.Join(resB.OutputDir, "build-manifest.json"))
+	if err != nil {
+		t.Fatalf("read build-manifest B: %v", err)
+	}
+
+	if string(manifestA) != string(manifestB) {
+		t.Fatalf("deterministic compilation failure: build-manifest mismatch:\nA:\n%s\nB:\n%s", manifestA, manifestB)
+	}
+}
