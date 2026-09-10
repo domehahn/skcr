@@ -85,6 +85,4 @@ jobs:
         with:
           go-version-file: go.mod
       - name: Run govulncheck
-        uses: golang/govulncheck-action@b37419f930e3d367397641d402287114674ff07c # v1
-        with:
-          go-version-file: go.mod
+        run: go run golang.org/x/vuln/cmd/govulncheck@latest ./...
