@@ -10,7 +10,8 @@ on:
 permissions:
   contents: read
 jobs:
-  compatibility:
+  skil-interop:
+    name: skil-interop
     runs-on: ubuntu-latest
     timeout-minutes: 20
     strategy:

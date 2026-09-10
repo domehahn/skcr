@@ -12,7 +12,7 @@ permissions:
 
 jobs:
   go:
-    name: Build and Unit Tests
+    name: go
     runs-on: ubuntu-latest
     permissions:
       contents: read
@@ -49,7 +49,7 @@ jobs:
         run: make test-race
 
   schemas:
-    name: Schema Validation Gate
+    name: schemas
     runs-on: ubuntu-latest
     permissions:
       contents: read
