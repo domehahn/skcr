@@ -29,18 +29,20 @@ type Result struct {
 }
 
 type Manifest struct {
-	SchemaVersion   string          `json:"schema_version"`
-	Tool            string          `json:"tool,omitempty"`
-	ToolVersion     string          `json:"tool_version,omitempty"`
-	SourceDigest    string          `json:"source_digest,omitempty"`
-	CompiledDigest  string          `json:"compiled_digest,omitempty"`
-	TargetName      string          `json:"target_name,omitempty"`
-	ContractVersion string          `json:"contract_version,omitempty"`
-	BuildParameters map[string]any  `json:"build_parameters,omitempty"`
-	Source          SourceDigests   `json:"source"`
-	Target          TargetMetadata  `json:"target"`
-	Mapping         Mapping         `json:"mapping"`
-	Provenance      BuildProvenance `json:"provenance"`
+	SchemaVersion         string          `json:"schema_version"`
+	Tool                  string          `json:"tool,omitempty"`
+	ToolVersion           string          `json:"tool_version,omitempty"`
+	SourceDigest          string          `json:"source_digest,omitempty"`
+	CompiledDigest        string          `json:"compiled_digest,omitempty"`
+	Target                string          `json:"target,omitempty"`
+	TargetName            string          `json:"target_name,omitempty"`
+	ContractVersion       string          `json:"contract_version,omitempty"`
+	BuildParameters       map[string]any  `json:"build_parameters,omitempty"`
+	BuildParametersDigest string          `json:"build_parameters_digest,omitempty"`
+	Source                SourceDigests   `json:"source"`
+	TargetMetadata        TargetMetadata  `json:"target_metadata,omitempty"`
+	Mapping               Mapping         `json:"mapping"`
+	Provenance            BuildProvenance `json:"provenance"`
 }
 
 type SourceDigests struct {
@@ -54,17 +56,18 @@ type SourceDigests struct {
 }
 
 type BuildProvenance struct {
-	SchemaVersion        string           `json:"schema_version,omitempty"`
-	Tool                 string           `json:"tool,omitempty"`
-	ToolVersion          string           `json:"tool_version,omitempty"`
-	SourceDigest         string           `json:"source_digest,omitempty"`
-	CompiledDigest       string           `json:"compiled_digest,omitempty"`
-	Target               string           `json:"target,omitempty"`
-	ContractVersion      string           `json:"contract_version,omitempty"`
-	BuildParameters      map[string]any   `json:"build_parameters,omitempty"`
-	Compiler             CompilerIdentity `json:"compiler"`
-	SourceArtifactDigest string           `json:"source_artifact_digest"`
-	MappingDigest        string           `json:"mapping_digest"`
+	SchemaVersion         string           `json:"schema_version,omitempty"`
+	Tool                  string           `json:"tool,omitempty"`
+	ToolVersion           string           `json:"tool_version,omitempty"`
+	SourceDigest          string           `json:"source_digest,omitempty"`
+	CompiledDigest        string           `json:"compiled_digest,omitempty"`
+	Target                string           `json:"target,omitempty"`
+	ContractVersion       string           `json:"contract_version,omitempty"`
+	BuildParameters       map[string]any   `json:"build_parameters,omitempty"`
+	BuildParametersDigest string           `json:"build_parameters_digest,omitempty"`
+	Compiler              CompilerIdentity `json:"compiler"`
+	SourceArtifactDigest  string           `json:"source_artifact_digest"`
+	MappingDigest         string           `json:"mapping_digest"`
 }
 type CompilerIdentity struct {
 	Name    string `json:"name"`
@@ -308,33 +311,37 @@ func CompileSkill(skillDir string, opts Options) (Result, error) {
 	if contractVersion == "" {
 		contractVersion = "1"
 	}
+	buildParamsDigest := calculateBuildParametersDigest(buildParams)
 	mappingBytes, _ := json.Marshal(mapping)
 	provenance := BuildProvenance{
-		SchemaVersion:        "1.0.0",
-		Tool:                 "skcr",
-		ToolVersion:          compilerVersion,
-		SourceDigest:         sourceDigest,
-		CompiledDigest:       compiledDigest,
-		Target:               Target,
-		ContractVersion:      contractVersion,
-		BuildParameters:      buildParams,
-		Compiler:             CompilerIdentity{Name: "skcr", Version: compilerVersion},
-		SourceArtifactDigest: sourceDigest,
-		MappingDigest:        digest(mappingBytes),
+		SchemaVersion:         "1.0.0",
+		Tool:                  "skcr",
+		ToolVersion:           compilerVersion,
+		SourceDigest:          sourceDigest,
+		CompiledDigest:        compiledDigest,
+		Target:                Target,
+		ContractVersion:       contractVersion,
+		BuildParameters:       buildParams,
+		BuildParametersDigest: buildParamsDigest,
+		Compiler:              CompilerIdentity{Name: "skcr", Version: compilerVersion},
+		SourceArtifactDigest:  sourceDigest,
+		MappingDigest:         digest(mappingBytes),
 	}
 	manifest := Manifest{
-		SchemaVersion:   "1.0.0",
-		Tool:            "skcr",
-		ToolVersion:     compilerVersion,
-		SourceDigest:    sourceDigest,
-		CompiledDigest:  compiledDigest,
-		TargetName:      Target,
-		ContractVersion: contractVersion,
-		BuildParameters: buildParams,
-		Source:          source,
-		Target:          TargetMetadata{Type: Target, ContractSchema: "1", EvalSchema: "1", ArtifactDigest: compiledDigest},
-		Mapping:         mapping,
-		Provenance:      provenance,
+		SchemaVersion:         "1.0.0",
+		Tool:                  "skcr",
+		ToolVersion:           compilerVersion,
+		SourceDigest:          sourceDigest,
+		CompiledDigest:        compiledDigest,
+		Target:                Target,
+		TargetName:            Target,
+		ContractVersion:       contractVersion,
+		BuildParameters:       buildParams,
+		BuildParametersDigest: buildParamsDigest,
+		Source:                source,
+		TargetMetadata:        TargetMetadata{Type: Target, ContractSchema: "1", EvalSchema: "1", ArtifactDigest: compiledDigest},
+		Mapping:               mapping,
+		Provenance:            provenance,
 	}
 	manifestBytes, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {
@@ -688,3 +695,12 @@ func writeChecksums(outputDir string) error {
 	}
 	return os.WriteFile(filepath.Join(outputDir, "checksums.txt"), []byte(content.String()), 0o644)
 }
+
+func calculateBuildParametersDigest(params map[string]any) string {
+	bytes, err := json.Marshal(params)
+	if err != nil {
+		return digest([]byte("{}"))
+	}
+	return digest(bytes)
+}
+

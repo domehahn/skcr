@@ -59,8 +59,11 @@ func TestCompileSkillProducesNativeSkilArtifacts(t *testing.T) {
 			t.Errorf("compiled Eval v2 mapping missing %q:\n%s", want, adversarial)
 		}
 	}
-	if result.Manifest.Source.DescriptorDigest == "" || result.Manifest.Source.IntegrationsDigest == "" || result.Manifest.Source.DependenciesDigest == "" || result.Manifest.Source.AssuranceDigest == "" || result.Manifest.Target.ArtifactDigest == "" || result.Manifest.Provenance.SourceArtifactDigest == "" || result.Manifest.Provenance.MappingDigest == "" {
+	if result.Manifest.Source.DescriptorDigest == "" || result.Manifest.Source.IntegrationsDigest == "" || result.Manifest.Source.DependenciesDigest == "" || result.Manifest.Source.AssuranceDigest == "" || result.Manifest.TargetMetadata.ArtifactDigest == "" || result.Manifest.Provenance.SourceArtifactDigest == "" || result.Manifest.Provenance.MappingDigest == "" {
 		t.Fatal("manifest digests must be populated")
+	}
+	if result.Manifest.SchemaVersion != "1.0.0" || result.Manifest.Target != "skil" || result.Manifest.BuildParametersDigest == "" {
+		t.Fatalf("manifest identity contract failed: schema_version=%q, target=%q, params_digest=%q", result.Manifest.SchemaVersion, result.Manifest.Target, result.Manifest.BuildParametersDigest)
 	}
 }
 

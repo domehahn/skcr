@@ -1,0 +1,9 @@
+schema_version: "2.0.0"
+name: forward-compat-fixture
+version: "1.1.0"
+description: Forward-compatible contract fixture
+contract:
+  file: contract.yaml
+evals:
+  directory: evals
+new_optional_feature: true
