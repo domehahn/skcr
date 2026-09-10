@@ -8,6 +8,27 @@ const (
 	DeliveryBoth     DeliveryMode = "both"
 )
 
+// Canonical capability types declared by skills
+const (
+	CapFilesystemRead   = "filesystem.read"
+	CapFilesystemWrite  = "filesystem.write"
+	CapFilesystemDelete = "filesystem.delete"
+	CapProcessExec      = "process.exec"
+	CapProcessSpawn     = "process.spawn"
+	CapNetworkEgress    = "network.egress"
+	CapNetworkListen    = "network.listen"
+	CapSecretRead       = "secret.read"
+	CapToolInvoke       = "tool.invoke"
+	CapMCPInvoke        = "mcp.invoke"
+)
+
+// Standard Capability Declaration Model for Intent Expression
+type DeclaredCapability struct {
+	Type        string            `json:"type" yaml:"type"`
+	Resource    string            `json:"resource,omitempty" yaml:"resource,omitempty"`
+	Constraints map[string]string `json:"constraints,omitempty" yaml:"constraints,omitempty"`
+}
+
 type ToolCapability struct {
 	Name               string
 	SkillPathPattern   string

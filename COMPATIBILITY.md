@@ -1,41 +1,27 @@
-# Cross-repository compatibility matrix
+# Toolchain compatibility
 
-skcr is one of four sibling repos in an agentic skill supply chain:
+The four products remain independent: skcr compiles, skil evaluates trust,
+skpm packages and installs, SkillForge stores and governs artifacts.
 
-```
-skcr (author/compile)  →  skil (scan/attest)  →  skpm (package/publish)  →  SkillForge (registry)
-```
+`.github/workflows/toolchain.yml` runs real consumer tests on every PR,
+main push, daily schedule and manual dispatch. The repository being changed
+uses the event commit (including PR merge contents); its sibling uses main
+or an explicit stable release. Exact checkout SHAs are retained as artifacts.
+No cross-repository write token or repository_dispatch secret is required.
 
-Each pairing that matters for skcr is enforced by a CI job, not just
-documented — a version bump on either side that breaks the pairing fails
-CI, not silently drifts. This file records *what's currently pinned* so
-the pairing is auditable without reading workflow YAML.
+Supported stable baselines: skil **v0.6.0**, skpm **v2.3.0** (GitHub latest
+release lookup on 2026-09-09). SkillForge has **no stable release** at that
+lookup; stable SkillForge compatibility is unavailable, not PASS. Add its
+first supported release as an additional matrix cell before claiming readiness.
+A fixed historical SkillForge commit is not called current.
 
-| Pairing                          | Enforced by                         | Currently pinned to | Status |
-|-----------------------------------|--------------------------------------|----------------------|--------|
-| skcr `main` (current) × skil stable | `.github/workflows/ci.yml` → `skil-interop` | [skil v0.2.0](https://github.com/domehahn/skil/releases/tag/v0.2.0) | ✅ enforced |
+Each producer runs its consumers: skil PRs compile skcr fixtures and run
+skpm's signature verifier; SkillForge PRs run current and stable skpm.
+Consumer PRs also run against current providers and available stable baselines.
+Select Toolchain compatibility as required checks in branch protection.
+Source-controlled workflows cannot configure remote branch protection.
 
-## What the `skil-interop` job actually checks
-
-For every fixture under `tests/interop/*/`, it compiles the fixture with
-this branch's `skcr` and then runs the pinned `skil`'s `validate`,
-`scan --static-only`, and `verify` against the compiled output — i.e. it
-proves skcr's *current* compiled output is still something skil's
-*stable* release accepts and scans cleanly, not just that skcr's own
-internal tests pass.
-
-## Bumping the pin
-
-When skil cuts a new stable release that skcr's interop job should
-track:
-
-1. Build that skil tag locally: `go install github.com/domehahn/skil/cmd/skil@vX.Y.Z`.
-2. Run the exact loop `skil-interop` runs (see the job for the precise
-   commands) against every fixture under `tests/interop/*/` — confirm
-   `validate`/`scan`/`verify` all still pass before touching CI.
-3. Update the `go install ... @vX.Y.Z` line and this file's pinned version
-   together, in the same commit.
-
-Don't bump the pin reflexively on every skil release — only when you've
-actually verified the pairing still holds, or deliberately want to prove
-it doesn't (and fix skcr's output or file an issue against skil).
+Before moving a stable pin, run the same tests at the new tag and record the
+resolved commit. Main is deliberately floating for drift detection; the logged
+SHAs make every failure reproducible. No current/stable pairing implies full
+native isolation, release signing, HA, or whole-toolchain readiness.

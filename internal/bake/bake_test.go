@@ -140,7 +140,7 @@ func TestBuildInitialConfigVariants(t *testing.T) {
 	if cfg.Targets["gitlab"].GitLabDuo["slash_command"] != true {
 		t.Fatal("expected gitlab slash_command default true")
 	}
-	for _, skill := range []string{"python-reviewer", "spring-boot-reviewer", "opentofu-reviewer", "cncf-prometheus-reviewer"} {
+	for _, skill := range []string{"python-reviewer", "spring-boot-reviewer", "opentofu-reviewer", "kubernetes-platform-reviewer"} {
 		if !stringSliceContains(cfg.Targets["codex"].Skills, skill) {
 			t.Errorf("default init target missing built-in skill %q", skill)
 		}
