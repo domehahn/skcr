@@ -1,0 +1,7 @@
+schema_version: "2.0.0"
+capabilities:
+  runtime:
+    allowed:
+      tools:
+        allow: ["run_command"]
+        deny: ["run_command"]

@@ -1,0 +1,32 @@
+schema_version: "2.0.0"
+capabilities:
+  runtime:
+    allowed:
+      filesystem:
+        read: ["src/**"]
+        write: ["dist/**"]
+        delete: []
+      network:
+        inbound: false
+        outbound: true
+        hosts: ["api.github.com"]
+      commands:
+        execute: true
+        allow:
+          - executable: "go"
+      secrets:
+        read: ["GITHUB_TOKEN"]
+        expose: false
+      environment:
+        read: ["PATH", "HOME"]
+      tools:
+        allow: ["view_file", "run_command"]
+        deny: []
+      mcp:
+        servers: []
+        tools: []
+      agent:
+        autonomous_actions: false
+        external_side_effects: false
+        confirm_destructive: true
+        confirm_external: true

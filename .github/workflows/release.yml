@@ -46,3 +46,23 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  smoke-test:
+    name: Post-Release Artifact Smoke Test
+    needs: release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: go.mod
+      - name: Build and Smoke Test Binary Artifact
+        run: |
+          make build
+          ./dist/skcr version
+          TMP_DIR=$(mktemp -d)
+          ./dist/skcr scaffold --target "$TMP_DIR" --name "smoke-skill"
+          ./dist/skcr compile --source "$TMP_DIR/smoke-skill" --target skil
+

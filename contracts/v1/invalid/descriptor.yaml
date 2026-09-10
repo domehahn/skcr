@@ -1,0 +1,6 @@
+schema_version: "99.0.0"
+name: invalid-descriptor-fixture
+version: "invalid-semver"
+description: Invalid descriptor schema version
+contract:
+  file: contract.yaml
