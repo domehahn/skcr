@@ -27,13 +27,13 @@ jobs:
             consumer_ref: main
             provider_ref: v0.6.0
     steps:
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: domehahn/${{ matrix.consumer }}
           ref: ${{ matrix.consumer == 'skcr' && github.sha || matrix.consumer_ref }}
           path: ${{ matrix.consumer }}
           persist-credentials: false
-      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: domehahn/${{ matrix.provider }}
           ref: ${{ matrix.provider == 'skcr' && github.sha || matrix.provider_ref }}
