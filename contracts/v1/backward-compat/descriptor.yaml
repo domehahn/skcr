@@ -1,0 +1,8 @@
+schema_version: "2.0.0"
+name: backward-compat-fixture
+version: "1.0.0"
+description: Backward-compatible contract fixture
+contract:
+  file: contract.yaml
+evals:
+  directory: evals

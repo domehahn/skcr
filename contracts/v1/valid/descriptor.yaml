@@ -1,0 +1,8 @@
+schema_version: "2.0.0"
+name: valid-contract-fixture
+version: "1.0.0"
+description: Valid contract fixture for compatibility testing
+contract:
+  file: contract.yaml
+evals:
+  directory: evals
