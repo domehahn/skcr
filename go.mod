@@ -1,6 +1,6 @@
 module github.com/domehahn/skcr/v2
 
-go 1.22
+go 1.23
 
 require (
 	github.com/domehahn/sklib v0.3.0

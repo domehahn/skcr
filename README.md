@@ -1,5 +1,13 @@
 # Skill Creator (`skcr`)
 
+[![CI](https://github.com/domehahn/skcr/actions/workflows/ci.yml/badge.svg)](https://github.com/domehahn/skcr/actions/workflows/ci.yml)
+[![Release](https://github.com/domehahn/skcr/actions/workflows/release.yml/badge.svg)](https://github.com/domehahn/skcr/actions/workflows/release.yml)
+[![Go Report Card](https://goreportcard.com/badge/github.com/domehahn/skcr)](https://goreportcard.com/report/github.com/domehahn/skcr)
+[![Go Reference](https://pkg.go.dev/badge/github.com/domehahn/skcr.svg)](https://pkg.go.dev/github.com/domehahn/skcr)
+[![Go Version](https://img.shields.io/github/go-mod/go-version/domehahn/skcr)](https://github.com/domehahn/skcr/blob/main/go.mod)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](https://github.com/domehahn/skcr/blob/main/LICENSE)
+[![Release](https://img.shields.io/github/v/release/domehahn/skcr)](https://github.com/domehahn/skcr/releases)
+
 `skcr` is a Go source-artifact compiler for creating, validating, compiling,
 versioning, and rendering AI agent skills across multiple platforms.
 
