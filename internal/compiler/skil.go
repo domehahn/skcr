@@ -703,4 +703,3 @@ func calculateBuildParametersDigest(params map[string]any) string {
 	}
 	return digest(bytes)
 }
-
